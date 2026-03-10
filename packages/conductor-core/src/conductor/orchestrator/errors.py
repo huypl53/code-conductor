@@ -38,3 +38,7 @@ class FileConflictError(OrchestratorError):
         super().__init__(
             f"File conflict between '{task_a}' and '{task_b}': {sorted(files)}"
         )
+
+
+class ReviewError(OrchestratorError):
+    """Raised when a review query fails to return structured output."""

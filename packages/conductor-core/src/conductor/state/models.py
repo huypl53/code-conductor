@@ -16,6 +16,12 @@ class TaskStatus(StrEnum):
     BLOCKED = "blocked"
 
 
+class ReviewStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    NEEDS_REVISION = "needs_revision"
+
+
 class AgentStatus(StrEnum):
     IDLE = "idle"
     WORKING = "working"
@@ -39,6 +45,9 @@ class Task(BaseModel):
     produces: list[str] = Field(default_factory=list)
     target_file: str = ""
     material_files: list[str] = Field(default_factory=list)
+    # Phase 5: review tracking fields (all-default for backward compat)
+    review_status: ReviewStatus = ReviewStatus.PENDING
+    revision_count: int = 0
 
 
 class AgentRecord(BaseModel):
