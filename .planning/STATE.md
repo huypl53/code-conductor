@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-01-PLAN.md (orchestrator type contracts)
-last_updated: "2026-03-10T16:15:07.132Z"
+stopped_at: Completed 04-02-PLAN.md (DependencyScheduler and file ownership)
+last_updated: "2026-03-10T16:19:51.939Z"
 last_activity: "2026-03-10 — Phase 2 Plan 1 complete: Pydantic v2 state models, enums, and error hierarchy"
 progress:
   total_phases: 11
   completed_phases: 3
   total_plans: 9
-  completed_plans: 7
+  completed_plans: 8
   percent: 10
 ---
 
@@ -57,6 +57,7 @@ Progress: [█░░░░░░░░░] 10%
 | Phase 03-acp-communication-layer P01 | 3 | 2 tasks | 5 files |
 | Phase 03-acp-communication-layer P02 | 4 | 2 tasks | 3 files |
 | Phase 04-orchestrator-core P01 | 3 | 2 tasks | 6 files |
+| Phase 04-orchestrator-core P02 | 2 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,8 @@ Recent decisions affecting current work:
 - [Phase 04-orchestrator-core]: TaskPlan.model_json_schema() is the output_format contract for SDK structured decomposition
 - [Phase 04-orchestrator-core]: Task state model extended with all-default new fields (requires, produces, target_file, material_files) — backward compat with existing serialized state guaranteed
 - [Phase 04-orchestrator-core]: build_system_prompt() includes 'Do not modify files outside your assignment' as explicit constraint for role anchoring over long sessions
+- [Phase 04-orchestrator-core]: DependencyScheduler accepts dict[str, set[str]] graph — decouples from Pydantic TaskSpec, orchestrator builds graph at wire-up time
+- [Phase 04-orchestrator-core]: validate_file_ownership accepts list[(task_id, target_file)] tuples — same decoupling rationale, avoids coupling to TaskSpec before Plan 03 wires it
 
 ### Pending Todos
 
@@ -99,6 +102,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T16:15:07.130Z
-Stopped at: Completed 04-01-PLAN.md (orchestrator type contracts)
+Last session: 2026-03-10T16:19:51.936Z
+Stopped at: Completed 04-02-PLAN.md (DependencyScheduler and file ownership)
 Resume file: None

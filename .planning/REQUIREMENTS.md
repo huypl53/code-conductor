@@ -21,8 +21,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **CORD-01**: Shared state file (`.conductor/state.json`) tracks all tasks, agent assignments, status, outputs, and interfaces
 - [x] **CORD-02**: Orchestrator writes task assignments and resolves conflicts in shared state
 - [x] **CORD-03**: Sub-agents update their own task status and outputs in shared state
-- [ ] **CORD-04**: Orchestrator identifies task dependencies and decides strategy per dependency (sequence, stubs-first, parallel)
-- [ ] **CORD-05**: Orchestrator prevents concurrent file edit conflicts by assigning file ownership to agents
+- [x] **CORD-04**: Orchestrator identifies task dependencies and decides strategy per dependency (sequence, stubs-first, parallel)
+- [x] **CORD-05**: Orchestrator prevents concurrent file edit conflicts by assigning file ownership to agents
 - [x] **CORD-06**: Task list is visible to all agents — each agent can see what others are working on and their status
 
 ### Communication
@@ -117,8 +117,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ORCH-01 | Phase 4: Orchestrator Core | Pending |
 | ORCH-02 | Phase 4: Orchestrator Core | Pending |
 | ORCH-06 | Phase 4: Orchestrator Core | Complete |
-| CORD-04 | Phase 4: Orchestrator Core | Pending |
-| CORD-05 | Phase 4: Orchestrator Core | Pending |
+| CORD-04 | Phase 4: Orchestrator Core | Complete |
+| CORD-05 | Phase 4: Orchestrator Core | Complete |
 | ORCH-03 | Phase 5: Orchestrator Intelligence | Pending |
 | ORCH-04 | Phase 5: Orchestrator Intelligence | Pending |
 | ORCH-05 | Phase 5: Orchestrator Intelligence | Pending |
