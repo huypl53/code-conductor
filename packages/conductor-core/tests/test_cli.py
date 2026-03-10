@@ -225,6 +225,7 @@ def test_run_interactive_routes_input(tmp_path: "Path") -> None:  # type: ignore
         patch("conductor.cli.commands.run.Orchestrator") as mock_orch_cls,
         patch("conductor.cli.commands.run.Live"),
         patch("conductor.cli.commands.run._display_loop", new=AsyncMock(return_value=None)),
+        patch("conductor.cli.commands.run._input_loop", new=AsyncMock(return_value=None)),
     ):
         mock_sm = MagicMock()
         mock_sm.read_state.return_value = MagicMock(tasks=[], agents=[])

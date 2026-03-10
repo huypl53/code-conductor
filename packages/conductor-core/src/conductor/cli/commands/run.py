@@ -11,6 +11,8 @@ from rich.console import Console
 from rich.live import Live
 
 from conductor.cli.display import _build_table, _display_loop
+from conductor.cli.input_loop import _input_loop
+from conductor.orchestrator.escalation import HumanQuery
 from conductor.orchestrator.orchestrator import Orchestrator
 from conductor.state.manager import StateManager
 
@@ -32,8 +34,8 @@ async def _run_async(description: str, *, auto: bool, repo: Path) -> None:
     conductor_dir.mkdir(parents=True, exist_ok=True)
 
     state_manager = StateManager(conductor_dir / "state.json")
-    human_out: asyncio.Queue[object] = asyncio.Queue()
-    human_in: asyncio.Queue[object] = asyncio.Queue()
+    human_out: asyncio.Queue[HumanQuery] = asyncio.Queue()
+    human_in: asyncio.Queue[str] = asyncio.Queue()
 
     orchestrator = Orchestrator(
         state_manager=state_manager,
@@ -50,10 +52,20 @@ async def _run_async(description: str, *, auto: bool, repo: Path) -> None:
 
     orch_task = asyncio.create_task(orch_coro)
 
+    # Console for the input loop — stderr keeps it separate from Rich Live on stdout
+    input_console = Console(stderr=True)
+
     try:
         with Live(console=Console(stderr=False), refresh_per_second=4) as live:
             await asyncio.gather(
                 _display_loop(live, state_manager, until=orch_task),
+                _input_loop(
+                    human_out,
+                    human_in,
+                    orchestrator,
+                    state_manager=state_manager,
+                    console=input_console,
+                ),
                 orch_task,
             )
     except KeyboardInterrupt:
@@ -61,6 +73,10 @@ async def _run_async(description: str, *, auto: bool, repo: Path) -> None:
         with suppress(asyncio.CancelledError):
             await orch_task
         _console.print("Interrupted. Shutting down...")
+        # Note: asyncio.to_thread(input) cannot be cancelled from Python — the
+        # thread blocks until Enter is pressed. The gather's CancelledError
+        # propagation cleans up the _input_loop coroutine. This is acceptable
+        # for CLI since the process exits anyway.
 
     # Print final status table
     try:
