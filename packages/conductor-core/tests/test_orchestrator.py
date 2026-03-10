@@ -1346,6 +1346,29 @@ class TestOrchestratorResume:
 # ---------------------------------------------------------------------------
 
 
+def _make_spec_review_result(
+    is_clear: bool = True,
+    issues: list[str] | None = None,
+    confirmed_description: str = "Build feature",
+):
+    """Return a real ResultMessage with SpecReview structured_output."""
+    from claude_agent_sdk import ResultMessage
+
+    return ResultMessage(
+        subtype="success",
+        duration_ms=100,
+        duration_api_ms=80,
+        is_error=False,
+        num_turns=1,
+        session_id="test-session-id",
+        structured_output={
+            "is_clear": is_clear,
+            "issues": issues or [],
+            "confirmed_description": confirmed_description,
+        },
+    )
+
+
 class TestPreRunReview:
     """RUNT-04: pre_run_review() performs upfront single-exchange spec analysis."""
 
@@ -1356,17 +1379,12 @@ class TestPreRunReview:
 
         state_mgr = _make_state_manager()
 
-        mock_result = MagicMock()
-        mock_result.subtype = None
-        mock_result.structured_output = {
-            "is_clear": True,
-            "issues": [],
-            "confirmed_description": "Build a REST API with auth",
-        }
+        result_msg = _make_spec_review_result(
+            confirmed_description="Build a REST API with auth"
+        )
 
         async def _mock_query(prompt, options):
-            from claude_agent_sdk import ResultMessage
-            yield mock_result
+            yield result_msg
 
         with patch(f"{_ORCH}.query", side_effect=_mock_query):
             orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
@@ -1385,16 +1403,14 @@ class TestPreRunReview:
 
         state_mgr = _make_state_manager()
 
-        mock_result = MagicMock()
-        mock_result.subtype = None
-        mock_result.structured_output = {
-            "is_clear": False,
-            "issues": ["Missing auth mechanism", "No error handling specified"],
-            "confirmed_description": "Build an API assuming JWT auth",
-        }
+        result_msg = _make_spec_review_result(
+            is_clear=False,
+            issues=["Missing auth mechanism", "No error handling specified"],
+            confirmed_description="Build an API assuming JWT auth",
+        )
 
         async def _mock_query(prompt, options):
-            yield mock_result
+            yield result_msg
 
         with patch(f"{_ORCH}.query", side_effect=_mock_query):
             with caplog.at_level(logging.WARNING, logger="conductor.orchestrator"):
@@ -1434,19 +1450,15 @@ class TestPreRunReview:
 
         state_mgr = _make_state_manager()
 
-        mock_result = MagicMock()
-        mock_result.subtype = None
-        mock_result.structured_output = {
-            "is_clear": True,
-            "issues": [],
-            "confirmed_description": "Build feature X",
-        }
+        result_msg = _make_spec_review_result(
+            confirmed_description="Build feature X"
+        )
 
         query_calls: list = []
 
         async def _mock_query(prompt, options):
             query_calls.append({"prompt": prompt, "options": options})
-            yield mock_result
+            yield result_msg
 
         with (
             patch(f"{_ORCH}.query", side_effect=_mock_query),

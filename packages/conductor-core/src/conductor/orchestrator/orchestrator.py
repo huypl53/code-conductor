@@ -13,9 +13,12 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
+from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
+from pydantic import BaseModel, Field
+
 from conductor.acp import ACPClient
 from conductor.orchestrator.decomposer import TaskDecomposer
-from conductor.orchestrator.errors import EscalationError
+from conductor.orchestrator.errors import DecompositionError, EscalationError
 from conductor.orchestrator.escalation import EscalationRouter, HumanQuery
 from conductor.orchestrator.identity import AgentIdentity, build_system_prompt
 from conductor.orchestrator.models import TaskSpec
@@ -35,6 +38,37 @@ from conductor.state.models import (
 )
 
 logger = logging.getLogger("conductor.orchestrator")
+
+# ---------------------------------------------------------------------------
+# Spec review model and prompt (RUNT-04)
+# ---------------------------------------------------------------------------
+
+_SPEC_REVIEW_MAX_TURNS = 2
+
+
+class SpecReview(BaseModel):
+    """Structured output from pre_run_review() spec analysis."""
+
+    is_clear: bool
+    issues: list[str] = Field(default_factory=list)
+    confirmed_description: str
+
+
+SPEC_REVIEW_PROMPT_TEMPLATE = """\
+You are a technical architect reviewing a feature specification before execution.
+Analyse the following feature description for completeness and technical risks.
+Identify any ambiguities that could lead to incorrect implementations.
+
+<feature_description>
+{feature_description}
+</feature_description>
+
+Return a SpecReview JSON object with:
+- is_clear: bool — whether the spec is clear enough to proceed without ambiguity
+- issues: list[str] — any ambiguities or risks identified (empty list if none)
+- confirmed_description: str — the spec as you understand it, filling gaps with
+  reasonable best-judgment assumptions
+"""
 
 
 class Orchestrator:
@@ -185,6 +219,78 @@ class Orchestrator:
         # Wait for any stragglers (shouldn't normally happen)
         if pending:
             await asyncio.gather(*pending.values())
+
+    async def pre_run_review(self, feature_description: str) -> str:
+        """Analyse *feature_description* before execution and return confirmed spec.
+
+        Runs a single-exchange SDK query (no ClaudeSDKClient, no PermissionHandler,
+        no escalation) to surface ambiguities and commit to an interpretation.
+        This is the ONLY point in auto mode where issues can be flagged — after
+        this call, execution is fully autonomous.
+
+        Args:
+            feature_description: Raw feature description from the user.
+
+        Returns:
+            The confirmed (possibly refined) feature description string.
+
+        Raises:
+            DecompositionError: If the SDK returns no result or no structured output.
+        """
+        prompt = SPEC_REVIEW_PROMPT_TEMPLATE.format(
+            feature_description=feature_description
+        )
+        options = ClaudeAgentOptions(
+            output_format={
+                "type": "json_schema",
+                "schema": SpecReview.model_json_schema(),
+            },
+            max_turns=_SPEC_REVIEW_MAX_TURNS,
+        )
+
+        result: ResultMessage | None = None
+        async for message in query(prompt=prompt, options=options):
+            if isinstance(message, ResultMessage):
+                result = message
+                break
+
+        if result is None:
+            raise DecompositionError(
+                "Spec review failed: no result received from query"
+            )
+
+        if result.structured_output is None:
+            raise DecompositionError(
+                "Spec review failed: no structured output in result"
+            )
+
+        review = SpecReview.model_validate(result.structured_output)
+
+        if not review.is_clear and review.issues:
+            logger.warning(
+                "Spec review identified issues before execution: %s",
+                review.issues,
+            )
+
+        return review.confirmed_description
+
+    async def run_auto(self, feature_description: str) -> None:
+        """Auto-mode entry point: review spec upfront then run autonomously.
+
+        Calls :meth:`pre_run_review` for upfront spec analysis, then passes
+        the confirmed description to :meth:`run`. After ``pre_run_review``
+        completes, execution is fully autonomous — no human input is requested.
+
+        Args:
+            feature_description: Natural language feature description from user.
+
+        Raises:
+            DecompositionError: If spec review fails.
+            FileConflictError: If any two tasks claim the same target file.
+            CycleError: If task dependencies contain a cycle.
+        """
+        confirmed = await self.pre_run_review(feature_description)
+        await self.run(confirmed)
 
     async def resume(self) -> None:
         """Re-spawn IN_PROGRESS tasks using stored session IDs.
