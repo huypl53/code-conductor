@@ -1,4 +1,7 @@
-"""ORCH-02: Orchestrator — full decompose-validate-schedule-spawn loop."""
+"""ORCH-02/05: Orchestrator — full decompose-validate-schedule-spawn loop.
+
+Includes observe-review-revise cycle (ORCH-04/05).
+"""
 from __future__ import annotations
 
 import asyncio
@@ -10,13 +13,16 @@ from conductor.acp import ACPClient
 from conductor.orchestrator.decomposer import TaskDecomposer
 from conductor.orchestrator.identity import AgentIdentity, build_system_prompt
 from conductor.orchestrator.models import TaskSpec
+from conductor.orchestrator.monitor import StreamMonitor
 from conductor.orchestrator.ownership import validate_file_ownership
+from conductor.orchestrator.reviewer import ReviewVerdict, review_output
 from conductor.orchestrator.scheduler import DependencyScheduler
 from conductor.state import StateManager
 from conductor.state.models import (
     AgentRecord,
     AgentStatus,
     ConductorState,
+    ReviewStatus,
     Task,
     TaskStatus,
 )
@@ -36,12 +42,15 @@ class Orchestrator:
         3. Write Task records to state before spawning
         4. Schedule tasks via DependencyScheduler (respects ``requires`` deps)
         5. Spawn agents concurrently up to ``min(plan.max_agents, max_agents)``
-        6. Update task status to COMPLETED after each agent finishes
+        6. Run observe-review-revise cycle for each agent
+        7. Update task status to COMPLETED after review passes or max_revisions hit
 
     Args:
         state_manager: StateManager for atomic state mutations.
         repo_path: Absolute path to the repository root (agent cwd).
         max_agents: Hard cap on concurrent agent sessions (default 5).
+        max_revisions: Maximum revision cycles before best-effort
+            completion (default 2).
     """
 
     def __init__(
@@ -49,10 +58,12 @@ class Orchestrator:
         state_manager: StateManager,
         repo_path: str,
         max_agents: int = 5,
+        max_revisions: int = 2,
     ) -> None:
         self._state = state_manager
         self._repo_path = repo_path
         self._max_agents = max_agents
+        self._max_revisions = max_revisions
         self._decomposer = TaskDecomposer()
 
     # ------------------------------------------------------------------
@@ -107,7 +118,7 @@ class Orchestrator:
                 if task_id not in pending:
                     task_spec = task_map[task_id]
                     pending[task_id] = asyncio.create_task(
-                        self._spawn_agent(task_spec, sem)
+                        self._run_agent_loop(task_spec, sem)
                     )
 
             if not pending:
@@ -133,20 +144,28 @@ class Orchestrator:
     # Private helpers
     # ------------------------------------------------------------------
 
-    async def _spawn_agent(
+    async def _run_agent_loop(
         self,
         task_spec: TaskSpec,
         sem: asyncio.Semaphore,
+        max_revisions: int | None = None,
     ) -> None:
-        """Acquire semaphore, spawn an agent for *task_spec*, stream to completion.
+        """Acquire semaphore, run the observe-review-revise cycle for *task_spec*.
 
-        Writes an AgentRecord to state before opening the session, then
-        updates task status to COMPLETED after the session closes.
+        The entire revision loop runs inside a single ``async with ACPClient``
+        block — the session stays open between review and revision feedback.
+        Task status is only set to COMPLETED after review passes, or after
+        ``max_revisions`` exhaustion (best-effort).
 
         Args:
             task_spec: Task specification for the agent to execute.
             sem: Semaphore limiting concurrent sessions.
+            max_revisions: Override for max revision cycles
+                (uses instance default if None).
         """
+        if max_revisions is None:
+            max_revisions = self._max_revisions
+
         async with sem:
             agent_id = f"agent-{task_spec.id}-{uuid.uuid4().hex[:8]}"
             identity = AgentIdentity(
@@ -165,6 +184,9 @@ class Orchestrator:
                 self._make_add_agent_fn(agent_id, task_spec),
             )
 
+            final_verdict: ReviewVerdict | None = None
+            revision_num = 0
+
             async with ACPClient(
                 cwd=self._repo_path,
                 system_prompt=system_prompt,
@@ -172,13 +194,43 @@ class Orchestrator:
                 await client.send(
                     f"Task {task_spec.id}: {task_spec.description}"
                 )
-                async for _ in client.stream_response():
-                    pass  # consume response stream
 
-            # Update task to COMPLETED
+                for revision_num in range(max_revisions + 1):
+                    monitor = StreamMonitor(task_spec.id)
+                    async for message in client.stream_response():
+                        monitor.process(message)
+
+                    verdict = await review_output(
+                        task_description=task_spec.description,
+                        target_file=task_spec.target_file,
+                        agent_summary=monitor.result_text or "",
+                        repo_path=self._repo_path,
+                    )
+                    final_verdict = verdict
+
+                    if verdict.approved:
+                        break
+
+                    if revision_num < max_revisions:
+                        await client.send(
+                            f"Revision needed:\n{verdict.revision_instructions}"
+                            "\n\nPlease revise your implementation."
+                        )
+
+            # After session closes, update state with review result
+            review_status = (
+                ReviewStatus.APPROVED
+                if final_verdict and final_verdict.approved
+                else ReviewStatus.NEEDS_REVISION
+            )
+
             await asyncio.to_thread(
                 self._state.mutate,
-                self._make_complete_task_fn(task_spec.id),
+                self._make_complete_task_fn(
+                    task_spec.id,
+                    review_status=review_status,
+                    revision_count=revision_num,
+                ),
             )
 
     @staticmethod
@@ -236,13 +288,17 @@ class Orchestrator:
     @staticmethod
     def _make_complete_task_fn(
         task_id: str,
+        review_status: ReviewStatus = ReviewStatus.APPROVED,
+        revision_count: int = 0,
     ) -> Callable[[ConductorState], None]:
-        """Return a mutate fn that sets task status to COMPLETED."""
+        """Return a mutate fn that sets task COMPLETED with review metadata."""
 
         def _complete(state: ConductorState) -> None:
             for task in state.tasks:
                 if task.id == task_id:
                     task.status = TaskStatus.COMPLETED  # type: ignore[assignment]
+                    task.review_status = review_status  # type: ignore[assignment]
+                    task.revision_count = revision_count
                     task.updated_at = datetime.now(UTC)
                     break
 
