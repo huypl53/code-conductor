@@ -43,6 +43,7 @@ class ACPClient:
         *,
         cwd: str,
         system_prompt: str = "",
+        resume: str | None = None,
         allowed_tools: list[str] | None = None,
         permission_handler: PermissionHandler | None = None,
         max_turns: int = _DEFAULT_MAX_TURNS,
@@ -73,6 +74,7 @@ class ACPClient:
         self._options = ClaudeAgentOptions(
             cwd=cwd,
             system_prompt=system_prompt,
+            resume=resume,
             allowed_tools=resolved_tools,
             max_turns=max_turns,
             setting_sources=resolved_sources,
