@@ -59,6 +59,10 @@ class AgentRecord(BaseModel):
     current_task_id: str | None = None
     status: AgentStatus = AgentStatus.IDLE
     registered_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    # Phase 7: session tracking fields (all-default for backward compat)
+    session_id: str | None = None  # SDK session ID for resume
+    memory_file: str | None = None  # path to .memory/<agent-id>.md
+    started_at: datetime | None = None  # for session ordering on restart
 
 
 class Dependency(BaseModel):

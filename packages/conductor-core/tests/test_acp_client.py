@@ -256,3 +256,20 @@ class TestComm01OptionsWiring:
 
         options = captured[0]
         assert options.max_turns == 50
+
+    def test_default_setting_sources_constant(self):
+        """_DEFAULT_SETTING_SOURCES module-level constant equals ['project']."""
+        from conductor.acp.client import _DEFAULT_SETTING_SOURCES
+        assert _DEFAULT_SETTING_SOURCES == ["project"]
+
+    async def test_setting_sources_project_passed_to_options(self):
+        """ClaudeAgentOptions receives setting_sources=['project'] when no override given."""
+        constructor, captured = self._capture_options()
+
+        with patch("conductor.acp.client.ClaudeSDKClient", constructor):
+            client = ACPClient(cwd="/tmp")
+            async with client:
+                pass
+
+        options = captured[0]
+        assert options.setting_sources == ["project"]

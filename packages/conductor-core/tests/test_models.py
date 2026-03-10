@@ -103,6 +103,51 @@ class TestAgentRecordModel:
         assert isinstance(agent.registered_at, datetime)
         assert agent.registered_at.tzinfo is not None
 
+    # Phase 7: session tracking fields (backward-compat defaults)
+    def test_default_session_id_is_none(self) -> None:
+        agent = AgentRecord(id="a1", name="Agent One", role="worker")
+        assert agent.session_id is None
+
+    def test_default_memory_file_is_none(self) -> None:
+        agent = AgentRecord(id="a1", name="Agent One", role="worker")
+        assert agent.memory_file is None
+
+    def test_default_started_at_is_none(self) -> None:
+        agent = AgentRecord(id="a1", name="Agent One", role="worker")
+        assert agent.started_at is None
+
+    def test_round_trip_with_session_tracking_fields(self) -> None:
+        ts = datetime(2026, 3, 10, 12, 0, 0, tzinfo=timezone.utc)
+        agent = AgentRecord(
+            id="a1",
+            name="Agent One",
+            role="worker",
+            session_id="sess-123",
+            memory_file=".memory/agent-a.md",
+            started_at=ts,
+        )
+        data = agent.model_dump_json()
+        restored = AgentRecord.model_validate_json(data)
+        assert restored.session_id == "sess-123"
+        assert restored.memory_file == ".memory/agent-a.md"
+        assert restored.started_at == ts
+
+    def test_deserialize_old_json_without_new_fields(self) -> None:
+        """Old AgentRecord JSON without session tracking fields must deserialize without error."""
+        old_json = json.dumps({
+            "id": "a1",
+            "name": "Agent One",
+            "role": "worker",
+            "current_task_id": None,
+            "status": "idle",
+            "registered_at": "2026-03-10T12:00:00Z",
+        })
+        agent = AgentRecord.model_validate_json(old_json)
+        assert agent.id == "a1"
+        assert agent.session_id is None
+        assert agent.memory_file is None
+        assert agent.started_at is None
+
 
 class TestDependencyModel:
     def test_stores_task_id_and_depends_on(self) -> None:
