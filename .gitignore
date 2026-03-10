@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+dist/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+
+# Runtime
+.conductor/
+
+# IDE
+.vscode/
+.idea/

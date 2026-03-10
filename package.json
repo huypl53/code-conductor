@@ -1,0 +1,10 @@
+{
+  "name": "conductor-monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.25.0",
+  "scripts": {
+    "lint": "pnpm --filter conductor-dashboard exec biome check ./src",
+    "typecheck": "pnpm --filter conductor-dashboard exec tsc --noEmit",
+    "build": "pnpm --filter conductor-dashboard build"
+  }
+}
