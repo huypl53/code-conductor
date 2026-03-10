@@ -51,7 +51,9 @@ class Orchestrator:
     Args:
         state_manager: StateManager for atomic state mutations.
         repo_path: Absolute path to the repository root (agent cwd).
-        max_agents: Hard cap on concurrent agent sessions (default 5).
+        max_agents: Hard cap on concurrent agent sessions (default 10).
+            The decomposer's TaskPlan.max_agents (1-10 per schema) is the
+            binding constraint when <= self._max_agents.
         max_revisions: Maximum revision cycles before best-effort
             completion (default 2).
     """
@@ -60,7 +62,7 @@ class Orchestrator:
         self,
         state_manager: StateManager,
         repo_path: str,
-        max_agents: int = 5,
+        max_agents: int = 10,
         max_revisions: int = 2,
     ) -> None:
         self._state = state_manager

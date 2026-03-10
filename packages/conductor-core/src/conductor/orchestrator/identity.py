@@ -36,12 +36,19 @@ def build_system_prompt(identity: AgentIdentity) -> str:
     else:
         material_section = "Reference files: none"
 
+    memory_file = f".memory/{identity.name}.md"
+
     return (
         f"You are {identity.name}, a {identity.role}.\n\n"
         f"Task ID: {identity.task_id}\n"
         f"Task: {identity.task_description}\n\n"
         f"Your assigned file:\n  {identity.target_file}\n\n"
         f"{material_section}\n\n"
-        "Do not modify files outside your assignment. "
+        f"Your memory file: {memory_file}\n"
+        "Write important decisions, context, and discoveries here"
+        " using the Write tool.\n"
+        "Read other agents' memory files at .memory/ using the Read tool.\n\n"
+        f"Do not modify files outside your assignment, "
+        f"except your memory file at {memory_file}. "
         "Focus exclusively on your target file and task."
     )
