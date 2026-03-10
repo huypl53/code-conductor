@@ -57,7 +57,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **DASH-03**: Dashboard supports live stream view per agent (real-time tool calls, streaming output)
 - [x] **DASH-04**: Dashboard sends smart notifications for key events (errors, completions, intervention needed)
 - [ ] **DASH-05**: Dashboard handles conversation verbosity with layered visibility — collapsed by default, expand on demand
-- [ ] **DASH-06**: User can intervene from dashboard (cancel, redirect, provide feedback to agents)
+- [x] **DASH-06**: User can intervene from dashboard (cancel, redirect, provide feedback to agents)
 
 ### Packaging
 
@@ -141,7 +141,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DASH-02 | Phase 10: Dashboard Frontend | Pending |
 | DASH-03 | Phase 10: Dashboard Frontend | Pending |
 | DASH-05 | Phase 10: Dashboard Frontend | Pending |
-| DASH-06 | Phase 10: Dashboard Frontend | Pending |
+| DASH-06 | Phase 10: Dashboard Frontend | Complete |
 | PKG-01 | Phase 11: Packaging and Distribution | Pending |
 | PKG-02 | Phase 11: Packaging and Distribution | Pending |
 | PKG-04 | Phase 11: Packaging and Distribution | Pending |
