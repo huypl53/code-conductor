@@ -110,7 +110,10 @@ Plans:
   3. The orchestrator can cancel a sub-agent's current work and reassign it with corrected instructions
   4. The orchestrator can inject a guidance message to a running sub-agent without stopping or restarting it
   5. The orchestrator can pause a sub-agent and present the human with a decision prompt before resuming
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 06-01-PLAN.md — EscalationRouter with auto/interactive mode routing + error types (TDD)
+- [ ] 06-02-PLAN.md — Orchestrator intervention methods: cancel, inject, pause/resume (TDD)
 
 ### Phase 7: Agent Runtime
 **Goal**: Agents reliably inherit repository context, persist knowledge across sessions, survive restarts, and the orchestrator dynamically sizes the team based on work complexity
@@ -181,7 +184,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 3. ACP Communication Layer | 2/2 | Complete   | 2026-03-10 |
 | 4. Orchestrator Core | 3/3 | Complete   | 2026-03-10 |
 | 5. Orchestrator Intelligence | 1/2 | In Progress|  |
-| 6. Escalation and Intervention | 0/TBD | Not started | - |
+| 6. Escalation and Intervention | 0/2 | Not started | - |
 | 7. Agent Runtime | 0/TBD | Not started | - |
 | 8. CLI Interface | 0/TBD | Not started | - |
 | 9. Dashboard Backend | 0/TBD | Not started | - |
