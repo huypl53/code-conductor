@@ -80,7 +80,11 @@ Plans:
   3. Orchestrator assigns file ownership to agents before work begins — no two agents are assigned overlapping files
   4. Orchestrator sequences or parallelizes tasks correctly based on declared dependencies
   5. Orchestrator enforces a `max_agents` cap and does not exceed it during execution
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 04-01-PLAN.md — Orchestrator types: error hierarchy, TaskSpec/TaskPlan models, AgentIdentity, Task model extension
+- [ ] 04-02-PLAN.md — DependencyScheduler (graphlib) + file ownership validation (TDD)
+- [ ] 04-03-PLAN.md — TaskDecomposer (SDK structured output) + Orchestrator main class
 
 ### Phase 5: Orchestrator Intelligence
 **Goal**: The orchestrator monitors sub-agent work in real time, reviews completed output for quality and coherence, and can request revisions before marking a task complete
@@ -165,14 +169,14 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Monorepo Foundation | 2/2 | Complete   | 2026-03-10 |
 | 2. Shared State Infrastructure | 2/2 | Complete   | 2026-03-10 |
 | 3. ACP Communication Layer | 2/2 | Complete   | 2026-03-10 |
-| 4. Orchestrator Core | 0/TBD | Not started | - |
+| 4. Orchestrator Core | 0/3 | Not started | - |
 | 5. Orchestrator Intelligence | 0/TBD | Not started | - |
 | 6. Escalation and Intervention | 0/TBD | Not started | - |
 | 7. Agent Runtime | 0/TBD | Not started | - |
