@@ -3,10 +3,12 @@ from conductor.orchestrator.decomposer import TaskDecomposer
 from conductor.orchestrator.errors import (
     CycleError,
     DecompositionError,
+    EscalationError,
     FileConflictError,
     OrchestratorError,
     ReviewError,
 )
+from conductor.orchestrator.escalation import DecisionLog, EscalationRouter, HumanQuery
 from conductor.orchestrator.identity import AgentIdentity, build_system_prompt
 from conductor.orchestrator.models import TaskPlan, TaskSpec
 from conductor.orchestrator.monitor import StreamMonitor
@@ -22,6 +24,7 @@ __all__ = [
     "CycleError",
     "FileConflictError",
     "ReviewError",
+    "EscalationError",
     # models
     "TaskSpec",
     "TaskPlan",
@@ -41,4 +44,8 @@ __all__ = [
     # reviewer
     "ReviewVerdict",
     "review_output",
+    # escalation
+    "EscalationRouter",
+    "HumanQuery",
+    "DecisionLog",
 ]

@@ -42,3 +42,7 @@ class FileConflictError(OrchestratorError):
 
 class ReviewError(OrchestratorError):
     """Raised when a review query fails to return structured output."""
+
+
+class EscalationError(OrchestratorError):
+    """Raised when the EscalationRouter encounters an unrecoverable routing failure."""
