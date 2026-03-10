@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 07-02-PLAN.md (ACPClient resume parameter, SessionRegistry for agent-to-session mapping)
-last_updated: "2026-03-10T17:51:48.056Z"
+stopped_at: Completed 07-03-PLAN.md (mode wiring, session persistence, pre_run_review, run_auto)
+last_updated: "2026-03-10T18:04:27.942Z"
 last_activity: "2026-03-10 — Phase 2 Plan 1 complete: Pydantic v2 state models, enums, and error hierarchy"
 progress:
   total_phases: 11
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 16
-  completed_plans: 15
+  completed_plans: 16
   percent: 10
 ---
 
@@ -65,6 +65,7 @@ Progress: [█░░░░░░░░░] 10%
 | Phase 06-escalation-and-intervention P02 | 4 | 1 tasks | 2 files |
 | Phase 07-agent-runtime P01 | 3 | 2 tasks | 5 files |
 | Phase 07-agent-runtime P02 | 132 | 2 tasks | 4 files |
+| Phase 07-agent-runtime P03 | 12 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -119,6 +120,11 @@ Recent decisions affecting current work:
 - [Phase 07-agent-runtime]: ACPClient resume parameter positioned after system_prompt to preserve existing keyword-only API order
 - [Phase 07-agent-runtime]: SessionRegistry.load() silently returns empty registry on missing/invalid JSON — crash-safe startup
 - [Phase 07-agent-runtime]: filelock lock file at path.with_suffix('.json.lock') for SessionRegistry — mirrors StateManager pattern
+- [Phase 07-agent-runtime]: Orchestrator SessionRegistry loaded from .conductor/sessions.json on init — crash-safe, empty registry on missing file
+- [Phase 07-agent-runtime]: session_id persisted via get_server_info() in try/except — not a fatal error if SDK method unavailable
+- [Phase 07-agent-runtime]: pre_run_review() uses query() (single-exchange, no PermissionHandler) — never blocks on human input in auto mode
+- [Phase 07-agent-runtime]: SpecReview Pydantic model with is_clear/issues/confirmed_description — JSON schema enforced structured output
+- [Phase 07-agent-runtime]: run_auto() is the --auto CLI entry point — chains pre_run_review then run
 
 ### Pending Todos
 
@@ -131,6 +137,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T17:51:48.053Z
-Stopped at: Completed 07-02-PLAN.md (ACPClient resume parameter, SessionRegistry for agent-to-session mapping)
+Last session: 2026-03-10T18:04:27.939Z
+Stopped at: Completed 07-03-PLAN.md (mode wiring, session persistence, pre_run_review, run_auto)
 Resume file: None

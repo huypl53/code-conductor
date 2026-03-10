@@ -40,8 +40,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **RUNT-01**: Sub-agents inherit repo context (`.claude/`, `CLAUDE.md`, project config) naturally
 - [x] **RUNT-02**: All agents share a `.memory/` folder for cross-agent knowledge persistence
 - [x] **RUNT-03**: Full session persistence — agent identities, conversations, task progress, shared memory survive restarts
-- [ ] **RUNT-04**: `--auto` mode: orchestrator thinks critically on specs upfront, then runs fully autonomous
-- [ ] **RUNT-05**: Interactive mode: orchestrator can ask human questions during execution
+- [x] **RUNT-04**: `--auto` mode: orchestrator thinks critically on specs upfront, then runs fully autonomous
+- [x] **RUNT-05**: Interactive mode: orchestrator can ask human questions during execution
 - [x] **RUNT-06**: Orchestrator dynamically decides how many sub-agents to spawn based on task decomposition
 
 ### User Interface — CLI
@@ -130,8 +130,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RUNT-01 | Phase 7: Agent Runtime | Complete |
 | RUNT-02 | Phase 7: Agent Runtime | Complete |
 | RUNT-03 | Phase 7: Agent Runtime | Complete |
-| RUNT-04 | Phase 7: Agent Runtime | Pending |
-| RUNT-05 | Phase 7: Agent Runtime | Pending |
+| RUNT-04 | Phase 7: Agent Runtime | Complete |
+| RUNT-05 | Phase 7: Agent Runtime | Complete |
 | RUNT-06 | Phase 7: Agent Runtime | Complete |
 | CLI-01 | Phase 8: CLI Interface | Pending |
 | CLI-02 | Phase 8: CLI Interface | Pending |
