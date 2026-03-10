@@ -936,6 +936,397 @@ class TestComm07PauseAndDecide:
 
 
 # ---------------------------------------------------------------------------
+# RUNT-03/05 tests: mode wiring, .memory/ creation, session persistence, resume
+# ---------------------------------------------------------------------------
+
+
+class TestOrchestratorModeWiring:
+    """RUNT-05: Orchestrator accepts mode and queue params, creates EscalationRouter."""
+
+    def test_mode_default_is_auto(self):
+        """Orchestrator default mode is 'auto'."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+        assert orch._mode == "auto"
+
+    def test_mode_interactive_stored(self):
+        """Orchestrator stores mode='interactive' when specified."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        q1: asyncio.Queue = asyncio.Queue()
+        q2: asyncio.Queue = asyncio.Queue()
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(
+            state_manager=state_mgr,
+            repo_path="/repo",
+            mode="interactive",
+            human_out=q1,
+            human_in=q2,
+        )
+        assert orch._mode == "interactive"
+        assert orch._human_out is q1
+        assert orch._human_in is q2
+
+    def test_escalation_router_created_with_mode(self):
+        """Orchestrator creates EscalationRouter with mode and queue params."""
+        from conductor.orchestrator.escalation import EscalationRouter
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        q1: asyncio.Queue = asyncio.Queue()
+        q2: asyncio.Queue = asyncio.Queue()
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(
+            state_manager=state_mgr,
+            repo_path="/repo",
+            mode="interactive",
+            human_out=q1,
+            human_in=q2,
+        )
+        assert isinstance(orch._escalation_router, EscalationRouter)
+        assert orch._escalation_router._mode == "interactive"
+        assert orch._escalation_router._human_out is q1
+        assert orch._escalation_router._human_in is q2
+
+    def test_escalation_router_auto_mode_no_queues(self):
+        """In auto mode, EscalationRouter receives no queues."""
+        from conductor.orchestrator.escalation import EscalationRouter
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo", mode="auto")
+        assert isinstance(orch._escalation_router, EscalationRouter)
+        assert orch._escalation_router._mode == "auto"
+        assert orch._escalation_router._human_out is None
+        assert orch._escalation_router._human_in is None
+
+
+class TestOrchestratorMemoryDir:
+    """RUNT-02: Orchestrator creates .memory/ directory at run start."""
+
+    @pytest.mark.asyncio
+    async def test_run_creates_memory_dir(self, tmp_path):
+        """run() creates .memory/ directory under repo_path before spawning agents."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        tasks = [_make_task_spec("t1", "src/a.py")]
+        plan = _make_plan(tasks)
+        state_mgr = _make_state_manager()
+
+        mock_decomposer = AsyncMock()
+        mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        memory_dir = tmp_path / ".memory"
+        assert not memory_dir.exists()
+
+        with (
+            patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer),
+            patch(f"{_ORCH}.ACPClient", side_effect=lambda **kw: _make_mock_acp_client()),
+            patch(f"{_ORCH}.review_output", _approved_review_mock()),
+        ):
+            orch = Orchestrator(
+                state_manager=state_mgr, repo_path=str(tmp_path)
+            )
+            await orch.run("Build feature")
+
+        assert memory_dir.exists(), ".memory/ directory was not created"
+        assert memory_dir.is_dir()
+
+
+class TestOrchestratorSessionPersistence:
+    """RUNT-03: session_id persisted to AgentRecord before first send()."""
+
+    @pytest.mark.asyncio
+    async def test_session_id_persisted_before_first_send(self, tmp_path):
+        """_run_agent_loop persists session_id to AgentRecord before client.send()."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        task_spec = _make_task_spec("t1", "src/a.py")
+        sem = asyncio.Semaphore(2)
+        state_mgr = _make_state_manager()
+
+        persisted_session_ids: list[str] = []
+        send_order: list[str] = []
+
+        def _track_mutate(fn):
+            from conductor.state.models import AgentRecord, AgentStatus, ConductorState
+
+            dummy = ConductorState(
+                agents=[
+                    AgentRecord(id="dummy-agent", name="dummy-agent", role="dev")
+                ]
+            )
+            fn(dummy)
+            for agent in dummy.agents:
+                if agent.session_id is not None:
+                    persisted_session_ids.append(agent.session_id)
+                    send_order.append("persist_session")
+
+        state_mgr.mutate = _track_mutate
+
+        client = _make_mock_acp_client()
+
+        original_send = client.send.side_effect
+
+        async def _tracking_send(msg):
+            send_order.append("send")
+
+        client.send = AsyncMock(side_effect=_tracking_send)
+
+        mock_server_info = {"session_id": "sess-xyz"}
+
+        mock_sdk_client = MagicMock()
+        mock_sdk_client.get_server_info = AsyncMock(return_value=mock_server_info)
+        client._sdk_client = mock_sdk_client
+
+        with (
+            patch(f"{_ORCH}.ACPClient", return_value=client),
+            patch(f"{_ORCH}.review_output", _approved_review_mock()),
+        ):
+            orch = Orchestrator(
+                state_manager=state_mgr, repo_path=str(tmp_path)
+            )
+            await orch._run_agent_loop(task_spec, sem)
+
+        assert "sess-xyz" in persisted_session_ids, (
+            "session_id 'sess-xyz' was not persisted to AgentRecord"
+        )
+        # persist_session must precede first send
+        if "persist_session" in send_order and "send" in send_order:
+            assert send_order.index("persist_session") < send_order.index("send"), (
+                f"session_id persist must happen before first send: {send_order}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_resume_session_id_passed_to_acp_client(self, tmp_path):
+        """_run_agent_loop passes resume=session_id to ACPClient when provided."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        task_spec = _make_task_spec("t1", "src/a.py")
+        sem = asyncio.Semaphore(2)
+        state_mgr = _make_state_manager()
+
+        captured_kwargs: list[dict] = []
+
+        def _acp_factory(**kwargs):
+            captured_kwargs.append(kwargs)
+            return _make_mock_acp_client()
+
+        with (
+            patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
+            patch(f"{_ORCH}.review_output", _approved_review_mock()),
+        ):
+            orch = Orchestrator(
+                state_manager=state_mgr, repo_path=str(tmp_path)
+            )
+            await orch._run_agent_loop(
+                task_spec, sem, resume_session_id="sess-resume-123"
+            )
+
+        assert captured_kwargs, "ACPClient was not instantiated"
+        assert captured_kwargs[0].get("resume") == "sess-resume-123", (
+            f"Expected resume='sess-resume-123', got: {captured_kwargs[0].get('resume')}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_resume_session_id_none_by_default(self, tmp_path):
+        """_run_agent_loop uses resume=None when resume_session_id not provided."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        task_spec = _make_task_spec("t1", "src/a.py")
+        sem = asyncio.Semaphore(2)
+        state_mgr = _make_state_manager()
+
+        captured_kwargs: list[dict] = []
+
+        def _acp_factory(**kwargs):
+            captured_kwargs.append(kwargs)
+            return _make_mock_acp_client()
+
+        with (
+            patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
+            patch(f"{_ORCH}.review_output", _approved_review_mock()),
+        ):
+            orch = Orchestrator(
+                state_manager=state_mgr, repo_path=str(tmp_path)
+            )
+            await orch._run_agent_loop(task_spec, sem)
+
+        assert captured_kwargs, "ACPClient was not instantiated"
+        assert captured_kwargs[0].get("resume") is None
+
+
+class TestOrchestratorResume:
+    """RUNT-03: Orchestrator.resume() re-spawns IN_PROGRESS tasks."""
+
+    @pytest.mark.asyncio
+    async def test_resume_finds_in_progress_tasks(self, tmp_path):
+        """resume() reads state, finds IN_PROGRESS tasks, calls _run_agent_loop."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import (
+            AgentRecord,
+            AgentStatus,
+            ConductorState,
+            Task,
+            TaskStatus,
+        )
+
+        state_mgr = _make_state_manager()
+
+        # Build a state with one IN_PROGRESS task
+        in_progress_task = Task(
+            id="task-resume-1",
+            title="Resume Task",
+            description="A task to resume",
+            status=TaskStatus.IN_PROGRESS,
+            assigned_agent="agent-task-resume-1-abc",
+            target_file="src/resume.py",
+        )
+        agent_record = AgentRecord(
+            id="agent-task-resume-1-abc",
+            name="agent-task-resume-1-abc",
+            role="developer",
+            current_task_id="task-resume-1",
+            status=AgentStatus.WORKING,
+        )
+        mock_state = ConductorState(
+            tasks=[in_progress_task],
+            agents=[agent_record],
+        )
+
+        def _read_state():
+            return mock_state
+
+        state_mgr.read_state = _read_state
+
+        spawned_specs: list = []
+        spawned_resumes: list = []
+
+        async def _capture_loop(task_spec, sem, resume_session_id=None):
+            spawned_specs.append(task_spec)
+            spawned_resumes.append(resume_session_id)
+
+        with patch(f"{_ORCH}.ACPClient"):
+            orch = Orchestrator(
+                state_manager=state_mgr, repo_path=str(tmp_path)
+            )
+            orch._run_agent_loop = _capture_loop
+            await orch.resume()
+
+        assert len(spawned_specs) == 1, (
+            f"Expected 1 spawned spec for IN_PROGRESS task, got {len(spawned_specs)}"
+        )
+        assert spawned_specs[0].id == "task-resume-1"
+
+    @pytest.mark.asyncio
+    async def test_resume_uses_stored_session_id(self, tmp_path):
+        """resume() looks up session_id from SessionRegistry and passes it."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import (
+            AgentRecord,
+            AgentStatus,
+            ConductorState,
+            Task,
+            TaskStatus,
+        )
+
+        state_mgr = _make_state_manager()
+
+        in_progress_task = Task(
+            id="task-2",
+            title="Task 2",
+            description="Task with session",
+            status=TaskStatus.IN_PROGRESS,
+            assigned_agent="agent-task-2-xyz",
+            target_file="src/foo.py",
+        )
+        agent_record = AgentRecord(
+            id="agent-task-2-xyz",
+            name="agent-task-2-xyz",
+            role="developer",
+            current_task_id="task-2",
+            status=AgentStatus.WORKING,
+            session_id="stored-sess-999",
+        )
+        mock_state = ConductorState(
+            tasks=[in_progress_task],
+            agents=[agent_record],
+        )
+        state_mgr.read_state = MagicMock(return_value=mock_state)
+
+        spawned_resumes: list = []
+
+        async def _capture_loop(task_spec, sem, resume_session_id=None):
+            spawned_resumes.append(resume_session_id)
+
+        with patch(f"{_ORCH}.ACPClient"):
+            orch = Orchestrator(
+                state_manager=state_mgr, repo_path=str(tmp_path)
+            )
+            # Manually register the session_id in the registry
+            orch._session_registry.register("agent-task-2-xyz", "stored-sess-999")
+            orch._run_agent_loop = _capture_loop
+            await orch.resume()
+
+        assert spawned_resumes == ["stored-sess-999"], (
+            f"Expected resume with 'stored-sess-999', got: {spawned_resumes}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_resume_fresh_session_when_no_session_id(self, tmp_path):
+        """resume() spawns fresh session (resume=None) when no session_id stored."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import (
+            AgentRecord,
+            AgentStatus,
+            ConductorState,
+            Task,
+            TaskStatus,
+        )
+
+        state_mgr = _make_state_manager()
+
+        in_progress_task = Task(
+            id="task-3",
+            title="Task 3",
+            description="No session",
+            status=TaskStatus.IN_PROGRESS,
+            assigned_agent="agent-task-3-nnn",
+            target_file="src/bar.py",
+        )
+        agent_record = AgentRecord(
+            id="agent-task-3-nnn",
+            name="agent-task-3-nnn",
+            role="developer",
+            current_task_id="task-3",
+            status=AgentStatus.WORKING,
+            # no session_id set
+        )
+        mock_state = ConductorState(
+            tasks=[in_progress_task],
+            agents=[agent_record],
+        )
+        state_mgr.read_state = MagicMock(return_value=mock_state)
+
+        spawned_resumes: list = []
+
+        async def _capture_loop(task_spec, sem, resume_session_id=None):
+            spawned_resumes.append(resume_session_id)
+
+        with patch(f"{_ORCH}.ACPClient"):
+            orch = Orchestrator(
+                state_manager=state_mgr, repo_path=str(tmp_path)
+            )
+            orch._run_agent_loop = _capture_loop
+            await orch.resume()
+
+        assert spawned_resumes == [None], (
+            f"Expected resume=None for fresh session, got: {spawned_resumes}"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Registry cleanup tests
 # ---------------------------------------------------------------------------
 
