@@ -6,6 +6,7 @@
  */
 import { useConductorSocket } from "./hooks/useConductorSocket";
 import { AgentGrid } from "./components/AgentGrid";
+import { NotificationProvider, useSmartNotifications } from "./components/NotificationProvider";
 
 const WS_URL = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
 
@@ -25,8 +26,11 @@ function App() {
   const { conductorState, events, connected, sendIntervention } =
     useConductorSocket(WS_URL);
 
+  useSmartNotifications(events);
+
   return (
     <div className="min-h-screen bg-gray-50">
+      <NotificationProvider />
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
