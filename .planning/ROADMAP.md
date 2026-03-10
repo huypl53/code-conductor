@@ -65,7 +65,10 @@ Plans:
   2. Sub-agent can send a question (permission prompt, clarification) and receive an answer from the orchestrator
   3. A permission prompt that receives no response within the timeout resolves to a safe default (deny) rather than hanging
   4. Orchestrator can open, use, and close an ACP session without resource leaks
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 03-01-PLAN.md — ACP error hierarchy + PermissionHandler with timeout safe-default (TDD)
+- [ ] 03-02-PLAN.md — ACPClient wrapping ClaudeSDKClient with session lifecycle (TDD)
 
 ### Phase 4: Orchestrator Core
 **Goal**: The orchestrator can take a feature description, decompose it into discrete tasks, spawn sub-agents with identities (name, role, target, materials), manage task dependencies, and prevent concurrent file edit conflicts
@@ -168,7 +171,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Monorepo Foundation | 2/2 | Complete   | 2026-03-10 |
 | 2. Shared State Infrastructure | 2/2 | Complete   | 2026-03-10 |
-| 3. ACP Communication Layer | 0/TBD | Not started | - |
+| 3. ACP Communication Layer | 0/2 | Not started | - |
 | 4. Orchestrator Core | 0/TBD | Not started | - |
 | 5. Orchestrator Intelligence | 0/TBD | Not started | - |
 | 6. Escalation and Intervention | 0/TBD | Not started | - |
