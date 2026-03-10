@@ -3,8 +3,8 @@
  *
  * Three expansion levels:
  *   collapsed - header only (name, role, task, status badge)
- *   detail    - expands to show recent actions placeholder
- *   stream    - expands further to show live stream placeholder
+ *   detail    - expands to show recent actions, files modified, intervention controls
+ *   stream    - expands further to show live event stream
  *
  * Defaults to collapsed (DASH-05).
  */
@@ -17,6 +17,8 @@ import type {
   ExpansionLevel,
 } from "../types/conductor";
 import { StatusBadge } from "./StatusBadge";
+import { InterventionPanel } from "./InterventionPanel";
+import { LiveStream } from "./LiveStream";
 
 interface AgentCardProps {
   agent: AgentRecord;
@@ -25,7 +27,9 @@ interface AgentCardProps {
   onIntervene?: (command: InterventionCommand) => void;
 }
 
-export function AgentCard({ agent, tasks }: AgentCardProps) {
+const MAX_RECENT_EVENTS = 10;
+
+export function AgentCard({ agent, tasks, events, onIntervene }: AgentCardProps) {
   const [expansion, setExpansion] = useState<ExpansionLevel>("collapsed");
 
   const currentTask = agent.current_task_id
@@ -34,11 +38,22 @@ export function AgentCard({ agent, tasks }: AgentCardProps) {
 
   const taskTitle = currentTask ? currentTask.title : "No task assigned";
 
+  const agentEvents = events
+    .filter((e) => e.agent_id === agent.id)
+    .slice(-MAX_RECENT_EVENTS);
+
   function toggleExpansion() {
     setExpansion((prev) => (prev === "collapsed" ? "detail" : "collapsed"));
   }
 
+  function toggleStream() {
+    setExpansion((prev) => (prev === "stream" ? "detail" : "stream"));
+  }
+
   const isExpanded = expansion !== "collapsed";
+
+  // No-op intervention handler if none provided
+  const handleIntervene = onIntervene ?? (() => {});
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-200">
@@ -48,6 +63,7 @@ export function AgentCard({ agent, tasks }: AgentCardProps) {
         onClick={toggleExpansion}
         className="w-full flex items-center gap-3 px-4 py-3 text-left"
         aria-expanded={isExpanded}
+        aria-label={agent.name}
       >
         {/* Chevron icon */}
         <svg
@@ -73,26 +89,69 @@ export function AgentCard({ agent, tasks }: AgentCardProps) {
         <StatusBadge status={agent.status} />
       </button>
 
-      {/* Detail section */}
+      {/* Detail section (visible when not collapsed) */}
       {expansion !== "collapsed" && (
-        <div className="px-4 pb-4 border-t border-gray-100">
+        <div className="px-4 pb-4 border-t border-gray-100 space-y-4">
+          {/* Recent Actions */}
           <div className="pt-3">
-            <p className="text-sm text-gray-500">Recent actions</p>
-            <button
-              type="button"
-              onClick={() => setExpansion("stream")}
-              className="mt-2 text-xs text-blue-600 hover:underline"
-            >
-              Show live stream
-            </button>
+            <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
+              Recent Actions
+            </h3>
+            {agentEvents.length === 0 ? (
+              <p className="text-xs text-gray-400">No recent activity</p>
+            ) : (
+              <ul className="space-y-1">
+                {agentEvents.map((event, index) => (
+                  <li key={index} className="text-xs text-gray-600">
+                    <span className="font-mono">{event.type}</span>
+                    {event.task_id && (
+                      <span className="text-gray-400 ml-1">task: {event.task_id}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
+
+          {/* Files */}
+          <div>
+            <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
+              Files
+            </h3>
+            {currentTask ? (
+              <ul className="space-y-1">
+                {currentTask.target_file && (
+                  <li className="text-xs font-mono text-gray-600">{currentTask.target_file}</li>
+                )}
+                {currentTask.material_files.map((file) => (
+                  <li key={file} className="text-xs font-mono text-gray-400">
+                    {file}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-gray-400">No files</p>
+            )}
+          </div>
+
+          {/* Intervention Controls */}
+          <InterventionPanel agentId={agent.id} onIntervene={handleIntervene} />
+
+          {/* Live stream toggle */}
+          <button
+            type="button"
+            onClick={toggleStream}
+            className="text-xs text-blue-600 hover:underline"
+          >
+            {expansion === "stream" ? "Hide live stream" : "Show live stream"}
+          </button>
         </div>
       )}
 
       {/* Stream section */}
       {expansion === "stream" && (
         <div className="px-4 pb-4">
-          <p className="text-sm text-gray-500">Live stream</p>
+          <LiveStream agentId={agent.id} events={events} />
         </div>
       )}
     </div>
