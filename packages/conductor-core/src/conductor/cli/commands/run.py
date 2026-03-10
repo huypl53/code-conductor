@@ -23,12 +23,19 @@ def run(
     description: str = typer.Argument(..., help="Feature description"),
     auto: bool = typer.Option(True, "--auto/--interactive", help="Run mode"),
     repo: str = typer.Option(".", "--repo", help="Path to repo root"),
+    dashboard_port: int = typer.Option(None, "--dashboard-port", help="Start dashboard server on this port"),
 ) -> None:
     """Start the orchestrator for a feature description with live agent display."""
-    asyncio.run(_run_async(description, auto=auto, repo=Path(repo).resolve()))
+    asyncio.run(_run_async(description, auto=auto, repo=Path(repo).resolve(), dashboard_port=dashboard_port))
 
 
-async def _run_async(description: str, *, auto: bool, repo: Path) -> None:
+async def _run_async(
+    description: str,
+    *,
+    auto: bool,
+    repo: Path,
+    dashboard_port: int | None = None,
+) -> None:
     """Async implementation of the run command."""
     conductor_dir = repo / ".conductor"
     conductor_dir.mkdir(parents=True, exist_ok=True)
@@ -55,6 +62,24 @@ async def _run_async(description: str, *, auto: bool, repo: Path) -> None:
     # Console for the input loop — stderr keeps it separate from Rich Live on stdout
     input_console = Console(stderr=True)
 
+    # Optional dashboard server
+    gather_extras: list[object] = []
+    if dashboard_port is not None:
+        import uvicorn
+
+        from conductor.dashboard.server import create_app
+
+        dashboard_app = create_app(conductor_dir / "state.json")
+        config = uvicorn.Config(
+            dashboard_app,
+            host="127.0.0.1",
+            port=dashboard_port,
+            log_level="warning",
+        )
+        server = uvicorn.Server(config)
+        gather_extras.append(server.serve())
+        _console.print(f"Dashboard: http://127.0.0.1:{dashboard_port}")
+
     try:
         with Live(console=Console(stderr=False), refresh_per_second=4) as live:
             await asyncio.gather(
@@ -67,6 +92,7 @@ async def _run_async(description: str, *, auto: bool, repo: Path) -> None:
                     console=input_console,
                 ),
                 orch_task,
+                *gather_extras,
             )
     except KeyboardInterrupt:
         orch_task.cancel()
