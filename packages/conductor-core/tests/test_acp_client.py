@@ -204,6 +204,10 @@ class TestComm01OptionsWiring:
     async def test_permission_handler_wired_as_can_use_tool(self):
         """options.can_use_tool is bound to PermissionHandler.handle."""
         handler = PermissionHandler()
+        # Capture the bound method reference before it changes — Python bound
+        # methods are recreated on each attribute access so identity (is) check
+        # would fail. Use == which compares the underlying function + instance.
+        handle_ref = handler.handle
         constructor, captured = self._capture_options()
 
         with patch("conductor.acp.client.ClaudeSDKClient", constructor):
@@ -212,7 +216,7 @@ class TestComm01OptionsWiring:
                 pass
 
         options = captured[0]
-        assert options.can_use_tool is handler.handle
+        assert options.can_use_tool == handle_ref
 
     async def test_system_prompt_passed_through(self):
         """options.system_prompt matches the value given to ACPClient."""
