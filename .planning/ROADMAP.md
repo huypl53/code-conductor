@@ -95,7 +95,7 @@ Plans:
   2. When a sub-agent completes a task, the orchestrator reviews the output and either approves or requests changes
   3. Orchestrator can send structured feedback to a sub-agent and the sub-agent revises accordingly
   4. A task is only marked complete after orchestrator review passes — not immediately when the sub-agent reports done
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 05-01-PLAN.md — StreamMonitor + ReviewVerdict/review_output + state model extension (TDD)
 - [ ] 05-02-PLAN.md — Wire _run_agent_loop into Orchestrator with observe-review-revise cycle (TDD)
@@ -180,7 +180,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 2. Shared State Infrastructure | 2/2 | Complete   | 2026-03-10 |
 | 3. ACP Communication Layer | 2/2 | Complete   | 2026-03-10 |
 | 4. Orchestrator Core | 3/3 | Complete   | 2026-03-10 |
-| 5. Orchestrator Intelligence | 0/2 | Not started | - |
+| 5. Orchestrator Intelligence | 1/2 | In Progress|  |
 | 6. Escalation and Intervention | 0/TBD | Not started | - |
 | 7. Agent Runtime | 0/TBD | Not started | - |
 | 8. CLI Interface | 0/TBD | Not started | - |

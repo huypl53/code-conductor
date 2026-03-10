@@ -11,8 +11,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **ORCH-01**: Orchestrator agent (Claude Code via ACP) can receive a feature description and decompose it into discrete coding tasks
 - [x] **ORCH-02**: Orchestrator can spawn sub-agents via ACP and assign them tasks with role, target, and materials
-- [ ] **ORCH-03**: Orchestrator monitors sub-agent progress in real-time via ACP streaming (tool calls, file edits)
-- [ ] **ORCH-04**: Orchestrator reviews sub-agent output for quality and coherence before marking work complete
+- [x] **ORCH-03**: Orchestrator monitors sub-agent progress in real-time via ACP streaming (tool calls, file edits)
+- [x] **ORCH-04**: Orchestrator reviews sub-agent output for quality and coherence before marking work complete
 - [ ] **ORCH-05**: Orchestrator can give feedback to sub-agents and request revisions
 - [x] **ORCH-06**: Each agent has identity: name, role, target (what they're building), materials (files/context they need)
 
@@ -119,8 +119,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ORCH-06 | Phase 4: Orchestrator Core | Complete |
 | CORD-04 | Phase 4: Orchestrator Core | Complete |
 | CORD-05 | Phase 4: Orchestrator Core | Complete |
-| ORCH-03 | Phase 5: Orchestrator Intelligence | Pending |
-| ORCH-04 | Phase 5: Orchestrator Intelligence | Pending |
+| ORCH-03 | Phase 5: Orchestrator Intelligence | Complete |
+| ORCH-04 | Phase 5: Orchestrator Intelligence | Complete |
 | ORCH-05 | Phase 5: Orchestrator Intelligence | Pending |
 | COMM-03 | Phase 6: Escalation and Intervention | Pending |
 | COMM-04 | Phase 6: Escalation and Intervention | Pending |
