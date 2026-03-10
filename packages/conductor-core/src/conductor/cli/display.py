@@ -36,7 +36,8 @@ def _build_table(state: ConductorState) -> Table:
     agents_by_id = {agent.id: agent for agent in state.agents}
 
     for task in state.tasks:
-        agent = agents_by_id.get(task.assigned_agent or "") if task.assigned_agent else None
+        assigned_id = task.assigned_agent
+        agent = agents_by_id.get(assigned_id) if assigned_id else None
 
         agent_name = agent.name if agent else "-"
         agent_role = agent.role if agent else "-"

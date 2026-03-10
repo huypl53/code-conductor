@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 
 from conductor.cli.display import _build_table
+from conductor.orchestrator.escalation import HumanQuery
 
 if TYPE_CHECKING:
     from conductor.state.manager import StateManager
@@ -79,15 +80,16 @@ async def _dispatch_command(
 
     else:
         console.print(
-            f"Unknown command: {cmd}. Available: cancel, feedback, redirect, status, quit"
+            f"Unknown command: {cmd}. "
+            "Available: cancel, feedback, redirect, status, quit"
         )
 
     return False
 
 
 async def _input_loop(
-    human_out: asyncio.Queue,  # type: ignore[type-arg]
-    human_in: asyncio.Queue,  # type: ignore[type-arg]
+    human_out: asyncio.Queue[HumanQuery],
+    human_in: asyncio.Queue[str],
     orchestrator: object,
     state_manager: StateManager | None = None,
     console: Console | None = None,
@@ -105,7 +107,7 @@ async def _input_loop(
         console = Console(stderr=True)
 
     input_task: asyncio.Task[str] = asyncio.create_task(_ainput("> "))
-    queue_task: asyncio.Task[object] = asyncio.create_task(human_out.get())
+    queue_task: asyncio.Task[HumanQuery] = asyncio.create_task(human_out.get())
 
     try:
         while True:
