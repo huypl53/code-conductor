@@ -107,13 +107,50 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated during roadmap creation) | | |
+| PKG-03 | Phase 1: Monorepo Foundation | Pending |
+| CORD-01 | Phase 2: Shared State Infrastructure | Pending |
+| CORD-02 | Phase 2: Shared State Infrastructure | Pending |
+| CORD-03 | Phase 2: Shared State Infrastructure | Pending |
+| CORD-06 | Phase 2: Shared State Infrastructure | Pending |
+| COMM-01 | Phase 3: ACP Communication Layer | Pending |
+| COMM-02 | Phase 3: ACP Communication Layer | Pending |
+| ORCH-01 | Phase 4: Orchestrator Core | Pending |
+| ORCH-02 | Phase 4: Orchestrator Core | Pending |
+| ORCH-06 | Phase 4: Orchestrator Core | Pending |
+| CORD-04 | Phase 4: Orchestrator Core | Pending |
+| CORD-05 | Phase 4: Orchestrator Core | Pending |
+| ORCH-03 | Phase 5: Orchestrator Intelligence | Pending |
+| ORCH-04 | Phase 5: Orchestrator Intelligence | Pending |
+| ORCH-05 | Phase 5: Orchestrator Intelligence | Pending |
+| COMM-03 | Phase 6: Escalation and Intervention | Pending |
+| COMM-04 | Phase 6: Escalation and Intervention | Pending |
+| COMM-05 | Phase 6: Escalation and Intervention | Pending |
+| COMM-06 | Phase 6: Escalation and Intervention | Pending |
+| COMM-07 | Phase 6: Escalation and Intervention | Pending |
+| RUNT-01 | Phase 7: Agent Runtime | Pending |
+| RUNT-02 | Phase 7: Agent Runtime | Pending |
+| RUNT-03 | Phase 7: Agent Runtime | Pending |
+| RUNT-04 | Phase 7: Agent Runtime | Pending |
+| RUNT-05 | Phase 7: Agent Runtime | Pending |
+| RUNT-06 | Phase 7: Agent Runtime | Pending |
+| CLI-01 | Phase 8: CLI Interface | Pending |
+| CLI-02 | Phase 8: CLI Interface | Pending |
+| CLI-03 | Phase 8: CLI Interface | Pending |
+| DASH-04 | Phase 9: Dashboard Backend | Pending |
+| DASH-01 | Phase 10: Dashboard Frontend | Pending |
+| DASH-02 | Phase 10: Dashboard Frontend | Pending |
+| DASH-03 | Phase 10: Dashboard Frontend | Pending |
+| DASH-05 | Phase 10: Dashboard Frontend | Pending |
+| DASH-06 | Phase 10: Dashboard Frontend | Pending |
+| PKG-01 | Phase 11: Packaging and Distribution | Pending |
+| PKG-02 | Phase 11: Packaging and Distribution | Pending |
+| PKG-04 | Phase 11: Packaging and Distribution | Pending |
 
 **Coverage:**
-- v1 requirements: 30 total
-- Mapped to phases: 0
-- Unmapped: 30 ⚠️
+- v1 requirements: 30 total (note: DASH-04 split from other DASH requirements — backend vs. frontend boundary)
+- Mapped to phases: 38 rows (30 unique requirements, all mapped)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-10*
-*Last updated: 2026-03-10 after initial definition*
+*Last updated: 2026-03-10 after roadmap creation — traceability populated*
