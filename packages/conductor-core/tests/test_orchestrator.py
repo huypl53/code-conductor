@@ -666,3 +666,325 @@ class TestOrch05SessionOpenForRevision:
         aexit_count = client.__aexit__.call_count
         assert aexit_count == 1, \
             f"Expected __aexit__ called exactly 1 time, got {aexit_count}"
+
+
+# ---------------------------------------------------------------------------
+# COMM-05 tests: cancel_agent — cancel running sub-agent and reassign
+# ---------------------------------------------------------------------------
+
+
+class TestComm05CancelReassign:
+    """COMM-05: cancel_agent cancels a running task and spawns a new session."""
+
+    @pytest.mark.asyncio
+    async def test_cancel_agent_cancels_running_task(self):
+        """cancel_agent cancels the asyncio.Task for agent_id and removes from _active_tasks."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+        orch._semaphore = asyncio.Semaphore(2)
+
+        # Simulate a running task in _active_tasks
+        mock_task = MagicMock(spec=asyncio.Task)
+        mock_task.cancel = MagicMock()
+        orch._active_tasks["agent-t1-abc"] = mock_task
+
+        corrected_spec = _make_task_spec("t1", "src/a.py", title="Corrected T1")
+
+        with patch(f"{_ORCH}.ACPClient", side_effect=lambda **kw: _make_mock_acp_client()):
+            await orch.cancel_agent("agent-t1-abc", corrected_spec)
+
+        # Task was cancelled
+        mock_task.cancel.assert_called_once()
+        # Entry removed from _active_tasks (new task may have been added under a new key)
+        assert "agent-t1-abc" not in orch._active_tasks
+
+    @pytest.mark.asyncio
+    async def test_cancel_agent_spawns_new_loop_with_corrected_spec(self):
+        """cancel_agent spawns a new _run_agent_loop with the corrected TaskSpec."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+        orch._semaphore = asyncio.Semaphore(2)
+
+        corrected_spec = _make_task_spec("t1", "src/corrected.py", title="Corrected")
+        spawned_specs: list[TaskSpec] = []
+
+        original_run_agent_loop = orch._run_agent_loop
+
+        async def _capture_loop(task_spec, sem, **kwargs):
+            spawned_specs.append(task_spec)
+
+        orch._run_agent_loop = _capture_loop
+
+        await orch.cancel_agent("agent-unknown-id", corrected_spec)
+
+        assert len(spawned_specs) == 1
+        assert spawned_specs[0].target_file == "src/corrected.py"
+
+    @pytest.mark.asyncio
+    async def test_cancel_agent_unknown_id_is_idempotent(self):
+        """cancel_agent on unknown agent_id does not raise — just spawns new task."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+        orch._semaphore = asyncio.Semaphore(2)
+
+        corrected_spec = _make_task_spec("t1", "src/a.py")
+
+        async def _noop_loop(task_spec, sem, **kwargs):
+            pass
+
+        orch._run_agent_loop = _noop_loop
+
+        # Should not raise even though agent_id is not in _active_tasks
+        await orch.cancel_agent("nonexistent-agent", corrected_spec)
+
+
+# ---------------------------------------------------------------------------
+# COMM-06 tests: inject_guidance — send guidance without stopping agent
+# ---------------------------------------------------------------------------
+
+
+class TestComm06InjectGuidance:
+    """COMM-06: inject_guidance sends guidance to active agent without interrupting."""
+
+    @pytest.mark.asyncio
+    async def test_inject_guidance_calls_client_send(self):
+        """inject_guidance calls client.send(guidance) on the active client."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+
+        mock_client = AsyncMock()
+        mock_client.send = AsyncMock()
+        orch._active_clients["agent-t1"] = mock_client
+
+        await orch.inject_guidance("agent-t1", "Please use snake_case for variables.")
+
+        mock_client.send.assert_called_once_with("Please use snake_case for variables.")
+
+    @pytest.mark.asyncio
+    async def test_inject_guidance_does_not_interrupt(self):
+        """inject_guidance does NOT call client.interrupt()."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+
+        mock_client = AsyncMock()
+        mock_client.send = AsyncMock()
+        mock_client.interrupt = AsyncMock()
+        orch._active_clients["agent-t1"] = mock_client
+
+        await orch.inject_guidance("agent-t1", "Use type hints everywhere.")
+
+        mock_client.interrupt.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_inject_guidance_unknown_agent_raises_escalation_error(self):
+        """inject_guidance raises EscalationError when agent_id is not active."""
+        from conductor.orchestrator.errors import EscalationError
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+
+        with pytest.raises(EscalationError):
+            await orch.inject_guidance("nonexistent-agent", "Some guidance")
+
+
+# ---------------------------------------------------------------------------
+# COMM-07 tests: pause_for_human_decision — interrupt, escalate, resume
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_acp_client_with_interrupt():
+    """Return a mock ACPClient that supports interrupt() and stream_response()."""
+    client = AsyncMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    client.send = AsyncMock()
+    client.interrupt = AsyncMock()
+
+    async def _empty_stream():
+        return
+        yield
+
+    client.stream_response = MagicMock(side_effect=_empty_stream)
+    return client
+
+
+class TestComm07PauseAndDecide:
+    """COMM-07: pause_for_human_decision interrupts, escalates, resumes."""
+
+    @pytest.mark.asyncio
+    async def test_pause_calls_interrupt_and_drains_stream(self):
+        """pause_for_human_decision calls client.interrupt() and drains stream_response()."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+
+        mock_client = _make_mock_acp_client_with_interrupt()
+        orch._active_clients["agent-t1"] = mock_client
+
+        human_out: asyncio.Queue = asyncio.Queue()
+        human_in: asyncio.Queue = asyncio.Queue()
+        await human_in.put("Proceed with option A")
+
+        await orch.pause_for_human_decision(
+            "agent-t1", "Which approach?", human_out, human_in, timeout=5.0
+        )
+
+        mock_client.interrupt.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_pause_pushes_human_query_to_out_queue(self):
+        """pause_for_human_decision puts a HumanQuery on human_out."""
+        from conductor.orchestrator.escalation import HumanQuery
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+
+        mock_client = _make_mock_acp_client_with_interrupt()
+        orch._active_clients["agent-t1"] = mock_client
+
+        human_out: asyncio.Queue = asyncio.Queue()
+        human_in: asyncio.Queue = asyncio.Queue()
+        await human_in.put("Option B")
+
+        await orch.pause_for_human_decision(
+            "agent-t1", "What should I do?", human_out, human_in, timeout=5.0
+        )
+
+        assert not human_out.empty(), "HumanQuery was not pushed to human_out"
+        query = human_out.get_nowait()
+        assert isinstance(query, HumanQuery)
+        assert query.question == "What should I do?"
+
+    @pytest.mark.asyncio
+    async def test_pause_sends_decision_via_client_send(self):
+        """pause_for_human_decision sends human decision via client.send()."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+
+        mock_client = _make_mock_acp_client_with_interrupt()
+        orch._active_clients["agent-t1"] = mock_client
+
+        human_out: asyncio.Queue = asyncio.Queue()
+        human_in: asyncio.Queue = asyncio.Queue()
+        await human_in.put("Use approach X")
+
+        await orch.pause_for_human_decision(
+            "agent-t1", "Which approach?", human_out, human_in, timeout=5.0
+        )
+
+        # client.send should be called with the human decision embedded
+        mock_client.send.assert_called_once()
+        sent_text: str = mock_client.send.call_args[0][0]
+        assert "Use approach X" in sent_text
+
+    @pytest.mark.asyncio
+    async def test_pause_falls_back_on_timeout(self):
+        """pause_for_human_decision falls back to 'proceed with best judgment' on timeout."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+
+        mock_client = _make_mock_acp_client_with_interrupt()
+        orch._active_clients["agent-t1"] = mock_client
+
+        human_out: asyncio.Queue = asyncio.Queue()
+        human_in: asyncio.Queue = asyncio.Queue()  # empty — will time out
+
+        await orch.pause_for_human_decision(
+            "agent-t1", "What next?", human_out, human_in, timeout=0.01
+        )
+
+        # Should send fallback message
+        mock_client.send.assert_called_once()
+        sent_text: str = mock_client.send.call_args[0][0]
+        assert "proceed with best judgment" in sent_text
+
+    @pytest.mark.asyncio
+    async def test_pause_unknown_agent_raises_escalation_error(self):
+        """pause_for_human_decision raises EscalationError for unknown agent_id."""
+        from conductor.orchestrator.errors import EscalationError
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+
+        human_out: asyncio.Queue = asyncio.Queue()
+        human_in: asyncio.Queue = asyncio.Queue()
+
+        with pytest.raises(EscalationError):
+            await orch.pause_for_human_decision(
+                "nonexistent-agent", "What next?", human_out, human_in
+            )
+
+
+# ---------------------------------------------------------------------------
+# Registry cleanup tests
+# ---------------------------------------------------------------------------
+
+
+class TestActiveClientCleanup:
+    """Registry cleanup: _active_clients and _active_tasks cleaned up on error."""
+
+    @pytest.mark.asyncio
+    async def test_active_clients_cleaned_up_on_exception(self):
+        """_active_clients entry is deleted in finally block when _run_agent_loop raises."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+        sem = asyncio.Semaphore(2)
+        task_spec = _make_task_spec("t1", "src/a.py")
+
+        error_client = AsyncMock()
+        error_client.__aenter__ = AsyncMock(return_value=error_client)
+        error_client.__aexit__ = AsyncMock(return_value=False)
+        error_client.send = AsyncMock(side_effect=RuntimeError("Session crashed"))
+
+        with (
+            patch(f"{_ORCH}.ACPClient", return_value=error_client),
+        ):
+            with pytest.raises(RuntimeError):
+                await orch._run_agent_loop(task_spec, sem)
+
+        # Agent ID key (whatever it was) should not be in _active_clients
+        assert len(orch._active_clients) == 0, (
+            f"_active_clients not cleaned up: {orch._active_clients}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_active_clients_cleaned_up_on_normal_completion(self):
+        """_active_clients entry is deleted when agent loop completes normally."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+        sem = asyncio.Semaphore(2)
+        task_spec = _make_task_spec("t1", "src/a.py")
+
+        normal_client = _make_mock_acp_client()
+
+        with (
+            patch(f"{_ORCH}.ACPClient", return_value=normal_client),
+            patch(f"{_ORCH}.review_output", _approved_review_mock()),
+        ):
+            await orch._run_agent_loop(task_spec, sem)
+
+        assert len(orch._active_clients) == 0, (
+            f"_active_clients not cleaned up after normal completion: {orch._active_clients}"
+        )
