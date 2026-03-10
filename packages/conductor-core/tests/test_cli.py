@@ -1,9 +1,10 @@
 """Tests for the Conductor CLI."""
 
+import asyncio
 import subprocess
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import conductor
-import pytest
 
 from conductor.state.models import (
     AgentRecord,
@@ -134,3 +135,49 @@ def test_build_table_status_styles() -> None:
     assert "green" in str(completed_cell.style)
     assert "red" in str(failed_cell.style)
     assert "yellow" in str(in_progress_cell.style)
+
+
+def test_run_interactive_routes_input(tmp_path: "Path") -> None:  # type: ignore[name-defined]
+    """_run_async constructs Orchestrator with correct mode based on auto flag."""
+    from pathlib import Path
+
+    from conductor.cli.commands.run import _run_async
+
+    async def _run_coro() -> None:
+        return None
+
+    with (
+        patch("conductor.cli.commands.run.StateManager") as mock_sm_cls,
+        patch("conductor.cli.commands.run.Orchestrator") as mock_orch_cls,
+        patch("conductor.cli.commands.run.Live"),
+        patch("conductor.cli.commands.run._display_loop", new=AsyncMock(return_value=None)),
+    ):
+        mock_sm = MagicMock()
+        mock_sm.read_state.return_value = MagicMock(tasks=[], agents=[])
+        mock_sm_cls.return_value = mock_sm
+
+        # Test auto=True
+        mock_orch_auto = MagicMock()
+        mock_orch_auto.run_auto = AsyncMock(return_value=None)
+        mock_orch_auto.run = AsyncMock(return_value=None)
+        mock_orch_cls.return_value = mock_orch_auto
+
+        asyncio.run(_run_async("test feature", auto=True, repo=tmp_path))
+
+        mock_orch_cls.assert_called_once()
+        call_kwargs = mock_orch_cls.call_args.kwargs
+        assert call_kwargs["mode"] == "auto"
+
+        mock_orch_cls.reset_mock()
+
+        # Test auto=False (interactive)
+        mock_orch_interactive = MagicMock()
+        mock_orch_interactive.run_auto = AsyncMock(return_value=None)
+        mock_orch_interactive.run = AsyncMock(return_value=None)
+        mock_orch_cls.return_value = mock_orch_interactive
+
+        asyncio.run(_run_async("test feature", auto=False, repo=tmp_path))
+
+        mock_orch_cls.assert_called_once()
+        call_kwargs = mock_orch_cls.call_args.kwargs
+        assert call_kwargs["mode"] == "interactive"
