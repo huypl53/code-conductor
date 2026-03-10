@@ -273,3 +273,39 @@ class TestComm01OptionsWiring:
 
         options = captured[0]
         assert options.setting_sources == ["project"]
+
+    async def test_resume_passed_through_when_provided(self):
+        """ClaudeAgentOptions receives resume='sess-abc' when ACPClient is given resume='sess-abc'."""
+        constructor, captured = self._capture_options()
+
+        with patch("conductor.acp.client.ClaudeSDKClient", constructor):
+            client = ACPClient(cwd="/tmp", resume="sess-abc")
+            async with client:
+                pass
+
+        options = captured[0]
+        assert options.resume == "sess-abc"
+
+    async def test_resume_defaults_to_none(self):
+        """ClaudeAgentOptions receives resume=None when ACPClient is constructed without resume."""
+        constructor, captured = self._capture_options()
+
+        with patch("conductor.acp.client.ClaudeSDKClient", constructor):
+            client = ACPClient(cwd="/tmp")
+            async with client:
+                pass
+
+        options = captured[0]
+        assert options.resume is None
+
+    async def test_resume_none_explicit(self):
+        """ClaudeAgentOptions receives resume=None when ACPClient is given resume=None explicitly."""
+        constructor, captured = self._capture_options()
+
+        with patch("conductor.acp.client.ClaudeSDKClient", constructor):
+            client = ACPClient(cwd="/tmp", resume=None)
+            async with client:
+                pass
+
+        options = captured[0]
+        assert options.resume is None
