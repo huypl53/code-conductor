@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 07-01-PLAN.md (AgentRecord session fields, memory-aware system prompt, max_agents=10)
-last_updated: "2026-03-10T17:47:36.602Z"
+stopped_at: Completed 07-02-PLAN.md (ACPClient resume parameter, SessionRegistry for agent-to-session mapping)
+last_updated: "2026-03-10T17:51:48.056Z"
 last_activity: "2026-03-10 — Phase 2 Plan 1 complete: Pydantic v2 state models, enums, and error hierarchy"
 progress:
   total_phases: 11
   completed_phases: 6
   total_plans: 16
-  completed_plans: 14
+  completed_plans: 15
   percent: 10
 ---
 
@@ -64,6 +64,7 @@ Progress: [█░░░░░░░░░] 10%
 | Phase 06-escalation-and-intervention P01 | 3 | 1 tasks | 4 files |
 | Phase 06-escalation-and-intervention P02 | 4 | 1 tasks | 2 files |
 | Phase 07-agent-runtime P01 | 3 | 2 tasks | 5 files |
+| Phase 07-agent-runtime P02 | 132 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,9 @@ Recent decisions affecting current work:
 - [Phase 07-agent-runtime]: AgentRecord session_id/memory_file/started_at all default None for backward compat with existing serialized state
 - [Phase 07-agent-runtime]: Memory file path convention is .memory/<agent-name>.md using AgentIdentity.name (unique per agent-task-uuid)
 - [Phase 07-agent-runtime]: Orchestrator default max_agents raised from 5 to 10 — decomposer TaskPlan.max_agents (1-10 schema) is binding constraint
+- [Phase 07-agent-runtime]: ACPClient resume parameter positioned after system_prompt to preserve existing keyword-only API order
+- [Phase 07-agent-runtime]: SessionRegistry.load() silently returns empty registry on missing/invalid JSON — crash-safe startup
+- [Phase 07-agent-runtime]: filelock lock file at path.with_suffix('.json.lock') for SessionRegistry — mirrors StateManager pattern
 
 ### Pending Todos
 
@@ -127,6 +131,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T17:47:36.599Z
-Stopped at: Completed 07-01-PLAN.md (AgentRecord session fields, memory-aware system prompt, max_agents=10)
+Last session: 2026-03-10T17:51:48.053Z
+Stopped at: Completed 07-02-PLAN.md (ACPClient resume parameter, SessionRegistry for agent-to-session mapping)
 Resume file: None
