@@ -154,7 +154,10 @@ Plans:
   2. When agent state changes (task assigned, status updated, task completed), the WebSocket client receives a delta event within 1 second
   3. Smart notification events (errors, completions, intervention needed) are identified and flagged server-side — the client does not filter raw events
   4. A new WebSocket client connecting mid-session receives the full current state via REST before receiving incremental updates
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 09-01-PLAN.md — EventType, DeltaEvent, classify_delta with smart notification flags (TDD)
+- [ ] 09-02-PLAN.md — FastAPI server, WebSocket broadcast, state watcher, CLI --dashboard-port flag
 
 ### Phase 10: Dashboard Frontend
 **Goal**: The web dashboard gives a developer full visibility into all running agents with layered detail — collapsed summary by default, expandable to recent actions, expandable further to live stream — and supports interventions without leaving the browser
@@ -194,6 +197,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 6. Escalation and Intervention | 2/2 | Complete   | 2026-03-10 |
 | 7. Agent Runtime | 3/3 | Complete   | 2026-03-10 |
 | 8. CLI Interface | 2/2 | Complete   | 2026-03-10 |
-| 9. Dashboard Backend | 0/TBD | Not started | - |
+| 9. Dashboard Backend | 0/2 | Not started | - |
 | 10. Dashboard Frontend | 0/TBD | Not started | - |
 | 11. Packaging and Distribution | 0/TBD | Not started | - |
