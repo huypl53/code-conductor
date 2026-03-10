@@ -14,7 +14,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **ORCH-03**: Orchestrator monitors sub-agent progress in real-time via ACP streaming (tool calls, file edits)
 - [ ] **ORCH-04**: Orchestrator reviews sub-agent output for quality and coherence before marking work complete
 - [ ] **ORCH-05**: Orchestrator can give feedback to sub-agents and request revisions
-- [ ] **ORCH-06**: Each agent has identity: name, role, target (what they're building), materials (files/context they need)
+- [x] **ORCH-06**: Each agent has identity: name, role, target (what they're building), materials (files/context they need)
 
 ### Coordination
 
@@ -116,7 +116,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COMM-02 | Phase 3: ACP Communication Layer | Complete |
 | ORCH-01 | Phase 4: Orchestrator Core | Pending |
 | ORCH-02 | Phase 4: Orchestrator Core | Pending |
-| ORCH-06 | Phase 4: Orchestrator Core | Pending |
+| ORCH-06 | Phase 4: Orchestrator Core | Complete |
 | CORD-04 | Phase 4: Orchestrator Core | Pending |
 | CORD-05 | Phase 4: Orchestrator Core | Pending |
 | ORCH-03 | Phase 5: Orchestrator Intelligence | Pending |
