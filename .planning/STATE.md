@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 10-03-PLAN.md (LiveStream, InterventionPanel, NotificationProvider, full dashboard)
-last_updated: "2026-03-10T19:45:22.401Z"
+stopped_at: Completed 11-01-PLAN.md (PyPI + npm packaging metadata, LICENSE, READMEs, bin script)
+last_updated: "2026-03-10T20:00:41.622Z"
 last_activity: "2026-03-10 — Phase 2 Plan 1 complete: Pydantic v2 state models, enums, and error hierarchy"
 progress:
   total_phases: 11
   completed_phases: 10
-  total_plans: 23
-  completed_plans: 23
+  total_plans: 25
+  completed_plans: 24
   percent: 10
 ---
 
@@ -73,6 +73,7 @@ Progress: [█░░░░░░░░░] 10%
 | Phase 10-dashboard-frontend P01 | 5 | 2 tasks | 11 files |
 | Phase 10-dashboard-frontend P02 | 5 | 2 tasks | 9 files |
 | Phase 10-dashboard-frontend P03 | 10 | 2 tasks | 11 files |
+| Phase 11-packaging-and-distribution P01 | 2 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -151,6 +152,9 @@ Recent decisions affecting current work:
 - [Phase 10-dashboard-frontend]: Events array capped at 500 via FIFO eviction (slice from tail) — prevents unbounded memory growth in long sessions
 - [Phase 10-dashboard-frontend]: useRef for lastProcessed index in useSmartNotifications avoids re-firing toasts on re-renders
 - [Phase 10-dashboard-frontend]: Single activeInput state (feedback|redirect|null) for InterventionPanel ensures mutual exclusivity
+- [Phase 11-packaging-and-distribution]: Package name is conductor-ai (PyPI) but import path remains conductor — documented in README
+- [Phase 11-packaging-and-distribution]: sirv (not sirv-cli) used as production dep — bin script uses Node HTTP server API directly
+- [Phase 11-packaging-and-distribution]: bin script uses ES module syntax (import.meta.url) for __dirname resolution, consistent with type:module package
 
 ### Pending Todos
 
@@ -163,6 +167,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T19:41:35.321Z
-Stopped at: Completed 10-03-PLAN.md (LiveStream, InterventionPanel, NotificationProvider, full dashboard)
+Last session: 2026-03-10T20:00:41.619Z
+Stopped at: Completed 11-01-PLAN.md (PyPI + npm packaging metadata, LICENSE, READMEs, bin script)
 Resume file: None
