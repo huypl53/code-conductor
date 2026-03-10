@@ -712,14 +712,14 @@ class TestComm05CancelReassign:
         corrected_spec = _make_task_spec("t1", "src/corrected.py", title="Corrected")
         spawned_specs: list[TaskSpec] = []
 
-        original_run_agent_loop = orch._run_agent_loop
-
         async def _capture_loop(task_spec, sem, **kwargs):
             spawned_specs.append(task_spec)
 
         orch._run_agent_loop = _capture_loop
 
         await orch.cancel_agent("agent-unknown-id", corrected_spec)
+        # Yield to event loop to allow the spawned asyncio.Task to execute
+        await asyncio.sleep(0)
 
         assert len(spawned_specs) == 1
         assert spawned_specs[0].target_file == "src/corrected.py"
@@ -742,6 +742,8 @@ class TestComm05CancelReassign:
 
         # Should not raise even though agent_id is not in _active_tasks
         await orch.cancel_agent("nonexistent-agent", corrected_spec)
+        # Yield to allow any spawned task to complete cleanly
+        await asyncio.sleep(0)
 
 
 # ---------------------------------------------------------------------------
