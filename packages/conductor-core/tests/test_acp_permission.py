@@ -113,7 +113,7 @@ class TestComm02AnswerQuestion:
                     id="t1",
                     title="Write auth module",
                     description="Implement JWT authentication",
-                    status=TaskStatus.pending,
+                    status=TaskStatus.PENDING,
                 )
             ]
         )
