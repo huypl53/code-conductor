@@ -7,7 +7,7 @@ requires-python = ">=3.12"
 package = false
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = ["packages/conductor-core"]
 
 [dependency-groups]
 dev = []
