@@ -140,7 +140,7 @@ Plans:
   1. `conductor run "add dark mode to the settings page"` starts the orchestrator and shows agent activity in the terminal
   2. The terminal displays each agent's name, role, and current task status in a live-updating view
   3. The user can type a CLI command to cancel an agent, redirect it with new instructions, or inject feedback — and the change takes effect without restarting the session
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 08-01-PLAN.md — Typer app + Rich Live agent display + run/status commands
 - [ ] 08-02-PLAN.md — Input loop + intervention commands (cancel, feedback, redirect)
@@ -193,7 +193,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 5. Orchestrator Intelligence | 1/2 | In Progress|  |
 | 6. Escalation and Intervention | 2/2 | Complete   | 2026-03-10 |
 | 7. Agent Runtime | 3/3 | Complete   | 2026-03-10 |
-| 8. CLI Interface | 0/2 | Not started | - |
+| 8. CLI Interface | 1/2 | In Progress|  |
 | 9. Dashboard Backend | 0/TBD | Not started | - |
 | 10. Dashboard Frontend | 0/TBD | Not started | - |
 | 11. Packaging and Distribution | 0/TBD | Not started | - |
