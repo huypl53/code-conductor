@@ -34,6 +34,11 @@ class Task(BaseModel):
     outputs: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    # Orchestrator-injected dependency/ownership fields (backward-compatible defaults)
+    requires: list[str] = Field(default_factory=list)
+    produces: list[str] = Field(default_factory=list)
+    target_file: str = ""
+    material_files: list[str] = Field(default_factory=list)
 
 
 class AgentRecord(BaseModel):
