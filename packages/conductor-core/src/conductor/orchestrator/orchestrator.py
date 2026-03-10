@@ -2,24 +2,28 @@
 
 Includes observe-review-revise cycle (ORCH-04/05).
 COMM-05/06/07: Intervention methods — cancel/reassign, inject guidance, pause/resume.
+RUNT-03/04/05: Mode wiring, .memory/ creation, session persistence, spec review.
 """
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
+from pathlib import Path
 
 from conductor.acp import ACPClient
 from conductor.orchestrator.decomposer import TaskDecomposer
 from conductor.orchestrator.errors import EscalationError
-from conductor.orchestrator.escalation import HumanQuery
+from conductor.orchestrator.escalation import EscalationRouter, HumanQuery
 from conductor.orchestrator.identity import AgentIdentity, build_system_prompt
 from conductor.orchestrator.models import TaskSpec
 from conductor.orchestrator.monitor import StreamMonitor
 from conductor.orchestrator.ownership import validate_file_ownership
 from conductor.orchestrator.reviewer import ReviewVerdict, review_output
 from conductor.orchestrator.scheduler import DependencyScheduler
+from conductor.orchestrator.session_registry import SessionRegistry
 from conductor.state import StateManager
 from conductor.state.models import (
     AgentRecord,
@@ -29,6 +33,8 @@ from conductor.state.models import (
     Task,
     TaskStatus,
 )
+
+logger = logging.getLogger("conductor.orchestrator")
 
 
 class Orchestrator:
@@ -51,6 +57,12 @@ class Orchestrator:
     Args:
         state_manager: StateManager for atomic state mutations.
         repo_path: Absolute path to the repository root (agent cwd).
+        mode: Execution mode — ``"auto"`` (fully autonomous) or
+            ``"interactive"`` (escalate low-confidence decisions to human).
+        human_out: Queue where :class:`HumanQuery` objects are pushed for
+            human review. Only used in ``interactive`` mode.
+        human_in: Queue from which the human's text answer is read.
+            Only used in ``interactive`` mode.
         max_agents: Hard cap on concurrent agent sessions (default 10).
             The decomposer's TaskPlan.max_agents (1-10 per schema) is the
             binding constraint when <= self._max_agents.
@@ -62,14 +74,31 @@ class Orchestrator:
         self,
         state_manager: StateManager,
         repo_path: str,
+        mode: str = "auto",
+        human_out: asyncio.Queue | None = None,
+        human_in: asyncio.Queue | None = None,
         max_agents: int = 10,
         max_revisions: int = 2,
     ) -> None:
         self._state = state_manager
         self._repo_path = repo_path
+        self._mode = mode
+        self._human_out = human_out
+        self._human_in = human_in
         self._max_agents = max_agents
         self._max_revisions = max_revisions
         self._decomposer = TaskDecomposer()
+        self._escalation_router = EscalationRouter(
+            mode=mode,
+            human_out=human_out,
+            human_in=human_in,
+        )
+        # Load (or create) session registry from .conductor/sessions.json
+        _sessions_path = (
+            Path(repo_path) / ".conductor" / "sessions.json"
+        )
+        self._session_registry = SessionRegistry.load(_sessions_path)
+        self._sessions_path = _sessions_path
         # COMM-05/06/07: active session registries for intervention methods
         self._active_clients: dict[str, ACPClient] = {}
         self._active_tasks: dict[str, asyncio.Task] = {}
@@ -91,6 +120,10 @@ class Orchestrator:
             FileConflictError: If any two tasks claim the same target file.
             CycleError: If task dependencies contain a cycle.
         """
+        # 0. Ensure .memory/ directory exists before spawning agents
+        memory_dir = Path(self._repo_path) / ".memory"
+        memory_dir.mkdir(parents=True, exist_ok=True)
+
         # 1. Decompose
         plan = await self._decomposer.decompose(feature_description)
 
@@ -152,6 +185,82 @@ class Orchestrator:
         # Wait for any stragglers (shouldn't normally happen)
         if pending:
             await asyncio.gather(*pending.values())
+
+    async def resume(self) -> None:
+        """Re-spawn IN_PROGRESS tasks using stored session IDs.
+
+        Reads current state, finds tasks with ``status == IN_PROGRESS``, and
+        calls ``_run_agent_loop`` for each — resuming the SDK session if a
+        session_id is stored in the :class:`SessionRegistry`, otherwise
+        starting a fresh session.
+
+        Multiple IN_PROGRESS tasks are resumed concurrently using the same
+        ``asyncio.wait(FIRST_COMPLETED)`` pattern as ``run()``.
+        """
+        state = await asyncio.to_thread(self._state.read_state)
+
+        # Find IN_PROGRESS tasks
+        in_progress = [
+            t for t in state.tasks
+            if t.status == TaskStatus.IN_PROGRESS
+        ]
+        if not in_progress:
+            return
+
+        # Build agent_id -> agent record map for fast lookup
+        agent_map = {a.id: a for a in state.agents}
+
+        sem = asyncio.Semaphore(self._max_agents)
+        self._semaphore = sem
+
+        pending: dict[str, asyncio.Task] = {}
+
+        for task in in_progress:
+            agent_id = task.assigned_agent
+            session_id: str | None = None
+
+            if agent_id:
+                # Try registry first, fall back to agent record
+                session_id = self._session_registry.get(agent_id)
+                if session_id is None:
+                    agent_rec = agent_map.get(agent_id)
+                    if agent_rec is not None:
+                        session_id = agent_rec.session_id
+
+            # Reconstruct TaskSpec from Task fields
+            task_spec = TaskSpec(
+                id=task.id,
+                title=task.title,
+                description=task.description,
+                role=(
+                    agent_map[agent_id].role
+                    if agent_id and agent_id in agent_map
+                    else "developer"
+                ),
+                target_file=task.target_file,
+                material_files=task.material_files,
+                requires=task.requires,
+                produces=task.produces,
+            )
+
+            t = asyncio.create_task(
+                self._run_agent_loop(
+                    task_spec, sem, resume_session_id=session_id
+                )
+            )
+            pending[task.id] = t
+            self._active_tasks[task.id] = t
+
+        while pending:
+            done_futures, _ = await asyncio.wait(
+                pending.values(), return_when=asyncio.FIRST_COMPLETED
+            )
+            for fut in done_futures:
+                completed_id = next(
+                    tid for tid, t in pending.items() if t is fut
+                )
+                del pending[completed_id]
+                self._active_tasks.pop(completed_id, None)
 
     # ------------------------------------------------------------------
     # Intervention methods (COMM-05/06/07)
@@ -266,6 +375,7 @@ class Orchestrator:
         task_spec: TaskSpec,
         sem: asyncio.Semaphore,
         max_revisions: int | None = None,
+        resume_session_id: str | None = None,
     ) -> None:
         """Acquire semaphore, run the observe-review-revise cycle for *task_spec*.
 
@@ -279,6 +389,8 @@ class Orchestrator:
             sem: Semaphore limiting concurrent sessions.
             max_revisions: Override for max revision cycles
                 (uses instance default if None).
+            resume_session_id: SDK session ID to resume an existing conversation.
+                If None, a new session is started.
         """
         if max_revisions is None:
             max_revisions = self._max_revisions
@@ -307,9 +419,35 @@ class Orchestrator:
             async with ACPClient(
                 cwd=self._repo_path,
                 system_prompt=system_prompt,
+                resume=resume_session_id,
             ) as client:
                 self._active_clients[agent_id] = client
                 try:
+                    # Persist session_id BEFORE sending first message (crash safety)
+                    if client._sdk_client is not None:
+                        try:
+                            server_info = (
+                                await client._sdk_client.get_server_info()
+                            )
+                            if server_info and "session_id" in server_info:
+                                session_id = server_info["session_id"]
+                                self._session_registry.register(
+                                    agent_id, session_id
+                                )
+                                self._session_registry.save(self._sessions_path)
+                                await asyncio.to_thread(
+                                    self._state.mutate,
+                                    self._make_save_session_fn(
+                                        agent_id, session_id
+                                    ),
+                                )
+                        except Exception:  # noqa: BLE001
+                            logger.debug(
+                                "get_server_info() unavailable or failed "
+                                "for agent %s — skipping session_id persist",
+                                agent_id,
+                            )
+
                     await client.send(
                         f"Task {task_spec.id}: {task_spec.description}"
                     )
@@ -396,6 +534,8 @@ class Orchestrator:
                     current_task_id=task_spec.id,
                     status=AgentStatus.WORKING,
                     registered_at=datetime.now(UTC),
+                    memory_file=f".memory/{agent_id}.md",
+                    started_at=datetime.now(UTC),
                 )
             )
             for task in state.tasks:
@@ -405,6 +545,21 @@ class Orchestrator:
                     break
 
         return _add_agent
+
+    @staticmethod
+    def _make_save_session_fn(
+        agent_id: str,
+        session_id: str,
+    ) -> Callable[[ConductorState], None]:
+        """Return a mutate fn that saves the session_id to the AgentRecord."""
+
+        def _save_session(state: ConductorState) -> None:
+            for agent in state.agents:
+                if agent.id == agent_id:
+                    agent.session_id = session_id
+                    break
+
+        return _save_session
 
     @staticmethod
     def _make_complete_task_fn(

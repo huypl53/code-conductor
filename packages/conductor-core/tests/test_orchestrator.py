@@ -98,7 +98,7 @@ class TestOrchestrator:
     """ORCH-02: Orchestrator orchestrates the full loop."""
 
     @pytest.mark.asyncio
-    async def test_run_decomposes_and_spawns(self):
+    async def test_run_decomposes_and_spawns(self, tmp_path):
         """Two independent tasks: both should get spawned (ACPClient opened twice)."""
         from conductor.orchestrator.orchestrator import Orchestrator
 
@@ -127,13 +127,13 @@ class TestOrchestrator:
             patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
             patch(f"{_ORCH}.review_output", _approved_review_mock()),
         ):
-            orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
             await orch.run("Build two features")
 
         assert spawn_count == 2, f"Expected 2 spawns, got {spawn_count}"
 
     @pytest.mark.asyncio
-    async def test_run_validates_ownership_before_spawn(self):
+    async def test_run_validates_ownership_before_spawn(self, tmp_path):
         """Two tasks sharing the same target_file: FileConflictError, no spawn."""
         from conductor.orchestrator.orchestrator import Orchestrator
 
@@ -158,14 +158,14 @@ class TestOrchestrator:
             patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer),
             patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
         ):
-            orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
             with pytest.raises(FileConflictError):
                 await orch.run("Build conflicting features")
 
         assert spawn_count == 0, "ACPClient should not be opened on conflict"
 
     @pytest.mark.asyncio
-    async def test_run_respects_dependency_order(self):
+    async def test_run_respects_dependency_order(self, tmp_path):
         """Tasks A(no deps) and B(requires A): A must spawn before B."""
         from conductor.orchestrator.orchestrator import Orchestrator
 
@@ -194,14 +194,14 @@ class TestOrchestrator:
             patch(f"{_ORCH}.ACPClient"),
             patch.object(OrchestratorClass, "_run_agent_loop", _patched_loop),
         ):
-            orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
             await orch.run("Build with dependencies")
 
         assert spawn_order.index("a") < spawn_order.index("b"), \
             f"Expected a before b, got: {spawn_order}"
 
     @pytest.mark.asyncio
-    async def test_run_max_agents_cap(self):
+    async def test_run_max_agents_cap(self, tmp_path):
         """4 independent tasks with max_agents=2: at most 2 concurrent sessions."""
         from conductor.orchestrator.orchestrator import Orchestrator
 
@@ -233,7 +233,7 @@ class TestOrchestrator:
             patch.object(OrchestratorClass, "_run_agent_loop", _slow_loop),
         ):
             orch = Orchestrator(
-                state_manager=state_mgr, repo_path="/repo", max_agents=5
+                state_manager=state_mgr, repo_path=str(tmp_path), max_agents=5
             )
             await orch.run("Build 4 tasks with cap 2")
 
@@ -241,7 +241,7 @@ class TestOrchestrator:
             f"Semaphore exceeded: {concurrent_high_water} concurrent"
 
     @pytest.mark.asyncio
-    async def test_spawn_writes_agent_record_before_session(self):
+    async def test_spawn_writes_agent_record_before_session(self, tmp_path):
         """AgentRecord is written to state before ACPClient.__aenter__ is called."""
         from conductor.orchestrator.orchestrator import Orchestrator
 
@@ -277,7 +277,7 @@ class TestOrchestrator:
             patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
             patch(f"{_ORCH}.review_output", _approved_review_mock()),
         ):
-            orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
             await orch.run("Build one task")
 
         # At least one mutate call must precede acp_enter
@@ -289,7 +289,7 @@ class TestOrchestrator:
             f"AgentRecord mutate must precede acp_enter: {call_order}"
 
     @pytest.mark.asyncio
-    async def test_spawn_builds_identity_prompt(self):
+    async def test_spawn_builds_identity_prompt(self, tmp_path):
         """ACPClient receives system_prompt containing agent name, role, target_file."""
         from conductor.orchestrator.orchestrator import Orchestrator
 
@@ -317,7 +317,7 @@ class TestOrchestrator:
             patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
             patch(f"{_ORCH}.review_output", _approved_review_mock()),
         ):
-            orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
             await orch.run("Build auth")
 
         assert captured_kwargs, "ACPClient was not instantiated"
@@ -326,7 +326,7 @@ class TestOrchestrator:
         assert "src/auth.py" in system_prompt
 
     @pytest.mark.asyncio
-    async def test_run_uses_min_max_agents(self):
+    async def test_run_uses_min_max_agents(self, tmp_path):
         """Orchestrator max_agents=3, plan max_agents=2: semaphore uses 2 (min)."""
         from conductor.orchestrator.orchestrator import Orchestrator
 
@@ -353,7 +353,7 @@ class TestOrchestrator:
             patch.object(OrchestratorClass, "_run_agent_loop", _capture_loop),
         ):
             orch = Orchestrator(
-                state_manager=state_mgr, repo_path="/repo", max_agents=3
+                state_manager=state_mgr, repo_path=str(tmp_path), max_agents=3
             )
             await orch.run("Build 3 tasks")
 
@@ -364,7 +364,7 @@ class TestOrchestrator:
             f"Semaphore value {semaphore_values[0]} exceeds plan max_agents=2"
 
     @pytest.mark.asyncio
-    async def test_run_updates_task_status_on_completion(self):
+    async def test_run_updates_task_status_on_completion(self, tmp_path):
         """Task status must be set to COMPLETED after agent session closes."""
         from conductor.orchestrator.orchestrator import Orchestrator
 
@@ -398,7 +398,7 @@ class TestOrchestrator:
             patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
             patch(f"{_ORCH}.review_output", _approved_review_mock()),
         ):
-            orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
             await orch.run("Build one task")
 
         assert "t1" in completed_task_ids, (
@@ -416,7 +416,9 @@ class TestOrch04CompleteGate:
     """ORCH-04: Task status COMPLETED only after review passes."""
 
     @pytest.mark.asyncio
-    async def test_approved_review_marks_task_completed_with_approved_status(self):
+    async def test_approved_review_marks_task_completed_with_approved_status(
+        self, tmp_path
+    ):
         """When review_output returns approved=True, task gets COMPLETED + APPROVED."""
         from conductor.orchestrator.orchestrator import Orchestrator
 
@@ -453,7 +455,7 @@ class TestOrch04CompleteGate:
             patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
             patch(f"{_ORCH}.review_output", AsyncMock(return_value=approved_verdict)),
         ):
-            orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
             await orch.run("Build feature")
 
         assert completed_tasks, "No COMPLETED mutation observed"
@@ -463,7 +465,7 @@ class TestOrch04CompleteGate:
         assert review_status == "approved", f"Expected approved, got {review_status}"
 
     @pytest.mark.asyncio
-    async def test_failed_review_with_no_revisions_still_completes(self):
+    async def test_failed_review_with_no_revisions_still_completes(self, tmp_path):
         """When review fails and no revisions possible, task still COMPLETED."""
         from conductor.orchestrator.orchestrator import Orchestrator
 
@@ -503,7 +505,7 @@ class TestOrch04CompleteGate:
         ):
             orch = Orchestrator(
                 state_manager=state_mgr,
-                repo_path="/repo",
+                repo_path=str(tmp_path),
                 max_revisions=0,
             )
             await orch.run("Build feature")
@@ -516,7 +518,7 @@ class TestOrch05RevisionSend:
     """ORCH-05: client.send() called with revision feedback on failed review."""
 
     @pytest.mark.asyncio
-    async def test_send_called_twice_on_one_revision(self):
+    async def test_send_called_twice_on_one_revision(self, tmp_path):
         """When review fails once then passes: client.send called exactly twice."""
         from conductor.orchestrator.orchestrator import Orchestrator
 
@@ -547,7 +549,7 @@ class TestOrch05RevisionSend:
             patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
             patch(f"{_ORCH}.review_output", mock_review),
         ):
-            orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
             await orch.run("Build feature")
 
         assert captured_clients, "ACPClient was never instantiated"
@@ -561,7 +563,7 @@ class TestOrch05MaxRevisions:
     """ORCH-05: Revision loop terminates at max_revisions cap."""
 
     @pytest.mark.asyncio
-    async def test_loop_runs_max_revisions_plus_one_iterations(self):
+    async def test_loop_runs_max_revisions_plus_one_iterations(self, tmp_path):
         """With max_revisions=2 and always failing: 3 iterations, revision_count=2."""
         from conductor.orchestrator.orchestrator import Orchestrator
 
@@ -607,7 +609,7 @@ class TestOrch05MaxRevisions:
         ):
             orch = Orchestrator(
                 state_manager=state_mgr,
-                repo_path="/repo",
+                repo_path=str(tmp_path),
                 max_revisions=2,
             )
             await orch.run("Build feature")
@@ -626,7 +628,7 @@ class TestOrch05SessionOpenForRevision:
     """ORCH-05: ACPClient session stays open for the entire revision loop."""
 
     @pytest.mark.asyncio
-    async def test_aexit_called_exactly_once_after_all_revisions(self):
+    async def test_aexit_called_exactly_once_after_all_revisions(self, tmp_path):
         """__aexit__ is called exactly once — session stays open for the loop."""
         from conductor.orchestrator.orchestrator import Orchestrator
 
@@ -658,7 +660,7 @@ class TestOrch05SessionOpenForRevision:
             patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
             patch(f"{_ORCH}.review_output", mock_review),
         ):
-            orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
             await orch.run("Build feature")
 
         assert captured_clients, "ACPClient was never instantiated"
@@ -1048,26 +1050,40 @@ class TestOrchestratorSessionPersistence:
 
         persisted_session_ids: list[str] = []
         send_order: list[str] = []
+        registered_agent_ids: list[str] = []
 
         def _track_mutate(fn):
-            from conductor.state.models import AgentRecord, AgentStatus, ConductorState
-
+            from conductor.state.models import (
+                AgentRecord,
+                AgentStatus,
+                ConductorState,
+                Task,
+            )
+            # Create a state that can accept both add_agent and save_session mutations
+            # Use a sentinel agent we can detect
+            dummy_agents = [
+                AgentRecord(id=aid, name=aid, role="dev")
+                for aid in registered_agent_ids
+            ] if registered_agent_ids else []
             dummy = ConductorState(
-                agents=[
-                    AgentRecord(id="dummy-agent", name="dummy-agent", role="dev")
-                ]
+                tasks=[Task(id="t1", title="T1", description="D1")],
+                agents=dummy_agents,
             )
             fn(dummy)
+            # Detect if an agent was newly added (add_agent mutation)
+            for agent in dummy.agents:
+                if agent.id not in registered_agent_ids:
+                    registered_agent_ids.append(agent.id)
+            # Detect session_id set (save_session mutation)
             for agent in dummy.agents:
                 if agent.session_id is not None:
-                    persisted_session_ids.append(agent.session_id)
-                    send_order.append("persist_session")
+                    if agent.session_id not in persisted_session_ids:
+                        persisted_session_ids.append(agent.session_id)
+                        send_order.append("persist_session")
 
         state_mgr.mutate = _track_mutate
 
         client = _make_mock_acp_client()
-
-        original_send = client.send.side_effect
 
         async def _tracking_send(msg):
             send_order.append("send")
@@ -1075,7 +1091,6 @@ class TestOrchestratorSessionPersistence:
         client.send = AsyncMock(side_effect=_tracking_send)
 
         mock_server_info = {"session_id": "sess-xyz"}
-
         mock_sdk_client = MagicMock()
         mock_sdk_client.get_server_info = AsyncMock(return_value=mock_server_info)
         client._sdk_client = mock_sdk_client
