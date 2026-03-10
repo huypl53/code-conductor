@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
   "filelock>=3.16",
   "pydantic>=2.10",
+  "claude-agent-sdk>=0.1.48",
 ]
 
 [project.scripts]
@@ -37,6 +38,7 @@ typeCheckingMode = "standard"
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = ["--import-mode=importlib"]
+asyncio_mode = "auto"
 
 [dependency-groups]
-dev = ["pytest>=8", "pyright>=1.1", "ruff>=0.1"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "pyright>=1.1", "ruff>=0.1"]
