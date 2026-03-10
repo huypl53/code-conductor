@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 10-01-PLAN.md (test infra, TypeScript types, Vite proxy, backend intervention commands)
-last_updated: "2026-03-10T19:28:14.122Z"
+stopped_at: Completed 10-02-PLAN.md (useConductorSocket hook, StatusBadge, AgentCard, AgentGrid, App layout)
+last_updated: "2026-03-10T19:35:01.065Z"
 last_activity: "2026-03-10 — Phase 2 Plan 1 complete: Pydantic v2 state models, enums, and error hierarchy"
 progress:
   total_phases: 11
   completed_phases: 9
   total_plans: 23
-  completed_plans: 21
+  completed_plans: 22
   percent: 10
 ---
 
@@ -71,6 +71,7 @@ Progress: [█░░░░░░░░░] 10%
 | Phase 09-dashboard-backend P01 | 87 | 1 tasks | 3 files |
 | Phase 09-dashboard-backend P02 | 3 | 2 tasks | 7 files |
 | Phase 10-dashboard-frontend P01 | 5 | 2 tasks | 11 files |
+| Phase 10-dashboard-frontend P02 | 5 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -144,6 +145,9 @@ Recent decisions affecting current work:
 - [Phase 10-dashboard-frontend]: Use defineConfig from vitest/config (not vite) to enable test: {} block without TypeScript errors in Vitest 4.x
 - [Phase 10-dashboard-frontend]: TYPE_CHECKING guard for Orchestrator import in server.py avoids circular import while preserving type annotations
 - [Phase 10-dashboard-frontend]: handle_intervention wraps orchestrator calls in try/except to prevent WebSocket disconnection on errors
+- [Phase 10-dashboard-frontend]: MockWebSocket class assigned to globalThis.WebSocket — standard pattern for testing WebSocket hooks in jsdom without a real server
+- [Phase 10-dashboard-frontend]: applyDelta returns null when state is null — delta-before-snapshot is a no-op, safe to ignore without snapshot
+- [Phase 10-dashboard-frontend]: Events array capped at 500 via FIFO eviction (slice from tail) — prevents unbounded memory growth in long sessions
 
 ### Pending Todos
 
@@ -156,6 +160,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T19:28:14.118Z
-Stopped at: Completed 10-01-PLAN.md (test infra, TypeScript types, Vite proxy, backend intervention commands)
+Last session: 2026-03-10T19:35:01.061Z
+Stopped at: Completed 10-02-PLAN.md (useConductorSocket hook, StatusBadge, AgentCard, AgentGrid, App layout)
 Resume file: None

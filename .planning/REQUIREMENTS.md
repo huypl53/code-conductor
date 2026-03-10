@@ -52,11 +52,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### User Interface — Web Dashboard
 
-- [ ] **DASH-01**: Web dashboard shows agent status summary (name, role, current task, progress)
+- [x] **DASH-01**: Web dashboard shows agent status summary (name, role, current task, progress)
 - [ ] **DASH-02**: Dashboard supports expandable detail view per agent (recent actions, files modified, current activity)
 - [ ] **DASH-03**: Dashboard supports live stream view per agent (real-time tool calls, streaming output)
 - [x] **DASH-04**: Dashboard sends smart notifications for key events (errors, completions, intervention needed)
-- [ ] **DASH-05**: Dashboard handles conversation verbosity with layered visibility — collapsed by default, expand on demand
+- [x] **DASH-05**: Dashboard handles conversation verbosity with layered visibility — collapsed by default, expand on demand
 - [x] **DASH-06**: User can intervene from dashboard (cancel, redirect, provide feedback to agents)
 
 ### Packaging
@@ -137,10 +137,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CLI-02 | Phase 8: CLI Interface | Complete |
 | CLI-03 | Phase 8: CLI Interface | Complete |
 | DASH-04 | Phase 9: Dashboard Backend | Complete |
-| DASH-01 | Phase 10: Dashboard Frontend | Pending |
+| DASH-01 | Phase 10: Dashboard Frontend | Complete |
 | DASH-02 | Phase 10: Dashboard Frontend | Pending |
 | DASH-03 | Phase 10: Dashboard Frontend | Pending |
-| DASH-05 | Phase 10: Dashboard Frontend | Pending |
+| DASH-05 | Phase 10: Dashboard Frontend | Complete |
 | DASH-06 | Phase 10: Dashboard Frontend | Complete |
 | PKG-01 | Phase 11: Packaging and Distribution | Pending |
 | PKG-02 | Phase 11: Packaging and Distribution | Pending |
