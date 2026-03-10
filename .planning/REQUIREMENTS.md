@@ -48,7 +48,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **CLI-01**: User can chat with the orchestrator via CLI terminal
 - [x] **CLI-02**: User can see which agents exist, their roles, and current task status
-- [ ] **CLI-03**: User can intervene (cancel, redirect, provide feedback) via CLI commands
+- [x] **CLI-03**: User can intervene (cancel, redirect, provide feedback) via CLI commands
 
 ### User Interface — Web Dashboard
 
@@ -135,7 +135,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RUNT-06 | Phase 7: Agent Runtime | Complete |
 | CLI-01 | Phase 8: CLI Interface | Complete |
 | CLI-02 | Phase 8: CLI Interface | Complete |
-| CLI-03 | Phase 8: CLI Interface | Pending |
+| CLI-03 | Phase 8: CLI Interface | Complete |
 | DASH-04 | Phase 9: Dashboard Backend | Pending |
 | DASH-01 | Phase 10: Dashboard Frontend | Pending |
 | DASH-02 | Phase 10: Dashboard Frontend | Pending |

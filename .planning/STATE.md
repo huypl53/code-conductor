@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 08-01-PLAN.md (Typer CLI, Rich Live display, conductor run/status commands)
-last_updated: "2026-03-10T18:27:09.594Z"
+stopped_at: Completed 08-02-PLAN.md (interactive input loop, _dispatch_command, _input_loop wired into run)
+last_updated: "2026-03-10T18:33:46.684Z"
 last_activity: "2026-03-10 — Phase 2 Plan 1 complete: Pydantic v2 state models, enums, and error hierarchy"
 progress:
   total_phases: 11
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 18
-  completed_plans: 17
+  completed_plans: 18
   percent: 10
 ---
 
@@ -67,6 +67,7 @@ Progress: [█░░░░░░░░░] 10%
 | Phase 07-agent-runtime P02 | 132 | 2 tasks | 4 files |
 | Phase 07-agent-runtime P03 | 12 | 2 tasks | 2 files |
 | Phase 08-cli-interface P01 | 4 | 2 tasks | 7 files |
+| Phase 08-cli-interface P02 | 4 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -129,6 +130,9 @@ Recent decisions affecting current work:
 - [Phase 08-cli-interface]: Typer name= parameter not prog_name= in typer>=0.12 — fixed during execution (Rule 1 auto-fix)
 - [Phase 08-cli-interface]: asyncio.gather combines _display_loop and orch_task — live table and orchestrator run concurrently
 - [Phase 08-cli-interface]: Live(console=Console(stderr=False)) prevents mixing Rich table output with stderr SDK logs
+- [Phase 08-cli-interface]: asyncio.wait FIRST_COMPLETED races terminal input vs. HumanQuery queue events — prevents blocking on one source while the other has data
+- [Phase 08-cli-interface]: Console(stderr=True) for input loop — confirmation messages and agent questions appear on stderr, never interfering with Rich Live table on stdout
+- [Phase 08-cli-interface]: asyncio.Queue typed as Queue[HumanQuery]/Queue[str] — eliminates pyright type errors and makes queue contracts explicit
 
 ### Pending Todos
 
@@ -141,6 +145,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T18:27:09.592Z
-Stopped at: Completed 08-01-PLAN.md (Typer CLI, Rich Live display, conductor run/status commands)
+Last session: 2026-03-10T18:33:46.680Z
+Stopped at: Completed 08-02-PLAN.md (interactive input loop, _dispatch_command, _input_loop wired into run)
 Resume file: None

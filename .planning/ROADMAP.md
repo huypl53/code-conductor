@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 5: Orchestrator Intelligence** - Real-time sub-agent monitoring, output review, and feedback loops
 - [x] **Phase 6: Escalation and Intervention** - Auto/interactive mode logic, cancel, inject-mid-stream, and pause/escalate (completed 2026-03-10)
 - [x] **Phase 7: Agent Runtime** - Context inheritance, shared memory, session persistence, and dynamic team sizing (completed 2026-03-10)
-- [ ] **Phase 8: CLI Interface** - Terminal interface for chatting with orchestrator, viewing agent status, and intervening
+- [x] **Phase 8: CLI Interface** - Terminal interface for chatting with orchestrator, viewing agent status, and intervening (completed 2026-03-10)
 - [ ] **Phase 9: Dashboard Backend** - State watcher, WebSocket broadcast server, and server-side event filtering
 - [ ] **Phase 10: Dashboard Frontend** - React dashboard with layered visibility, live stream, and intervention controls
 - [ ] **Phase 11: Packaging and Distribution** - pip and npm packages with installation and getting-started guide
@@ -140,7 +140,7 @@ Plans:
   1. `conductor run "add dark mode to the settings page"` starts the orchestrator and shows agent activity in the terminal
   2. The terminal displays each agent's name, role, and current task status in a live-updating view
   3. The user can type a CLI command to cancel an agent, redirect it with new instructions, or inject feedback — and the change takes effect without restarting the session
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 08-01-PLAN.md — Typer app + Rich Live agent display + run/status commands
 - [ ] 08-02-PLAN.md — Input loop + intervention commands (cancel, feedback, redirect)
@@ -193,7 +193,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 5. Orchestrator Intelligence | 1/2 | In Progress|  |
 | 6. Escalation and Intervention | 2/2 | Complete   | 2026-03-10 |
 | 7. Agent Runtime | 3/3 | Complete   | 2026-03-10 |
-| 8. CLI Interface | 1/2 | In Progress|  |
+| 8. CLI Interface | 2/2 | Complete   | 2026-03-10 |
 | 9. Dashboard Backend | 0/TBD | Not started | - |
 | 10. Dashboard Frontend | 0/TBD | Not started | - |
 | 11. Packaging and Distribution | 0/TBD | Not started | - |
