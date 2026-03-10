@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-01-PLAN.md (PermissionHandler ACP communication layer)
-last_updated: "2026-03-10T15:46:10.950Z"
+stopped_at: Completed 03-02-PLAN.md (ACPClient ACP communication layer)
+last_updated: "2026-03-10T15:52:09.209Z"
 last_activity: "2026-03-10 — Phase 2 Plan 1 complete: Pydantic v2 state models, enums, and error hierarchy"
 progress:
   total_phases: 11
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
   percent: 10
 ---
 
@@ -55,6 +55,7 @@ Progress: [█░░░░░░░░░] 10%
 | Phase 02-shared-state-infrastructure P01 | 5 | 2 tasks | 6 files |
 | Phase 02-shared-state-infrastructure P02 | 8 | 2 tasks | 3 files |
 | Phase 03-acp-communication-layer P01 | 3 | 2 tasks | 5 files |
+| Phase 03-acp-communication-layer P02 | 4 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,9 @@ Recent decisions affecting current work:
 - [Phase 03-acp-communication-layer]: PermissionHandler uses asyncio.wait_for for all async decision logic — ensures no deadlock from unanswered sub-agent prompts
 - [Phase 03-acp-communication-layer]: asyncio.to_thread for StateManager.read_state() inside async callbacks — never block the event loop
 - [Phase 03-acp-communication-layer]: Permission routing: AskUserQuestion -> answer_fn, everything else -> default-allow with input passthrough
+- [Phase 03-acp-communication-layer]: ACPClient uses _closed flag set in __aexit__ finally block — ensures flag is set even if disconnect raises
+- [Phase 03-acp-communication-layer]: PreToolUse keepalive hook (SyncHookJSONOutput) is mandatory SDK companion to can_use_tool — always register both or neither
+- [Phase 03-acp-communication-layer]: setting_sources parameter typed as list[SettingSource] not list[str] — enforces SDK type contract at call site
 
 ### Pending Todos
 
@@ -90,6 +94,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T15:46:10.947Z
-Stopped at: Completed 03-01-PLAN.md (PermissionHandler ACP communication layer)
+Last session: 2026-03-10T15:52:09.207Z
+Stopped at: Completed 03-02-PLAN.md (ACPClient ACP communication layer)
 Resume file: None

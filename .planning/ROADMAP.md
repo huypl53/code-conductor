@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Monorepo Foundation** - Python + Node.js monorepo scaffold with CI, linting, and project structure (completed 2026-03-10)
 - [x] **Phase 2: Shared State Infrastructure** - Safe `.conductor/state.json` with file-locked reads/writes and Pydantic models (completed 2026-03-10)
-- [ ] **Phase 3: ACP Communication Layer** - ACP client/server runtime with permission flow, timeout, and safe defaults
+- [x] **Phase 3: ACP Communication Layer** - ACP client/server runtime with permission flow, timeout, and safe defaults (completed 2026-03-10)
 - [ ] **Phase 4: Orchestrator Core** - Orchestrator agent that plans, decomposes, delegates, and manages file ownership
 - [ ] **Phase 5: Orchestrator Intelligence** - Real-time sub-agent monitoring, output review, and feedback loops
 - [ ] **Phase 6: Escalation and Intervention** - Auto/interactive mode logic, cancel, inject-mid-stream, and pause/escalate
@@ -65,7 +65,7 @@ Plans:
   2. Sub-agent can send a question (permission prompt, clarification) and receive an answer from the orchestrator
   3. A permission prompt that receives no response within the timeout resolves to a safe default (deny) rather than hanging
   4. Orchestrator can open, use, and close an ACP session without resource leaks
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 03-01-PLAN.md — ACP error hierarchy + PermissionHandler with timeout safe-default (TDD)
 - [ ] 03-02-PLAN.md — ACPClient wrapping ClaudeSDKClient with session lifecycle (TDD)
@@ -171,7 +171,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Monorepo Foundation | 2/2 | Complete   | 2026-03-10 |
 | 2. Shared State Infrastructure | 2/2 | Complete   | 2026-03-10 |
-| 3. ACP Communication Layer | 1/2 | In Progress|  |
+| 3. ACP Communication Layer | 2/2 | Complete   | 2026-03-10 |
 | 4. Orchestrator Core | 0/TBD | Not started | - |
 | 5. Orchestrator Intelligence | 0/TBD | Not started | - |
 | 6. Escalation and Intervention | 0/TBD | Not started | - |
