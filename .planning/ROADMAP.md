@@ -169,7 +169,11 @@ Plans:
   3. Expanding further opens the live stream: real-time tool calls and streaming output as they happen
   4. Verbose agent conversation is collapsed by default — the developer sees summaries, not raw logs, until they choose to expand
   5. The developer can cancel, redirect, or send feedback to an agent directly from the dashboard without touching the CLI
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 10-01-PLAN.md — Test infra, TypeScript types, Vite proxy, backend intervention extension
+- [ ] 10-02-PLAN.md — WebSocket hook, StatusBadge, AgentCard, AgentGrid, App layout
+- [ ] 10-03-PLAN.md — Detail view, LiveStream, InterventionPanel, NotificationProvider
 
 ### Phase 11: Packaging and Distribution
 **Goal**: Conductor can be installed into any repository with `pip install conductor-ai` and `npm install -g conductor-dashboard` — and a developer who has never seen the project can get it running from the getting-started guide
@@ -198,5 +202,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 7. Agent Runtime | 3/3 | Complete   | 2026-03-10 |
 | 8. CLI Interface | 2/2 | Complete   | 2026-03-10 |
 | 9. Dashboard Backend | 1/2 | In Progress|  |
-| 10. Dashboard Frontend | 0/TBD | Not started | - |
+| 10. Dashboard Frontend | 0/3 | Not started | - |
 | 11. Packaging and Distribution | 0/TBD | Not started | - |
