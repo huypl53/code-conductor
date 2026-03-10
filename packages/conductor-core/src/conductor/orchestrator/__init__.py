@@ -5,11 +5,14 @@ from conductor.orchestrator.errors import (
     DecompositionError,
     FileConflictError,
     OrchestratorError,
+    ReviewError,
 )
 from conductor.orchestrator.identity import AgentIdentity, build_system_prompt
 from conductor.orchestrator.models import TaskPlan, TaskSpec
+from conductor.orchestrator.monitor import StreamMonitor
 from conductor.orchestrator.orchestrator import Orchestrator
 from conductor.orchestrator.ownership import validate_file_ownership
+from conductor.orchestrator.reviewer import ReviewVerdict, review_output
 from conductor.orchestrator.scheduler import DependencyScheduler
 
 __all__ = [
@@ -18,6 +21,7 @@ __all__ = [
     "DecompositionError",
     "CycleError",
     "FileConflictError",
+    "ReviewError",
     # models
     "TaskSpec",
     "TaskPlan",
@@ -32,4 +36,9 @@ __all__ = [
     "DependencyScheduler",
     # ownership
     "validate_file_ownership",
+    # monitor
+    "StreamMonitor",
+    # reviewer
+    "ReviewVerdict",
+    "review_output",
 ]
