@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 09-01-PLAN.md (EventType, DeltaEvent, classify_delta — dashboard event classification module)
-last_updated: "2026-03-10T18:54:11.236Z"
+stopped_at: Completed 09-02-PLAN.md (FastAPI dashboard server, WebSocket streaming, CLI --dashboard-port integration)
+last_updated: "2026-03-10T18:59:57.615Z"
 last_activity: "2026-03-10 — Phase 2 Plan 1 complete: Pydantic v2 state models, enums, and error hierarchy"
 progress:
   total_phases: 11
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 20
-  completed_plans: 19
+  completed_plans: 20
   percent: 10
 ---
 
@@ -69,6 +69,7 @@ Progress: [█░░░░░░░░░] 10%
 | Phase 08-cli-interface P01 | 4 | 2 tasks | 7 files |
 | Phase 08-cli-interface P02 | 4 | 2 tasks | 3 files |
 | Phase 09-dashboard-backend P01 | 87 | 1 tasks | 3 files |
+| Phase 09-dashboard-backend P02 | 3 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -136,6 +137,9 @@ Recent decisions affecting current work:
 - [Phase 08-cli-interface]: asyncio.Queue typed as Queue[HumanQuery]/Queue[str] — eliminates pyright type errors and makes queue contracts explicit
 - [Phase 09-dashboard-backend]: EventType uses StrEnum so values compare equal to plain strings — classify_delta compares task.status to string literals without needing TaskStatus import
 - [Phase 09-dashboard-backend]: classify_delta returns [] when prev is None (initial snapshot) — avoids emitting TASK_ASSIGNED for every task on first load
+- [Phase 09-dashboard-backend]: Watch parent directory (not state_path directly) — watchfiles misses atomic os.replace inode swaps when watching the file itself
+- [Phase 09-dashboard-backend]: broadcast iterates list(active_connections) copy — avoids mutation-during-iteration when disconnecting dead clients
+- [Phase 09-dashboard-backend]: gather_extras list pattern — clean conditional task injection into asyncio.gather without restructuring existing orchestrator coroutines
 
 ### Pending Todos
 
@@ -148,6 +152,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T18:54:11.232Z
-Stopped at: Completed 09-01-PLAN.md (EventType, DeltaEvent, classify_delta — dashboard event classification module)
+Last session: 2026-03-10T18:59:57.611Z
+Stopped at: Completed 09-02-PLAN.md (FastAPI dashboard server, WebSocket streaming, CLI --dashboard-port integration)
 Resume file: None
