@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 01-monorepo-foundation-01-01-PLAN.md
-last_updated: "2026-03-10T11:46:39.744Z"
+stopped_at: Completed 01-02-PLAN.md (dashboard scaffold + CI workflow)
+last_updated: "2026-03-10T11:46:48.470Z"
 last_activity: 2026-03-10 — Roadmap created, all 30 v1 requirements mapped to 11 phases
 progress:
   total_phases: 11
@@ -65,6 +65,8 @@ Recent decisions affecting current work:
 - Roadmap: All three critical pitfalls (state corruption, cost explosion, over-parallelization) addressed in Phases 2-4 before any parallel agent work
 - [Phase 01-monorepo-foundation]: uv workspace members uses explicit list [packages/conductor-core] not glob to avoid including Node.js conductor-dashboard as Python member
 - [Phase 01-monorepo-foundation]: ruff added to conductor-core dev dependencies so uv run ruff works without global install
+- [Phase 01-monorepo-foundation]: Biome 2.x uses assist.actions.source.organizeImports (removed top-level organizeImports key in 2.x)
+- [Phase 01-monorepo-foundation]: Node 22 used in CI (current LTS); pnpm/action-setup@v4 with version 9 as specified
 
 ### Pending Todos
 
@@ -77,6 +79,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T11:46:15.508Z
-Stopped at: Completed 01-monorepo-foundation-01-01-PLAN.md
+Last session: 2026-03-10T11:46:48.468Z
+Stopped at: Completed 01-02-PLAN.md (dashboard scaffold + CI workflow)
 Resume file: None
