@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-02-PLAN.md (_run_agent_loop with observe-review-revise cycle)
-last_updated: "2026-03-10T17:01:29.327Z"
+stopped_at: Completed 06-01-PLAN.md (EscalationRouter with auto/interactive mode routing)
+last_updated: "2026-03-10T17:18:48.530Z"
 last_activity: "2026-03-10 — Phase 2 Plan 1 complete: Pydantic v2 state models, enums, and error hierarchy"
 progress:
   total_phases: 11
   completed_phases: 5
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 13
+  completed_plans: 12
   percent: 10
 ---
 
@@ -61,6 +61,7 @@ Progress: [█░░░░░░░░░] 10%
 | Phase 04-orchestrator-core P03 | 4 | 2 tasks | 5 files |
 | Phase 05-orchestrator-intelligence P01 | 4 | 2 tasks | 7 files |
 | Phase 05-orchestrator-intelligence P02 | 7 | 1 tasks | 2 files |
+| Phase 06-escalation-and-intervention P01 | 3 | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,9 @@ Recent decisions affecting current work:
 - [Phase 05-orchestrator-intelligence]: _run_agent_loop max_revisions defaults to instance-level self._max_revisions — per-orchestrator config without per-call override
 - [Phase 05-orchestrator-intelligence]: revision_num from for loop used as revision_count — captures final iteration index naturally without extra counter
 - [Phase 05-orchestrator-intelligence]: Single async-with ACPClient block for entire revision loop — session must stay open between review and revision send
+- [Phase 06-escalation-and-intervention]: EscalationRouter.resolve() always returns PermissionResultAllow — escalation routing never denies
+- [Phase 06-escalation-and-intervention]: Auto mode strictly ignores human_out/human_in queues — mode takes precedence over queue availability
+- [Phase 06-escalation-and-intervention]: _LOW_CONFIDENCE_KEYWORDS frozenset: delete/drop/remove/irreversible/cannot be undone/production/deploy/billing/secret/credentials
 
 ### Pending Todos
 
@@ -115,6 +119,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T16:58:29.669Z
-Stopped at: Completed 05-02-PLAN.md (_run_agent_loop with observe-review-revise cycle)
+Last session: 2026-03-10T17:18:48.528Z
+Stopped at: Completed 06-01-PLAN.md (EscalationRouter with auto/interactive mode routing)
 Resume file: None
