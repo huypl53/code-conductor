@@ -7,12 +7,18 @@ Exposes:
 On WebSocket connect, the client immediately receives a full state snapshot
 (belt-and-suspenders against missed events during connection setup).
 Subsequent messages are DeltaEvent JSON objects broadcast by the state watcher.
+
+WebSocket also accepts incoming intervention commands (JSON with action/agent_id)
+and routes them to the orchestrator when provided.
 """
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -20,6 +26,11 @@ from fastapi.responses import JSONResponse
 
 from conductor.dashboard.watcher import state_watcher
 from conductor.state.manager import StateManager
+
+if TYPE_CHECKING:
+    from conductor.orchestrator.orchestrator import Orchestrator
+
+logger = logging.getLogger("conductor.dashboard.server")
 
 
 class ConnectionManager:
@@ -50,11 +61,66 @@ class ConnectionManager:
             self.disconnect(connection)
 
 
-def create_app(state_path: Path) -> FastAPI:
+async def handle_intervention(data: str, orchestrator: Orchestrator) -> None:
+    """Parse and route an incoming intervention command to the orchestrator.
+
+    Args:
+        data: Raw JSON string received from WebSocket.
+        orchestrator: Orchestrator instance to route commands to.
+    """
+    try:
+        command = json.loads(data)
+    except json.JSONDecodeError:
+        return  # Silently ignore malformed JSON
+
+    action = command.get("action")
+    agent_id = command.get("agent_id")
+
+    if not isinstance(action, str) or not isinstance(agent_id, str):
+        return  # Missing or invalid required fields
+
+    try:
+        if action == "cancel":
+            from conductor.orchestrator.models import TaskSpec
+
+            await orchestrator.cancel_agent(
+                agent_id,
+                TaskSpec(
+                    id=agent_id,
+                    title="Cancelled from dashboard",
+                    description="",
+                    role="",
+                    target_file="",
+                ),
+            )
+        elif action == "feedback":
+            message = command.get("message", "")
+            await orchestrator.inject_guidance(agent_id, message)
+        elif action == "redirect":
+            from conductor.orchestrator.models import TaskSpec
+
+            message = command.get("message", "")
+            await orchestrator.cancel_agent(
+                agent_id,
+                TaskSpec(
+                    id=agent_id,
+                    title="Redirected from dashboard",
+                    description=message,
+                    role="",
+                    target_file="",
+                ),
+            )
+    except Exception:
+        logger.exception("Error handling intervention command action=%s agent=%s", action, agent_id)
+
+
+def create_app(state_path: Path, orchestrator: Orchestrator | None = None) -> FastAPI:
     """Create and configure the FastAPI dashboard application.
 
     Args:
         state_path: Path to state.json watched for changes.
+        orchestrator: Optional orchestrator instance for routing intervention commands.
+                      When None, incoming WebSocket messages are silently ignored.
 
     Returns:
         Configured FastAPI app with lifespan (state watcher task).
@@ -77,6 +143,7 @@ def create_app(state_path: Path) -> FastAPI:
     app = FastAPI(title="Conductor Dashboard", lifespan=lifespan)
     app.state.ws_manager = ws_manager
     app.state.state_manager = state_manager
+    app.state.orchestrator = orchestrator
 
     @app.get("/state")
     async def get_state() -> JSONResponse:
@@ -86,7 +153,11 @@ def create_app(state_path: Path) -> FastAPI:
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket) -> None:
-        """WebSocket endpoint — sends initial state snapshot, then delta events."""
+        """WebSocket endpoint — sends initial state snapshot, then delta events.
+
+        Also accepts intervention commands (JSON with action/agent_id) from the
+        dashboard client and routes them to the orchestrator.
+        """
         await ws_manager.connect(websocket)
         try:
             # Send full current state as first message (belt-and-suspenders)
@@ -98,9 +169,12 @@ def create_app(state_path: Path) -> FastAPI:
             except Exception:
                 pass
 
-            # Keep connection alive; watcher broadcasts will push events
+            # Keep connection alive; watcher broadcasts will push events.
+            # Route incoming messages to orchestrator if available.
             while True:
-                await websocket.receive_text()
+                data = await websocket.receive_text()
+                if app.state.orchestrator is not None:
+                    await handle_intervention(data, app.state.orchestrator)
         except WebSocketDisconnect:
             ws_manager.disconnect(websocket)
 

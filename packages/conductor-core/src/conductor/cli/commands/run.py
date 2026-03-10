@@ -69,7 +69,7 @@ async def _run_async(
 
         from conductor.dashboard.server import create_app
 
-        dashboard_app = create_app(conductor_dir / "state.json")
+        dashboard_app = create_app(conductor_dir / "state.json", orchestrator=orchestrator)
         config = uvicorn.Config(
             dashboard_app,
             host="127.0.0.1",
