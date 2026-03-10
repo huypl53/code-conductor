@@ -1342,6 +1342,157 @@ class TestOrchestratorResume:
 
 
 # ---------------------------------------------------------------------------
+# RUNT-04 tests: pre_run_review and run_auto
+# ---------------------------------------------------------------------------
+
+
+class TestPreRunReview:
+    """RUNT-04: pre_run_review() performs upfront single-exchange spec analysis."""
+
+    @pytest.mark.asyncio
+    async def test_pre_run_review_returns_confirmed_description(self, tmp_path):
+        """pre_run_review() returns confirmed_description from structured output."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+
+        mock_result = MagicMock()
+        mock_result.subtype = None
+        mock_result.structured_output = {
+            "is_clear": True,
+            "issues": [],
+            "confirmed_description": "Build a REST API with auth",
+        }
+
+        async def _mock_query(prompt, options):
+            from claude_agent_sdk import ResultMessage
+            yield mock_result
+
+        with patch(f"{_ORCH}.query", side_effect=_mock_query):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            result = await orch.pre_run_review(
+                "Build a REST API with authentication"
+            )
+
+        assert result == "Build a REST API with auth"
+
+    @pytest.mark.asyncio
+    async def test_pre_run_review_logs_warning_on_issues(self, tmp_path, caplog):
+        """pre_run_review() logs warning when review identifies issues."""
+        import logging
+
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+
+        mock_result = MagicMock()
+        mock_result.subtype = None
+        mock_result.structured_output = {
+            "is_clear": False,
+            "issues": ["Missing auth mechanism", "No error handling specified"],
+            "confirmed_description": "Build an API assuming JWT auth",
+        }
+
+        async def _mock_query(prompt, options):
+            yield mock_result
+
+        with patch(f"{_ORCH}.query", side_effect=_mock_query):
+            with caplog.at_level(logging.WARNING, logger="conductor.orchestrator"):
+                orch = Orchestrator(
+                    state_manager=state_mgr, repo_path=str(tmp_path)
+                )
+                result = await orch.pre_run_review("Build an API")
+
+        assert result == "Build an API assuming JWT auth"
+        assert any("issue" in msg.lower() for msg in caplog.messages), (
+            f"Expected warning about issues, got: {caplog.messages}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_pre_run_review_raises_on_no_result(self, tmp_path):
+        """pre_run_review() raises DecompositionError when SDK returns no result."""
+        from conductor.orchestrator.errors import DecompositionError
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+
+        async def _empty_query(prompt, options):
+            return
+            yield  # make it an async generator
+
+        with patch(f"{_ORCH}.query", side_effect=_empty_query):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            with pytest.raises(DecompositionError):
+                await orch.pre_run_review("Build something")
+
+    @pytest.mark.asyncio
+    async def test_pre_run_review_is_single_exchange_no_permission_handler(
+        self, tmp_path
+    ):
+        """pre_run_review() uses query() (not ClaudeSDKClient/PermissionHandler)."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+
+        mock_result = MagicMock()
+        mock_result.subtype = None
+        mock_result.structured_output = {
+            "is_clear": True,
+            "issues": [],
+            "confirmed_description": "Build feature X",
+        }
+
+        query_calls: list = []
+
+        async def _mock_query(prompt, options):
+            query_calls.append({"prompt": prompt, "options": options})
+            yield mock_result
+
+        with (
+            patch(f"{_ORCH}.query", side_effect=_mock_query),
+            patch(f"{_ORCH}.ACPClient") as mock_acp,
+        ):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            await orch.pre_run_review("Build feature X")
+
+        # query() was called (not ACPClient/ClaudeSDKClient)
+        assert len(query_calls) == 1, "query() should be called exactly once"
+        # ACPClient should NOT be instantiated for spec review
+        mock_acp.assert_not_called()
+
+
+class TestRunAuto:
+    """RUNT-04: run_auto() chains pre_run_review -> run."""
+
+    @pytest.mark.asyncio
+    async def test_run_auto_calls_pre_run_review_then_run(self, tmp_path):
+        """run_auto() calls pre_run_review() then run() with confirmed description."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+
+        call_log: list[str] = []
+        confirmed_desc = "Build a REST API with confirmed spec"
+
+        async def _mock_pre_run_review(feature_description):
+            call_log.append(f"pre_run_review:{feature_description}")
+            return confirmed_desc
+
+        async def _mock_run(feature_description):
+            call_log.append(f"run:{feature_description}")
+
+        with patch(f"{_ORCH}.ACPClient"):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            orch.pre_run_review = _mock_pre_run_review
+            orch.run = _mock_run
+            await orch.run_auto("Build a REST API")
+
+        assert len(call_log) == 2, f"Expected 2 calls, got: {call_log}"
+        assert call_log[0] == "pre_run_review:Build a REST API"
+        assert call_log[1] == f"run:{confirmed_desc}"
+
+
+# ---------------------------------------------------------------------------
 # Registry cleanup tests
 # ---------------------------------------------------------------------------
 
