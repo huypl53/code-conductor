@@ -20,32 +20,7 @@ from conductor.state import (
     Task,
     TaskStatus,
 )
-from conductor.state.manager import StateManager
-
-
-# ---------------------------------------------------------------------------
-# Module-level worker function for multiprocessing spawn compatibility
-# ---------------------------------------------------------------------------
-
-
-def _write_tasks_worker(state_path: Path, prefix: str, count: int) -> None:
-    """Write `count` tasks to the state file, used by concurrent test."""
-    manager = StateManager(state_path)
-    for i in range(count):
-        task_id = f"{prefix}-task-{i}"
-
-        def _add(state: ConductorState, _id: str = task_id) -> None:
-            state.tasks.append(
-                Task(
-                    id=_id,
-                    title=f"Task {_id}",
-                    description=f"Description for {_id}",
-                    created_at=datetime.now(UTC),
-                    updated_at=datetime.now(UTC),
-                )
-            )
-
-        manager.mutate(_add)
+from conductor.state.manager import StateManager, _spawn_write_tasks
 
 
 # ---------------------------------------------------------------------------
@@ -179,12 +154,12 @@ class TestCord02ConcurrentWrites:
 
         ctx = multiprocessing.get_context("spawn")
         p1 = ctx.Process(
-            target=_write_tasks_worker,
-            args=(state_path, "alpha", 10),
+            target=_spawn_write_tasks,
+            args=(str(state_path), "alpha", 10),
         )
         p2 = ctx.Process(
-            target=_write_tasks_worker,
-            args=(state_path, "beta", 10),
+            target=_spawn_write_tasks,
+            args=(str(state_path), "beta", 10),
         )
 
         p1.start()

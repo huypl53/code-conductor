@@ -1,5 +1,6 @@
 """Conductor shared state management — public API."""
 from conductor.state.errors import StateCorrupted, StateError, StateLockTimeout
+from conductor.state.manager import StateManager
 from conductor.state.models import (
     AgentRecord,
     AgentStatus,
@@ -17,6 +18,7 @@ __all__ = [
     "StateCorrupted",
     "StateError",
     "StateLockTimeout",
+    "StateManager",
     "Task",
     "TaskStatus",
 ]
