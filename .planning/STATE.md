@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-01-PLAN.md (StreamMonitor and ReviewVerdict/review_output)
-last_updated: "2026-03-10T16:48:35.703Z"
+stopped_at: Completed 05-02-PLAN.md (_run_agent_loop with observe-review-revise cycle)
+last_updated: "2026-03-10T16:58:29.672Z"
 last_activity: "2026-03-10 — Phase 2 Plan 1 complete: Pydantic v2 state models, enums, and error hierarchy"
 progress:
   total_phases: 11
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 11
-  completed_plans: 10
+  completed_plans: 11
   percent: 10
 ---
 
@@ -60,6 +60,7 @@ Progress: [█░░░░░░░░░] 10%
 | Phase 04-orchestrator-core P02 | 2 | 2 tasks | 5 files |
 | Phase 04-orchestrator-core P03 | 4 | 2 tasks | 5 files |
 | Phase 05-orchestrator-intelligence P01 | 4 | 2 tasks | 7 files |
+| Phase 05-orchestrator-intelligence P02 | 7 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,9 @@ Recent decisions affecting current work:
 - [Phase 05-orchestrator-intelligence]: review_output() uses asyncio.to_thread for file reads — avoids blocking event loop under parallelism
 - [Phase 05-orchestrator-intelligence]: Content truncation: first 4000 + last 4000 chars with notice — preserves module declarations and end-of-file implementations
 - [Phase 05-orchestrator-intelligence]: ReviewStatus.PENDING/APPROVED/NEEDS_REVISION StrEnum with backward-compatible defaults on Task model
+- [Phase 05-orchestrator-intelligence]: _run_agent_loop max_revisions defaults to instance-level self._max_revisions — per-orchestrator config without per-call override
+- [Phase 05-orchestrator-intelligence]: revision_num from for loop used as revision_count — captures final iteration index naturally without extra counter
+- [Phase 05-orchestrator-intelligence]: Single async-with ACPClient block for entire revision loop — session must stay open between review and revision send
 
 ### Pending Todos
 
@@ -111,6 +115,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T16:48:35.699Z
-Stopped at: Completed 05-01-PLAN.md (StreamMonitor and ReviewVerdict/review_output)
+Last session: 2026-03-10T16:58:29.669Z
+Stopped at: Completed 05-02-PLAN.md (_run_agent_loop with observe-review-revise cycle)
 Resume file: None
