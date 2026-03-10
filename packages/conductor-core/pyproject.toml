@@ -1,7 +1,20 @@
 [project]
-name = "conductor-core"
+name = "conductor-ai"
 version = "0.1.0"
+description = "AI agent orchestration - a self-organizing team of coding agents"
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
+authors = [{ name = "Conductor Team" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+]
 dependencies = [
   "filelock>=3.16",
   "pydantic>=2.10",
