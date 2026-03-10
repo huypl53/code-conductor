@@ -137,6 +137,80 @@ def test_build_table_status_styles() -> None:
     assert "yellow" in str(in_progress_cell.style)
 
 
+def test_dispatch_cancel() -> None:
+    """_dispatch_command('cancel agent-1') calls orchestrator.cancel_agent('agent-1')."""
+    from conductor.cli.input_loop import _dispatch_command
+
+    mock_orch = MagicMock()
+    mock_orch.cancel_agent = AsyncMock()
+    mock_orch.inject_guidance = AsyncMock()
+
+    asyncio.run(_dispatch_command("cancel agent-1", mock_orch))
+
+    mock_orch.cancel_agent.assert_awaited_once_with("agent-1")
+    mock_orch.inject_guidance.assert_not_awaited()
+
+
+def test_dispatch_feedback() -> None:
+    """_dispatch_command('feedback agent-1 great work on the models') calls inject_guidance."""
+    from conductor.cli.input_loop import _dispatch_command
+
+    mock_orch = MagicMock()
+    mock_orch.cancel_agent = AsyncMock()
+    mock_orch.inject_guidance = AsyncMock()
+
+    asyncio.run(_dispatch_command("feedback agent-1 great work on the models", mock_orch))
+
+    mock_orch.inject_guidance.assert_awaited_once_with("agent-1", "great work on the models")
+    mock_orch.cancel_agent.assert_not_awaited()
+
+
+def test_dispatch_redirect() -> None:
+    """_dispatch_command('redirect agent-1 work on auth instead') calls cancel_agent with new_instructions."""
+    from conductor.cli.input_loop import _dispatch_command
+
+    mock_orch = MagicMock()
+    mock_orch.cancel_agent = AsyncMock()
+    mock_orch.inject_guidance = AsyncMock()
+
+    asyncio.run(_dispatch_command("redirect agent-1 work on auth instead", mock_orch))
+
+    mock_orch.cancel_agent.assert_awaited_once_with("agent-1", new_instructions="work on auth instead")
+    mock_orch.inject_guidance.assert_not_awaited()
+
+
+def test_dispatch_unknown() -> None:
+    """_dispatch_command('blah') does not call any orchestrator method."""
+    from conductor.cli.input_loop import _dispatch_command
+
+    mock_orch = MagicMock()
+    mock_orch.cancel_agent = AsyncMock()
+    mock_orch.inject_guidance = AsyncMock()
+
+    asyncio.run(_dispatch_command("blah", mock_orch))
+
+    mock_orch.cancel_agent.assert_not_awaited()
+    mock_orch.inject_guidance.assert_not_awaited()
+
+
+def test_dispatch_status() -> None:
+    """_dispatch_command('status') with a state_manager reads state and builds table."""
+    from conductor.cli.input_loop import _dispatch_command
+
+    mock_orch = MagicMock()
+    mock_orch.cancel_agent = AsyncMock()
+    mock_orch.inject_guidance = AsyncMock()
+
+    mock_sm = MagicMock()
+    mock_sm.read_state.return_value = ConductorState(
+        tasks=[Task(id="t1", title="Test task", description="desc")]
+    )
+
+    asyncio.run(_dispatch_command("status", mock_orch, state_manager=mock_sm))
+
+    mock_sm.read_state.assert_called_once()
+
+
 def test_run_interactive_routes_input(tmp_path: "Path") -> None:  # type: ignore[name-defined]
     """_run_async constructs Orchestrator with correct mode based on auto flag."""
     from pathlib import Path
