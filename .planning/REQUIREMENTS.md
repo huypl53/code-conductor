@@ -19,8 +19,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Coordination
 
 - [x] **CORD-01**: Shared state file (`.conductor/state.json`) tracks all tasks, agent assignments, status, outputs, and interfaces
-- [ ] **CORD-02**: Orchestrator writes task assignments and resolves conflicts in shared state
-- [ ] **CORD-03**: Sub-agents update their own task status and outputs in shared state
+- [x] **CORD-02**: Orchestrator writes task assignments and resolves conflicts in shared state
+- [x] **CORD-03**: Sub-agents update their own task status and outputs in shared state
 - [ ] **CORD-04**: Orchestrator identifies task dependencies and decides strategy per dependency (sequence, stubs-first, parallel)
 - [ ] **CORD-05**: Orchestrator prevents concurrent file edit conflicts by assigning file ownership to agents
 - [x] **CORD-06**: Task list is visible to all agents — each agent can see what others are working on and their status
@@ -109,8 +109,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | PKG-03 | Phase 1: Monorepo Foundation | Complete |
 | CORD-01 | Phase 2: Shared State Infrastructure | Complete |
-| CORD-02 | Phase 2: Shared State Infrastructure | Pending |
-| CORD-03 | Phase 2: Shared State Infrastructure | Pending |
+| CORD-02 | Phase 2: Shared State Infrastructure | Complete |
+| CORD-03 | Phase 2: Shared State Infrastructure | Complete |
 | CORD-06 | Phase 2: Shared State Infrastructure | Complete |
 | COMM-01 | Phase 3: ACP Communication Layer | Pending |
 | COMM-02 | Phase 3: ACP Communication Layer | Pending |
