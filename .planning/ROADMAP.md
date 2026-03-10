@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: ACP Communication Layer** - ACP client/server runtime with permission flow, timeout, and safe defaults (completed 2026-03-10)
 - [x] **Phase 4: Orchestrator Core** - Orchestrator agent that plans, decomposes, delegates, and manages file ownership (completed 2026-03-10)
 - [ ] **Phase 5: Orchestrator Intelligence** - Real-time sub-agent monitoring, output review, and feedback loops
-- [ ] **Phase 6: Escalation and Intervention** - Auto/interactive mode logic, cancel, inject-mid-stream, and pause/escalate
+- [x] **Phase 6: Escalation and Intervention** - Auto/interactive mode logic, cancel, inject-mid-stream, and pause/escalate (completed 2026-03-10)
 - [ ] **Phase 7: Agent Runtime** - Context inheritance, shared memory, session persistence, and dynamic team sizing
 - [ ] **Phase 8: CLI Interface** - Terminal interface for chatting with orchestrator, viewing agent status, and intervening
 - [ ] **Phase 9: Dashboard Backend** - State watcher, WebSocket broadcast server, and server-side event filtering
@@ -110,7 +110,7 @@ Plans:
   3. The orchestrator can cancel a sub-agent's current work and reassign it with corrected instructions
   4. The orchestrator can inject a guidance message to a running sub-agent without stopping or restarting it
   5. The orchestrator can pause a sub-agent and present the human with a decision prompt before resuming
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 06-01-PLAN.md — EscalationRouter with auto/interactive mode routing + error types (TDD)
 - [ ] 06-02-PLAN.md — Orchestrator intervention methods: cancel, inject, pause/resume (TDD)
@@ -184,7 +184,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 3. ACP Communication Layer | 2/2 | Complete   | 2026-03-10 |
 | 4. Orchestrator Core | 3/3 | Complete   | 2026-03-10 |
 | 5. Orchestrator Intelligence | 1/2 | In Progress|  |
-| 6. Escalation and Intervention | 0/2 | Not started | - |
+| 6. Escalation and Intervention | 2/2 | Complete   | 2026-03-10 |
 | 7. Agent Runtime | 0/TBD | Not started | - |
 | 8. CLI Interface | 0/TBD | Not started | - |
 | 9. Dashboard Backend | 0/TBD | Not started | - |

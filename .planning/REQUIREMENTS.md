@@ -31,9 +31,9 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **COMM-02**: Orchestrator answers sub-agent questions using project context and shared state knowledge
 - [x] **COMM-03**: In `--auto` mode, orchestrator uses best judgment to answer questions and logs decisions
 - [x] **COMM-04**: In interactive mode, orchestrator escalates questions it can't confidently answer to the human
-- [ ] **COMM-05**: Orchestrator can cancel a sub-agent's work and reassign with corrected instructions
-- [ ] **COMM-06**: Orchestrator can inject guidance to a sub-agent mid-stream without stopping their work
-- [ ] **COMM-07**: Orchestrator can pause a sub-agent and escalate to human for a decision
+- [x] **COMM-05**: Orchestrator can cancel a sub-agent's work and reassign with corrected instructions
+- [x] **COMM-06**: Orchestrator can inject guidance to a sub-agent mid-stream without stopping their work
+- [x] **COMM-07**: Orchestrator can pause a sub-agent and escalate to human for a decision
 
 ### Agent Runtime
 
@@ -124,9 +124,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ORCH-05 | Phase 5: Orchestrator Intelligence | Complete |
 | COMM-03 | Phase 6: Escalation and Intervention | Complete |
 | COMM-04 | Phase 6: Escalation and Intervention | Complete |
-| COMM-05 | Phase 6: Escalation and Intervention | Pending |
-| COMM-06 | Phase 6: Escalation and Intervention | Pending |
-| COMM-07 | Phase 6: Escalation and Intervention | Pending |
+| COMM-05 | Phase 6: Escalation and Intervention | Complete |
+| COMM-06 | Phase 6: Escalation and Intervention | Complete |
+| COMM-07 | Phase 6: Escalation and Intervention | Complete |
 | RUNT-01 | Phase 7: Agent Runtime | Pending |
 | RUNT-02 | Phase 7: Agent Runtime | Pending |
 | RUNT-03 | Phase 7: Agent Runtime | Pending |

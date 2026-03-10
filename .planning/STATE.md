@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 06-01-PLAN.md (EscalationRouter with auto/interactive mode routing)
-last_updated: "2026-03-10T17:18:48.530Z"
+stopped_at: "Completed 06-02-PLAN.md (Orchestrator intervention methods: cancel_agent, inject_guidance, pause_for_human_decision)"
+last_updated: "2026-03-10T17:24:53.229Z"
 last_activity: "2026-03-10 — Phase 2 Plan 1 complete: Pydantic v2 state models, enums, and error hierarchy"
 progress:
   total_phases: 11
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 13
-  completed_plans: 12
+  completed_plans: 13
   percent: 10
 ---
 
@@ -62,6 +62,7 @@ Progress: [█░░░░░░░░░] 10%
 | Phase 05-orchestrator-intelligence P01 | 4 | 2 tasks | 7 files |
 | Phase 05-orchestrator-intelligence P02 | 7 | 1 tasks | 2 files |
 | Phase 06-escalation-and-intervention P01 | 3 | 1 tasks | 4 files |
+| Phase 06-escalation-and-intervention P02 | 4 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -107,6 +108,9 @@ Recent decisions affecting current work:
 - [Phase 06-escalation-and-intervention]: EscalationRouter.resolve() always returns PermissionResultAllow — escalation routing never denies
 - [Phase 06-escalation-and-intervention]: Auto mode strictly ignores human_out/human_in queues — mode takes precedence over queue availability
 - [Phase 06-escalation-and-intervention]: _LOW_CONFIDENCE_KEYWORDS frozenset: delete/drop/remove/irreversible/cannot be undone/production/deploy/billing/secret/credentials
+- [Phase 06-escalation-and-intervention]: _active_clients cleanup in try/finally inside async-with ACPClient block — ensures cleanup even on SessionError
+- [Phase 06-escalation-and-intervention]: cancel_agent uses asyncio.create_task fire-and-forget for new session — caller does not wait for reassigned agent
+- [Phase 06-escalation-and-intervention]: pause_for_human_decision drains stream_response() after interrupt — prevents stale message corruption
 
 ### Pending Todos
 
@@ -119,6 +123,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T17:18:48.528Z
-Stopped at: Completed 06-01-PLAN.md (EscalationRouter with auto/interactive mode routing)
+Last session: 2026-03-10T17:24:53.226Z
+Stopped at: Completed 06-02-PLAN.md (Orchestrator intervention methods: cancel_agent, inject_guidance, pause_for_human_decision)
 Resume file: None
