@@ -36,7 +36,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Python linting and type checking pass on an empty module scaffold
   4. A `conductor --help` command runs without errors (even if it does nothing yet)
   5. CI runs both Python and Node.js checks on every push
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 01-01-PLAN.md — Root configs + Python package scaffold with CLI entry point
+- [ ] 01-02-PLAN.md — Dashboard scaffold (Vite/React/Tailwind/Biome) + CI workflow
 
 ### Phase 2: Shared State Infrastructure
 **Goal**: A `.conductor/state.json` file can be safely read and written by multiple processes without corruption — the single coordination backbone is reliable before any agent touches it
@@ -160,7 +163,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Monorepo Foundation | 0/TBD | Not started | - |
+| 1. Monorepo Foundation | 0/2 | Planning complete | - |
 | 2. Shared State Infrastructure | 0/TBD | Not started | - |
 | 3. ACP Communication Layer | 0/TBD | Not started | - |
 | 4. Orchestrator Core | 0/TBD | Not started | - |
