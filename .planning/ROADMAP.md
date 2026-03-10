@@ -126,7 +126,11 @@ Plans:
   4. In `--auto` mode, the orchestrator starts fully autonomous after an upfront spec review — it does not ask the human questions during execution
   5. In interactive mode, the orchestrator pauses and asks the human when it encounters ambiguity
   6. The orchestrator spawns 1-N sub-agents based on task decomposition complexity — not a fixed user-configured count
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 07-01-PLAN.md — State model extensions, memory-aware system prompt, ACPClient defaults, max_agents=10
+- [ ] 07-02-PLAN.md — ACPClient resume parameter + SessionRegistry for session persistence
+- [ ] 07-03-PLAN.md — Orchestrator mode wiring, .memory/ creation, session resume, pre_run_review
 
 ### Phase 8: CLI Interface
 **Goal**: A developer can run `conductor` from the terminal, describe a feature, watch agents work, and intervene (cancel, redirect, feedback) — without needing the web dashboard
@@ -185,7 +189,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 4. Orchestrator Core | 3/3 | Complete   | 2026-03-10 |
 | 5. Orchestrator Intelligence | 1/2 | In Progress|  |
 | 6. Escalation and Intervention | 2/2 | Complete   | 2026-03-10 |
-| 7. Agent Runtime | 0/TBD | Not started | - |
+| 7. Agent Runtime | 0/3 | Not started | - |
 | 8. CLI Interface | 0/TBD | Not started | - |
 | 9. Dashboard Backend | 0/TBD | Not started | - |
 | 10. Dashboard Frontend | 0/TBD | Not started | - |
