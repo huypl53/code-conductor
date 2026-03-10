@@ -63,7 +63,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **PKG-01**: Python core distributed as pip package (orchestration, ACP communication, state management)
 - [ ] **PKG-02**: Node.js dashboard distributed as npm package (web UI)
-- [ ] **PKG-03**: Monorepo structure with Python core + Node.js dashboard
+- [x] **PKG-03**: Monorepo structure with Python core + Node.js dashboard
 - [ ] **PKG-04**: Installation instructions and getting-started guide
 
 ## v2 Requirements
@@ -107,7 +107,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PKG-03 | Phase 1: Monorepo Foundation | Pending |
+| PKG-03 | Phase 1: Monorepo Foundation | Complete |
 | CORD-01 | Phase 2: Shared State Infrastructure | Pending |
 | CORD-02 | Phase 2: Shared State Infrastructure | Pending |
 | CORD-03 | Phase 2: Shared State Infrastructure | Pending |

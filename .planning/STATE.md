@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Phase 1 context gathered
-last_updated: "2026-03-10T11:27:03.723Z"
+stopped_at: Completed 01-monorepo-foundation-01-01-PLAN.md
+last_updated: "2026-03-10T11:46:39.744Z"
 last_activity: 2026-03-10 — Roadmap created, all 30 v1 requirements mapped to 11 phases
 progress:
   total_phases: 11
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  completed_phases: 1
+  total_plans: 2
+  completed_plans: 2
   percent: 0
 ---
 
@@ -50,6 +50,8 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 01-monorepo-foundation P01 | 2 | 2 tasks | 13 files |
+| Phase 01-monorepo-foundation P02 | 8 | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -61,6 +63,8 @@ Recent decisions affecting current work:
 - Roadmap: Build order is state → ACP → orchestrator → CLI → dashboard backend → dashboard frontend → packaging (non-negotiable dependency chain)
 - Roadmap: CLI (Phase 8) delivers working multi-agent product; dashboard phases (9-10) are significant investment, validate core loop first
 - Roadmap: All three critical pitfalls (state corruption, cost explosion, over-parallelization) addressed in Phases 2-4 before any parallel agent work
+- [Phase 01-monorepo-foundation]: uv workspace members uses explicit list [packages/conductor-core] not glob to avoid including Node.js conductor-dashboard as Python member
+- [Phase 01-monorepo-foundation]: ruff added to conductor-core dev dependencies so uv run ruff works without global install
 
 ### Pending Todos
 
@@ -73,6 +77,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T11:27:03.720Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-monorepo-foundation/01-CONTEXT.md
+Last session: 2026-03-10T11:46:15.508Z
+Stopped at: Completed 01-monorepo-foundation-01-01-PLAN.md
+Resume file: None
