@@ -51,7 +51,10 @@ Plans:
   3. Orchestrator can write a task assignment and a sub-agent can read it from the same state file
   4. Sub-agent can update its own task status and the orchestrator can observe the change
   5. All agents can read the full task list and see every other agent's current task and status
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 02-01-PLAN.md — Dependencies + Pydantic models, enums, and error classes
+- [ ] 02-02-PLAN.md — StateManager with file-locked atomic read/write (TDD)
 
 ### Phase 3: ACP Communication Layer
 **Goal**: The orchestrator can open an ACP session to a sub-agent, send messages, receive streamed responses, and answer sub-agent questions — with permission prompts handled safely and without deadlock
@@ -164,7 +167,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Monorepo Foundation | 2/2 | Complete   | 2026-03-10 |
-| 2. Shared State Infrastructure | 0/TBD | Not started | - |
+| 2. Shared State Infrastructure | 0/2 | Not started | - |
 | 3. ACP Communication Layer | 0/TBD | Not started | - |
 | 4. Orchestrator Core | 0/TBD | Not started | - |
 | 5. Orchestrator Intelligence | 0/TBD | Not started | - |
