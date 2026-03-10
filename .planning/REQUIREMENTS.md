@@ -27,8 +27,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Communication
 
-- [ ] **COMM-01**: Orchestrator acts as ACP client for sub-agents — receives their questions (permission prompts, clarifications, GSD questions)
-- [ ] **COMM-02**: Orchestrator answers sub-agent questions using project context and shared state knowledge
+- [x] **COMM-01**: Orchestrator acts as ACP client for sub-agents — receives their questions (permission prompts, clarifications, GSD questions)
+- [x] **COMM-02**: Orchestrator answers sub-agent questions using project context and shared state knowledge
 - [ ] **COMM-03**: In `--auto` mode, orchestrator uses best judgment to answer questions and logs decisions
 - [ ] **COMM-04**: In interactive mode, orchestrator escalates questions it can't confidently answer to the human
 - [ ] **COMM-05**: Orchestrator can cancel a sub-agent's work and reassign with corrected instructions
@@ -112,8 +112,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CORD-02 | Phase 2: Shared State Infrastructure | Complete |
 | CORD-03 | Phase 2: Shared State Infrastructure | Complete |
 | CORD-06 | Phase 2: Shared State Infrastructure | Complete |
-| COMM-01 | Phase 3: ACP Communication Layer | Pending |
-| COMM-02 | Phase 3: ACP Communication Layer | Pending |
+| COMM-01 | Phase 3: ACP Communication Layer | Complete |
+| COMM-02 | Phase 3: ACP Communication Layer | Complete |
 | ORCH-01 | Phase 4: Orchestrator Core | Pending |
 | ORCH-02 | Phase 4: Orchestrator Core | Pending |
 | ORCH-06 | Phase 4: Orchestrator Core | Pending |
