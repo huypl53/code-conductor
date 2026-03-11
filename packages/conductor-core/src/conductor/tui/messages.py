@@ -50,3 +50,11 @@ class DelegationComplete(Message):
         self.summary = summary
         self.error = error
         super().__init__()
+
+
+class UserSubmitted(Message):
+    """User pressed Enter in CommandInput — text ready for transcript."""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+        super().__init__()
