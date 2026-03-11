@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Task Verification & Build Safety
 status: planning
-stopped_at: Completed 23-resume-robustness-01-PLAN.md
-last_updated: "2026-03-11T10:23:02.422Z"
+stopped_at: Completed 24-task-verification-01-PLAN.md
+last_updated: "2026-03-11T10:31:06.323Z"
 last_activity: 2026-03-11 — Roadmap created for v1.2
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 0
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -46,6 +46,9 @@ Recent decisions affecting v1.2:
 - RESM-01/RESM-02 code partially exists in orchestrator.py — Phase 23 adds tests and hardens edge cases
 - [Phase 23-resume-robustness]: Used _track_mutate pattern to verify APPROVED state mutations in review_only exception fallback
 - [Phase 23-resume-robustness]: Used _failing_loop coroutine wholesale replacement for testing asyncio.Task exception retrieval in resume loop
+- [Phase 24-task-verification]: File existence gate placed between final_verdict assignment and verdict.approved check in _run_agent_loop — both verdict AND final_verdict overridden to propagate NEEDS_REVISION
+- [Phase 24-task-verification]: Build failures from build_command logged at ERROR level and never raised — orchestration always completes cleanly
+- [Phase 24-task-verification]: resume() early-exit path calls _post_run_build_check() before return so build runs even when all tasks already completed
 
 ### Pending Todos
 
@@ -57,6 +60,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T10:23:02.419Z
-Stopped at: Completed 23-resume-robustness-01-PLAN.md
+Last session: 2026-03-11T10:31:06.321Z
+Stopped at: Completed 24-task-verification-01-PLAN.md
 Resume file: None

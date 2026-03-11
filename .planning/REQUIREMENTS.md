@@ -9,14 +9,14 @@ Requirements for the Task Verification & Build Safety milestone. Each maps to ro
 
 ### Task Verification
 
-- [ ] **VRFY-01**: When a task has `target_file` set and the file does not exist on disk after review, the orchestrator retries via the revision loop instead of marking COMPLETED
+- [x] **VRFY-01**: When a task has `target_file` set and the file does not exist on disk after review, the orchestrator retries via the revision loop instead of marking COMPLETED
 - [ ] **VRFY-02**: After all tasks complete, if `build_command` is configured, the orchestrator runs it and reports pass/fail with stderr output
 - [ ] **VRFY-03**: User can set `build_command` via `--build-command` CLI flag or `.conductor/config.json`
 
 ### Quality Assurance
 
-- [ ] **QUAL-01**: Reviewer returns structured feedback; agent receives revision instructions and resubmits within a configurable maximum number of rounds
-- [ ] **QUAL-02**: When revision attempts are exhausted, the task is marked NEEDS_REVISION with the reason, not silently completed
+- [x] **QUAL-01**: Reviewer returns structured feedback; agent receives revision instructions and resubmits within a configurable maximum number of rounds
+- [x] **QUAL-02**: When revision attempts are exhausted, the task is marked NEEDS_REVISION with the reason, not silently completed
 
 ### Resume Robustness
 
@@ -69,11 +69,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VRFY-01 | Phase 24 | Pending |
+| VRFY-01 | Phase 24 | Complete |
 | VRFY-02 | Phase 25 | Pending |
 | VRFY-03 | Phase 25 | Pending |
-| QUAL-01 | Phase 24 | Pending |
-| QUAL-02 | Phase 24 | Pending |
+| QUAL-01 | Phase 24 | Complete |
+| QUAL-02 | Phase 24 | Complete |
 | RESM-01 | Phase 23 | Complete |
 | RESM-02 | Phase 23 | Complete |
 
