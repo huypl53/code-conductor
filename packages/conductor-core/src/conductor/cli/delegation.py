@@ -94,10 +94,12 @@ class DelegationManager:
         repo_path: str,
         dashboard_url: str = DEFAULT_DASHBOARD_URL,
         input_fn: Callable[..., Any] | None = None,
+        build_command: str | None = None,
     ) -> None:
         self._console = console
         self._repo_path = repo_path
         self._dashboard_url = dashboard_url
+        self._build_command = build_command
         self._active_run: _DelegationRun | None = None
         self._delegation_count = 0
         # Phase 22: escalation bridge
@@ -147,6 +149,7 @@ class DelegationManager:
             mode="interactive",
             human_out=self._human_out,
             human_in=self._human_in,
+            build_command=self._build_command,
         )
 
         run = _DelegationRun(
@@ -229,6 +232,7 @@ class DelegationManager:
             mode="interactive",
             human_out=self._human_out,
             human_in=self._human_in,
+            build_command=self._build_command,
         )
 
         run = _DelegationRun(

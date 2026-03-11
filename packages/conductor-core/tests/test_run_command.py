@@ -87,3 +87,80 @@ class TestRunBuildCommand:
 
             call_kwargs = MockOrch.call_args[1]
             assert call_kwargs.get("build_command") is None
+
+
+class TestConfigJsonBuildCommand:
+    """Tests for config.json build_command loading in conductor run."""
+
+    @pytest.mark.asyncio
+    async def test_config_json_provides_build_command(self, tmp_path):
+        """config.json build_command is used when no CLI flag is given."""
+        import json
+        from conductor.cli.commands.run import _run_async
+
+        conductor_dir = tmp_path / ".conductor"
+        conductor_dir.mkdir()
+        (conductor_dir / "config.json").write_text(
+            json.dumps({"build_command": "make test"})
+        )
+
+        with patch("conductor.cli.commands.run.Orchestrator") as MockOrch, \
+             patch("conductor.cli.commands.run.Live"), \
+             patch("conductor.cli.commands.run._display_loop", new_callable=AsyncMock), \
+             patch("conductor.cli.commands.run._input_loop", new_callable=AsyncMock):
+            mock_orch = MockOrch.return_value
+            mock_orch.run_auto = AsyncMock()
+
+            await _run_async("desc", auto=True, repo=tmp_path)
+
+            call_kwargs = MockOrch.call_args[1]
+            assert call_kwargs.get("build_command") == "make test"
+
+    @pytest.mark.asyncio
+    async def test_cli_flag_overrides_config_json(self, tmp_path):
+        """CLI --build-command takes precedence over config.json value."""
+        import json
+        from conductor.cli.commands.run import _run_async
+
+        conductor_dir = tmp_path / ".conductor"
+        conductor_dir.mkdir()
+        (conductor_dir / "config.json").write_text(
+            json.dumps({"build_command": "make test"})
+        )
+
+        with patch("conductor.cli.commands.run.Orchestrator") as MockOrch, \
+             patch("conductor.cli.commands.run.Live"), \
+             patch("conductor.cli.commands.run._display_loop", new_callable=AsyncMock), \
+             patch("conductor.cli.commands.run._input_loop", new_callable=AsyncMock):
+            mock_orch = MockOrch.return_value
+            mock_orch.run_auto = AsyncMock()
+
+            await _run_async(
+                "desc", auto=True, repo=tmp_path,
+                build_command="npx tsc --noEmit",
+            )
+
+            call_kwargs = MockOrch.call_args[1]
+            assert call_kwargs.get("build_command") == "npx tsc --noEmit"
+
+    @pytest.mark.asyncio
+    async def test_malformed_config_json_ok(self, tmp_path):
+        """Malformed config.json should not crash — build_command falls back to None."""
+        from conductor.cli.commands.run import _run_async
+
+        conductor_dir = tmp_path / ".conductor"
+        conductor_dir.mkdir()
+        (conductor_dir / "config.json").write_text("this is not valid json {{{")
+
+        with patch("conductor.cli.commands.run.Orchestrator") as MockOrch, \
+             patch("conductor.cli.commands.run.Live"), \
+             patch("conductor.cli.commands.run._display_loop", new_callable=AsyncMock), \
+             patch("conductor.cli.commands.run._input_loop", new_callable=AsyncMock):
+            mock_orch = MockOrch.return_value
+            mock_orch.run_auto = AsyncMock()
+
+            # Should not raise
+            await _run_async("desc", auto=True, repo=tmp_path)
+
+            call_kwargs = MockOrch.call_args[1]
+            assert call_kwargs.get("build_command") is None

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 from contextlib import suppress
 from pathlib import Path
@@ -18,6 +19,18 @@ from conductor.orchestrator.orchestrator import Orchestrator
 from conductor.state.manager import StateManager
 
 _console = Console()
+
+
+def _load_conductor_config(conductor_dir: Path) -> dict:
+    """Read .conductor/config.json and return its contents.
+
+    Returns an empty dict if the file is missing or contains malformed JSON.
+    """
+    config_path = conductor_dir / "config.json"
+    try:
+        return json.loads(config_path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
 
 
 def run(
@@ -55,6 +68,9 @@ async def _run_async(
     conductor_dir = repo / ".conductor"
     conductor_dir.mkdir(parents=True, exist_ok=True)
 
+    config = _load_conductor_config(conductor_dir)
+    resolved_build_command = build_command or config.get("build_command")
+
     state_manager = StateManager(conductor_dir / "state.json")
     human_out: asyncio.Queue[HumanQuery] = asyncio.Queue()
     human_in: asyncio.Queue[str] = asyncio.Queue()
@@ -65,7 +81,7 @@ async def _run_async(
         mode="auto" if auto else "interactive",
         human_out=human_out,
         human_in=human_in,
-        build_command=build_command,
+        build_command=resolved_build_command,
     )
 
     if resume:
