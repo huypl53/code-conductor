@@ -2745,3 +2745,183 @@ class TestOrchestratorConfigWiring:
         assert isinstance(orch._config, OrchestratorConfig)
         assert orch._config.max_review_iterations == 2
         assert orch._config.max_decomposition_retries == 3
+
+
+# ---------------------------------------------------------------------------
+# Phase 27 tests: Wave execution, model routing, lean prompts
+# ---------------------------------------------------------------------------
+
+
+class TestWaveExecution:
+    """WAVE-01: run() executes tasks in dependency waves via asyncio.gather."""
+
+    @pytest.mark.asyncio
+    async def test_run_executes_waves_sequentially(self, tmp_path):
+        """3 tasks (A no-dep, B no-dep, C depends on A+B): A+B in wave 1, C in wave 2."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        tasks = [
+            _make_task_spec("a", "src/a.py"),
+            _make_task_spec("b", "src/b.py"),
+            _make_task_spec("c", "src/c.py", requires=["a", "b"]),
+        ]
+        plan = _make_plan(tasks)
+        state_mgr = _make_state_manager()
+
+        execution_log: list[str] = []
+
+        mock_decomposer = AsyncMock()
+        mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        OrchestratorClass = __import__(
+            "conductor.orchestrator.orchestrator", fromlist=["Orchestrator"]
+        ).Orchestrator
+
+        async def _log_loop(self_ref, task_spec, sem):
+            execution_log.append(task_spec.id)
+            async with sem:
+                pass
+
+        with (
+            patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer),
+            patch(f"{_ORCH}.ACPClient"),
+            patch.object(OrchestratorClass, "_run_agent_loop", _log_loop),
+        ):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            await orch.run("Build 3 tasks with wave ordering")
+
+        # C must start after A and B
+        assert "c" in execution_log
+        assert "a" in execution_log
+        assert "b" in execution_log
+        c_idx = execution_log.index("c")
+        a_idx = execution_log.index("a")
+        b_idx = execution_log.index("b")
+        assert a_idx < c_idx, f"Expected a before c, got: {execution_log}"
+        assert b_idx < c_idx, f"Expected b before c, got: {execution_log}"
+
+    @pytest.mark.asyncio
+    async def test_run_passes_model_to_acp_client(self, tmp_path):
+        """run() with model_profile passes role-specific model to ACPClient."""
+        from conductor.orchestrator.models import ModelProfile
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        tasks = [_make_task_spec("t1", "src/a.py")]
+        # Set role to "executor" to match balanced profile
+        tasks[0] = TaskSpec(
+            id="t1",
+            title="Task t1",
+            description="Description for t1",
+            role="executor",
+            target_file="src/a.py",
+        )
+        plan = _make_plan(tasks)
+        state_mgr = _make_state_manager()
+
+        captured_kwargs: list[dict] = []
+
+        def _acp_factory(**kwargs):
+            captured_kwargs.append(kwargs)
+            return _make_mock_acp_client()
+
+        mock_decomposer = AsyncMock()
+        mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        with (
+            patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer),
+            patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
+            patch(f"{_ORCH}.review_output", _approved_review_mock()),
+        ):
+            orch = Orchestrator(
+                state_manager=state_mgr,
+                repo_path=str(tmp_path),
+                model_profile=ModelProfile.balanced(),
+            )
+            await orch.run("Build with model routing")
+
+        assert captured_kwargs, "ACPClient was not instantiated"
+        assert captured_kwargs[0].get("model") == "claude-haiku-35-20241022", (
+            f"Expected haiku model for executor role, got: {captured_kwargs[0].get('model')}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_run_no_model_profile_omits_model(self, tmp_path):
+        """run() without model_profile passes model=None to ACPClient."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        tasks = [_make_task_spec("t1", "src/a.py")]
+        plan = _make_plan(tasks)
+        state_mgr = _make_state_manager()
+
+        captured_kwargs: list[dict] = []
+
+        def _acp_factory(**kwargs):
+            captured_kwargs.append(kwargs)
+            return _make_mock_acp_client()
+
+        mock_decomposer = AsyncMock()
+        mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        with (
+            patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer),
+            patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
+            patch(f"{_ORCH}.review_output", _approved_review_mock()),
+        ):
+            orch = Orchestrator(
+                state_manager=state_mgr,
+                repo_path=str(tmp_path),
+                # No model_profile
+            )
+            await orch.run("Build without model routing")
+
+        assert captured_kwargs, "ACPClient was not instantiated"
+        assert captured_kwargs[0].get("model") is None, (
+            f"Expected model=None when no profile, got: {captured_kwargs[0].get('model')}"
+        )
+
+    def test_lean_system_prompt_under_500_tokens(self):
+        """build_system_prompt() with long task_description stays under 500 tokens."""
+        from conductor.orchestrator.identity import AgentIdentity, build_system_prompt
+
+        long_description = "x " * 300  # 600 words — would bloat old prompt
+        identity = AgentIdentity(
+            name="agent-lean",
+            role="backend developer",
+            target_file="src/lean.py",
+            material_files=["src/models.py", "src/utils.py"],
+            task_id="task-lean-1",
+            task_description=long_description,
+        )
+        prompt = build_system_prompt(identity)
+
+        word_count = len(prompt.split())
+        assert word_count < 375, (
+            f"Lean prompt should be under 375 words (~500 tokens), got {word_count}"
+        )
+        assert long_description.strip() not in prompt, (
+            "Task description should NOT be embedded in lean system prompt"
+        )
+
+    def test_acp_client_model_param(self, tmp_path):
+        """ACPClient stores model param and passes it to ClaudeAgentOptions."""
+        from conductor.acp.client import ACPClient
+
+        with patch("conductor.acp.client.ClaudeAgentOptions") as mock_options_cls:
+            mock_options_cls.return_value = MagicMock()
+            client_with_model = ACPClient(
+                cwd=str(tmp_path),
+                model="claude-haiku-35-20241022",
+            )
+            # model is stored on instance
+            assert client_with_model._model == "claude-haiku-35-20241022"
+            # model was passed to ClaudeAgentOptions
+            call_kwargs = mock_options_cls.call_args[1]
+            assert call_kwargs.get("model") == "claude-haiku-35-20241022"
+
+        with patch("conductor.acp.client.ClaudeAgentOptions") as mock_options_cls:
+            mock_options_cls.return_value = MagicMock()
+            client_no_model = ACPClient(cwd=str(tmp_path))
+            assert client_no_model._model is None
+            # model should NOT be passed to ClaudeAgentOptions when None
+            call_kwargs = mock_options_cls.call_args[1]
+            assert "model" not in call_kwargs
