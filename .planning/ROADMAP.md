@@ -142,7 +142,9 @@ Plans:
   2. When conductor_delegate tool-use fires, an OrchestratorStatusCell appears in the transcript showing which agents were spawned and what tasks they received
   3. Tool-use input (task description, agent config) accumulated across input_json_delta events is correctly parsed — the delegation cell shows real task content, not empty labels
   4. The SDK stream loop continues receiving events without stutter — widget creation uses post_message, not await mount
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 45-01-PLAN.md — TDD: SDK stream interception and orchestrator status
 
 ### Phase 46: Visual Polish and Verification
 **Goal**: Agent and orchestrator cells are visually distinct with accent colors, inline delegation event cells orient the user between stream and state-driven phases, and all pitfall checklist items are verified
@@ -203,5 +205,5 @@ Plans:
 | 42. Ctrl-G External Editor | v2.1 | 1/1 | Complete | 2026-03-12 |
 | 43. Agent Cell Widgets | v2.2 | 1/1 | Complete | 2026-03-11 |
 | 44. TranscriptPane Extensions and State Bridge | 1/1 | Complete    | 2026-03-11 | - |
-| 45. SDK Stream Interception and Orchestrator Status | v2.2 | 0/? | Not started | - |
+| 45. SDK Stream Interception and Orchestrator Status | v2.2 | 0/1 | Not started | - |
 | 46. Visual Polish and Verification | v2.2 | 0/? | Not started | - |
