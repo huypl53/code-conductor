@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Textual TUI Redesign
 status: completed
-stopped_at: Completed 34-01-PLAN.md
-last_updated: "2026-03-11T14:21:52.145Z"
-last_activity: 2026-03-11 — Phase 33 Plan 02 SDK Streaming Integration complete (2 new tests, 601 total)
+stopped_at: Completed 36-01-PLAN.md
+last_updated: "2026-03-11T14:51:15.276Z"
+last_activity: 2026-03-11 — Phase 36 Plan 01 Approval Modal Widgets complete (9 new tests, 620 total)
 progress:
   total_phases: 13
-  completed_phases: 7
-  total_plans: 9
-  completed_plans: 11
+  completed_phases: 8
+  total_plans: 12
+  completed_plans: 13
   percent: 28
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** A product owner describes a feature, and a self-organizing team of AI coding agents delivers quality, reviewed, tested code — with the human staying in control when they want to be.
-**Current focus:** v2.0 Textual TUI Redesign — Phase 33: SDK Streaming
+**Current focus:** v2.0 Textual TUI Redesign — Phase 36: Approval Modals
 
 ## Current Position
 
-Phase: 33 of 38 (SDK Streaming)
-Plan: 2 of 2 (Phase 33 complete)
-Status: Phase 33 complete, ready for Phase 34
-Last activity: 2026-03-11 — Phase 33 Plan 02 SDK Streaming Integration complete (2 new tests, 601 total)
+Phase: 36 of 38 (Approval Modals)
+Plan: 1 of 2
+Status: Phase 36 Plan 01 complete, ready for Plan 02
+Last activity: 2026-03-11 — Phase 36 Plan 01 Approval Modal Widgets complete (9 new tests, 620 total)
 
-Progress: [██▓░░░░░░░] 28%
+Progress: [██████████] 100%
 
 ## Accumulated Context
 
@@ -57,6 +57,8 @@ Progress: [██▓░░░░░░░] 28%
 - [Phase 33]: @work(exclusive=True, exit_on_error=False) for streaming -- prevents double-submit and crash on SDK error
 - [Phase 33]: Session ID from uuid4.hex[:8] on mount, overridable by resume or SDK ResultMessage
 - [Phase 34]: bold green/bold red raw colors for diff spans; DiffHighlightTheme applied only for diff/udiff fences
+- [Phase 36]: push_screen with callback for modal tests (push_screen_wait requires worker context)
+- [Phase 36]: app.screen.query_one() to query widgets on active modal screen in tests
 
 ### Pending Todos
 
@@ -76,6 +78,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T14:21:52.142Z
-Stopped at: Completed 34-01-PLAN.md
+Last session: 2026-03-11T14:51:09.044Z
+Stopped at: Completed 36-01-PLAN.md
 Resume file: None
