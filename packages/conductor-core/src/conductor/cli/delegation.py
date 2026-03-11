@@ -193,6 +193,72 @@ class DelegationManager:
             self._human_out = None
             self._human_in = None
 
+    # -- Resume delegation ---------------------------------------------------
+
+    async def resume_delegation(self) -> None:
+        """Resume interrupted delegation by calling orchestrator.resume()."""
+        conductor_dir = Path(self._repo_path) / ".conductor"
+        state_path = conductor_dir / "state.json"
+
+        if not state_path.exists():
+            self._console.print("[yellow]No state file found — nothing to resume.[/yellow]")
+            return
+
+        state_manager = StateManager(state_path)
+        state = state_manager.read_state()
+
+        incomplete = [t for t in state.tasks if t.status != "completed"]
+        if not incomplete:
+            self._console.print("[green]All tasks already completed — nothing to resume.[/green]")
+            return
+
+        total = len(state.tasks)
+        done = total - len(incomplete)
+        self._console.print(
+            f"\n[bold cyan]Resuming delegation...[/bold cyan] "
+            f"{done}/{total} tasks completed, {len(incomplete)} remaining."
+        )
+
+        # Create escalation queues
+        self._human_out = asyncio.Queue()
+        self._human_in = asyncio.Queue()
+
+        orchestrator = Orchestrator(
+            state_manager=state_manager,
+            repo_path=self._repo_path,
+            mode="interactive",
+            human_out=self._human_out,
+            human_in=self._human_in,
+        )
+
+        run = _DelegationRun(
+            task_description="(resumed)",
+            orchestrator=orchestrator,
+            state_manager=state_manager,
+        )
+        self._active_run = run
+
+        # Start background status + escalation tasks
+        self._status_task = asyncio.create_task(self._status_updater(run))
+        if self._input_fn is not None:
+            self._escalation_task = asyncio.create_task(self._escalation_listener())
+
+        try:
+            await orchestrator.resume()
+
+            state = state_manager.read_state()
+            done = sum(1 for t in state.tasks if t.status == "completed")
+            self._console.print(
+                f"\n[bold green]Delegation complete.[/bold green] "
+                f"{done}/{len(state.tasks)} tasks finished."
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Resume failed")
+            self._console.print(f"\n[red]Resume failed: {exc}[/red]")
+        finally:
+            self._cancel_background_tasks()
+            self._active_run = None
+
     # -- Phase 22: Live status display (VISB-01) ----------------------------
 
     async def _status_updater(self, run: _DelegationRun) -> None:

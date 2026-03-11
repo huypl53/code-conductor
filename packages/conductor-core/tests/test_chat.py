@@ -72,6 +72,16 @@ class TestSlashCommands:
         assert "/help" in SLASH_COMMANDS
         assert "/exit" in SLASH_COMMANDS
         assert "/status" in SLASH_COMMANDS
+        assert "/resume" in SLASH_COMMANDS
+
+    @pytest.mark.asyncio
+    async def test_resume_dispatches_to_delegation_manager(self) -> None:
+        session = self._make_session()
+        session._delegation_manager = MagicMock()
+        session._delegation_manager.resume_delegation = AsyncMock()
+        result = await session._handle_slash_command("/resume")
+        assert result is False
+        session._delegation_manager.resume_delegation.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

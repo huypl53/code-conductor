@@ -46,6 +46,7 @@ SLASH_COMMANDS: dict[str, str] = {
     "/exit": "Exit the chat session and restore terminal",
     "/status": "Show active sub-agents (ID, task, elapsed time)",
     "/summarize": "Summarize conversation to free context space",
+    "/resume": "Resume interrupted delegation from state.json",
 }
 
 
@@ -250,6 +251,10 @@ class ChatSession:
 
         if cmd == "/summarize":
             await self._handle_summarize()
+            return False
+
+        if cmd == "/resume":
+            await self._delegation_manager.resume_delegation()
             return False
 
         self._console.print(
