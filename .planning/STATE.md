@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Textual TUI Redesign
 status: completed
-stopped_at: Completed 36-01-PLAN.md
+stopped_at: Completed 36-02-PLAN.md
 last_updated: "2026-03-11T14:51:15.276Z"
-last_activity: 2026-03-11 — Phase 36 Plan 01 Approval Modal Widgets complete (9 new tests, 620 total)
+last_activity: 2026-03-11 — Phase 36 Plan 02 Wire escalation queue to modal overlays (2 new tests, 622 total)
 progress:
   total_phases: 13
   completed_phases: 8
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-11)
 ## Current Position
 
 Phase: 36 of 38 (Approval Modals)
-Plan: 1 of 2
-Status: Phase 36 Plan 01 complete, ready for Plan 02
-Last activity: 2026-03-11 — Phase 36 Plan 01 Approval Modal Widgets complete (9 new tests, 620 total)
+Plan: 2 of 2
+Status: Phase 36 complete (all plans done)
+Last activity: 2026-03-11 — Phase 36 Plan 02 Wire escalation queue to modal overlays (2 new tests, 622 total)
 
 Progress: [██████████] 100%
 
@@ -59,6 +59,8 @@ Progress: [██████████] 100%
 - [Phase 34]: bold green/bold red raw colors for diff spans; DiffHighlightTheme applied only for diff/udiff fences
 - [Phase 36]: push_screen with callback for modal tests (push_screen_wait requires worker context)
 - [Phase 36]: app.screen.query_one() to query widgets on active modal screen in tests
+- [Phase 36]: Escalation listener only starts for non-TUI (input_fn) paths; TUI uses ConductorApp._watch_escalations @work coroutine
+- [Phase 36]: All escalation types routed through EscalationModal; context-based routing to FileApprovalModal/CommandApprovalModal deferred
 
 ### Pending Todos
 
@@ -79,5 +81,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-11T14:51:09.044Z
-Stopped at: Completed 36-01-PLAN.md
+Stopped at: Completed 36-02-PLAN.md
 Resume file: None
