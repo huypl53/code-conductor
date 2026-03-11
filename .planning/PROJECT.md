@@ -4,17 +4,25 @@
 
 Conductor is an open-source multi-agent coding orchestration framework. You describe what to build, and Conductor's orchestrator — itself a Claude Code agent with orchestration skills — breaks the work down, spins up a dynamic team of ACP-compatible coding agents, manages their work in real-time, reviews output, and delivers coherent code. It ships with both a CLI and a web dashboard for full visibility into agent activity.
 
-## Current Milestone: v1.3 Orchestrator Intelligence
+## Current Milestones
+
+### v1.3 Orchestrator Intelligence (in progress)
 
 **Goal:** Make Conductor's orchestrator smarter — wave-based parallel execution, model routing for cost control, structured agent communication, goal-backward verification, and complexity-informed task decomposition.
 
+### v2.0 Textual TUI Redesign (parallel track)
+
+**Goal:** Replace prompt_toolkit + Rich with a full Textual-based TUI inspired by Codex CLI — cell-based transcript, modal approval overlays, inline agent monitoring, syntax-highlighted output, and a polished terminal experience.
+
 **Target features:**
-- Wave-based parallel execution — pre-computed dependency waves for maximum concurrency
-- Model routing — different models per role (opus for planning, haiku for verification)
-- Structured agent status protocol — DONE/BLOCKED/NEEDS_CONTEXT with programmatic routing
-- Goal-backward verification — stub detection + wiring checks beyond file existence
-- Two-stage review — spec compliance then code quality
-- Smart decomposition — complexity scoring with selective task expansion
+- Full Textual TUI framework — widget-based layout with CSS styling, reactive state
+- Cell-based transcript — streaming responses, immutable history cells, markdown rendering
+- Modal approval overlays — approve/deny agent file changes and command execution
+- Dashboard-in-terminal — inline agent status panels with progress, tool use, streaming output
+- Rich output — syntax-highlighted diffs, code blocks, shimmer spinners, adaptive colors
+- Status footer — model, mode, token usage, rate limits
+- Slash command autocomplete — popup for `/` commands with tab completion
+- Web dashboard coexistence — both TUI and web dashboard remain functional
 
 ## Core Value
 
@@ -44,13 +52,22 @@ A product owner describes a feature, and a self-organizing team of AI coding age
 
 ### Active
 
-- [ ] Per-task file existence gate — verify target file on disk before marking task COMPLETED
-- [ ] Post-run build command — optional build verification after all tasks complete
-- [ ] Quality review loops with structured feedback cycles (revise → re-review → approve)
-- [ ] Resume support hardening — robust error handling and edge cases from real-world testing
-- [ ] Per-task GSD scope flexibility — orchestrator decides whether sub-agent runs full planning or just executes
-- [ ] Git worktree isolation per agent for large parallel workloads
-- [ ] CI integration — auto-fix failing builds by spawning agents
+**v1.3 — Orchestrator Intelligence:**
+- [ ] Wave-based parallel execution with pre-computed dependency waves
+- [ ] Model routing per agent role (opus for planning, haiku for verification)
+- [ ] Structured agent status protocol (DONE/BLOCKED/NEEDS_CONTEXT)
+- [ ] Goal-backward verification (stub detection + wiring checks)
+- [ ] Two-stage review (spec compliance then code quality)
+- [ ] Smart decomposition with complexity scoring
+
+**v2.0 — Textual TUI Redesign:**
+- [ ] Textual-based TUI replacing prompt_toolkit + Rich
+- [ ] Cell-based transcript with streaming and markdown rendering
+- [ ] Modal approval overlays for agent actions
+- [ ] Inline agent monitoring panels in TUI
+- [ ] Syntax-highlighted diffs and code blocks
+- [ ] Status footer with model/tokens/mode
+- [ ] Slash command autocomplete popup
 
 ### Out of Scope
 
@@ -62,15 +79,17 @@ A product owner describes a feature, and a self-organizing team of AI coding age
 
 ## Context
 
-Shipped v1.0 with 10,946 LOC (8,604 Python + 2,342 TypeScript). v1.1 delivered Interactive Chat TUI (19 requirements, 5 phases).
+Shipped v1.0 with 10,946 LOC (8,604 Python + 2,342 TypeScript). v1.1 delivered Interactive Chat TUI (19 requirements, 5 phases). v1.2 added task verification and build safety. v1.3 adding orchestrator intelligence (parallel track).
 Tech stack: Python core (uv, Pydantic v2, asyncio, filelock) + Node.js dashboard (React, Vite, Tailwind, Vitest).
+Current TUI: prompt_toolkit for input + Rich for output — functional but basic.
 Distribution: `pip install conductor-ai` + `npm install -g conductor-dashboard`.
-17 phases completed across 32 plans in 2 days.
+30 phases completed across v1.0-v1.2.
+
+v2.0 TUI reference: OpenAI Codex CLI (Ratatui/Rust) — cell-based transcript, modal approval overlays, shimmer animations, syntax-highlighted diffs, slash command autocomplete, status footer. Conductor will use Textual (Python) to achieve similar UX while staying in the Python ecosystem.
 
 Known tech debt:
 - `get_server_info()` wrapped in broad `except Exception` — session_id persistence silently fails
 - Human verification needed for clean-environment installs (pip/npm/docs walkthrough)
-- ~10 SUMMARY frontmatter missing `requirements_completed` fields
 
 ## Constraints
 
@@ -92,6 +111,9 @@ Known tech debt:
 | StrEnum + ConfigDict for JSON serialization | Clean enum values in state.json without repr leaking | ✓ Good — no serialization issues |
 | asyncio.wait(FIRST_COMPLETED) for spawn loop | Ready tasks unblock as dependencies complete without waiting for whole wave | ✓ Good — efficient parallelism |
 | Watch parent directory for state changes | watchfiles misses atomic os.replace inode swaps on direct file watch | ✓ Good — solved production bug |
+| Textual over Ratatui for TUI redesign | Stays in Python ecosystem, built by Rich author, CSS styling, widget-based — avoids Rust FFI complexity | — Pending |
+| TUI and web dashboard coexist | TUI for primary terminal use, web dashboard for remote/detailed/mobile monitoring | — Pending |
+| v2.0 TUI as parallel worktree to v1.3 | Unblocks UI work without pausing orchestrator intelligence improvements | — Pending |
 
 ---
-*Last updated: 2026-03-11 after v1.2 milestone started*
+*Last updated: 2026-03-11 after v2.0 TUI milestone started*

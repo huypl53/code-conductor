@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: Orchestrator Intelligence
-status: complete
+milestone: v2.0
+milestone_name: Textual TUI Redesign
+status: defining_requirements
 stopped_at: null
 last_updated: "2026-03-11"
-last_activity: "2026-03-11 — All 5 phases complete (26-30), 579 tests passing"
+last_activity: "2026-03-11 — Milestone v2.0 started"
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** A product owner describes a feature, and a self-organizing team of AI coding agents delivers quality, reviewed, tested code — with the human staying in control when they want to be.
-**Current focus:** v1.3 milestone complete
+**Current focus:** v2.0 Textual TUI Redesign
 
 ## Current Position
 
-Phase: 30 of 30 (all complete)
-Plan: All plans executed
-Status: Complete
-Last activity: 2026-03-11 — All 5 phases delivered, 579 tests passing
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-11 — Milestone v2.0 started
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0%
 
 ## Accumulated Context
 
