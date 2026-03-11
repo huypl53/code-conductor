@@ -303,7 +303,6 @@ class ChatSession:
             cwd=self._cwd,
             permission_mode="bypassPermissions",
             include_partial_messages=True,
-            resume=self._resume_session_id,
             setting_sources=["project"],
             system_prompt={
                 "type": "preset",
@@ -384,6 +383,10 @@ class ChatSession:
             await self._ensure_sdk_connected()
         except Exception as exc:  # noqa: BLE001
             self._console.print(f"[red]Failed to connect to Claude: {exc}[/red]")
+            # Surface stderr if available (subprocess errors often hide details)
+            stderr = getattr(exc, "stderr", None) or getattr(exc, "output", None)
+            if stderr:
+                self._console.print(f"[dim]{stderr}[/dim]")
             return
 
         # Send the query
