@@ -294,80 +294,127 @@ class Orchestrator:
         await self.run(confirmed)
 
     async def resume(self) -> None:
-        """Re-spawn IN_PROGRESS tasks using stored session IDs.
+        """Resume an interrupted orchestration from persisted state.
 
-        Reads current state, finds tasks with ``status == IN_PROGRESS``, and
-        calls ``_run_agent_loop`` for each — resuming the SDK session if a
-        session_id is stored in the :class:`SessionRegistry`, otherwise
-        starting a fresh session.
+        Reads state.json and reconstructs the dependency scheduler:
+        - Completed tasks: skipped (pre-marked as done in scheduler)
+        - In-progress tasks with target file on disk: review only
+        - In-progress tasks without target file: re-run agent from scratch
+        - Pending tasks: run normally via scheduler
 
-        Multiple IN_PROGRESS tasks are resumed concurrently using the same
-        ``asyncio.wait(FIRST_COMPLETED)`` pattern as ``run()``.
+        Uses the same FIRST_COMPLETED spawn loop as run().
         """
         state = await asyncio.to_thread(self._state.read_state)
 
-        # Find IN_PROGRESS tasks
-        in_progress = [
-            t for t in state.tasks
-            if t.status == TaskStatus.IN_PROGRESS
-        ]
-        if not in_progress:
+        if not state.tasks:
             return
 
-        # Build agent_id -> agent record map for fast lookup
+        # Ensure .memory/ exists
+        memory_dir = Path(self._repo_path) / ".memory"
+        memory_dir.mkdir(parents=True, exist_ok=True)
+
+        # Build agent_id -> agent record map
         agent_map = {a.id: a for a in state.agents}
 
+        # Reconstruct dependency graph from persisted tasks
+        dep_graph: dict[str, set[str]] = {}
+        for t in state.tasks:
+            dep_graph[t.id] = set(t.requires)
+
+        scheduler = DependencyScheduler(dep_graph)
+
+        # Identify completed tasks (handled as immediate done() in spawn loop)
+        completed_ids = {
+            t.id for t in state.tasks
+            if t.status == TaskStatus.COMPLETED
+        }
+
+        # Determine how to handle each non-completed task
+        task_mode: dict[str, bool] = {}  # task_id -> review_only
+        for t in state.tasks:
+            if t.id in completed_ids:
+                continue
+            if t.status == TaskStatus.IN_PROGRESS:
+                # Check if target file exists on disk
+                target = Path(t.target_file)
+                if not target.is_absolute():
+                    target = Path(self._repo_path) / target
+                task_mode[t.id] = target.exists()
+            else:
+                task_mode[t.id] = False  # pending: full agent run
+
+        # Build TaskSpec lookup from state
+        task_specs: dict[str, TaskSpec] = {}
+        for t in state.tasks:
+            if t.id in completed_ids:
+                continue
+            agent_id = t.assigned_agent
+            role = "developer"
+            if agent_id and agent_id in agent_map:
+                role = agent_map[agent_id].role
+            task_specs[t.id] = TaskSpec(
+                id=t.id,
+                title=t.title,
+                description=t.description,
+                role=role,
+                target_file=t.target_file,
+                material_files=t.material_files,
+                requires=t.requires,
+                produces=t.produces,
+            )
+
+        if not task_specs:
+            return
+
+        # Effective concurrency cap
         sem = asyncio.Semaphore(self._max_agents)
         self._semaphore = sem
 
+        # Spawn loop (same pattern as run())
         pending: dict[str, asyncio.Task] = {}
 
-        for task in in_progress:
-            agent_id = task.assigned_agent
-            session_id: str | None = None
+        while scheduler.is_active():
+            ready_ids = scheduler.get_ready()
 
-            if agent_id:
-                # Try registry first, fall back to agent record
-                session_id = self._session_registry.get(agent_id)
-                if session_id is None:
-                    agent_rec = agent_map.get(agent_id)
-                    if agent_rec is not None:
-                        session_id = agent_rec.session_id
+            marked_done = False
+            for task_id in ready_ids:
+                if task_id in completed_ids:
+                    scheduler.done(task_id)
+                    marked_done = True
+                    continue
+                if task_id not in pending and task_id in task_specs:
+                    review_only = task_mode.get(task_id, False)
+                    t = asyncio.create_task(
+                        self._run_agent_loop(
+                            task_specs[task_id],
+                            sem,
+                            review_only=review_only,
+                        )
+                    )
+                    pending[task_id] = t
+                    self._active_tasks[task_id] = t
 
-            # Reconstruct TaskSpec from Task fields
-            task_spec = TaskSpec(
-                id=task.id,
-                title=task.title,
-                description=task.description,
-                role=(
-                    agent_map[agent_id].role
-                    if agent_id and agent_id in agent_map
-                    else "developer"
-                ),
-                target_file=task.target_file,
-                material_files=task.material_files,
-                requires=task.requires,
-                produces=task.produces,
-            )
+            # If we only marked completed tasks done, loop again to get
+            # newly-unblocked tasks before waiting on pending futures
+            if not pending and marked_done:
+                continue
+            if not pending:
+                break
 
-            t = asyncio.create_task(
-                self._run_agent_loop(
-                    task_spec, sem, resume_session_id=session_id
-                )
-            )
-            pending[task.id] = t
-            self._active_tasks[task.id] = t
-
-        while pending:
             done_futures, _ = await asyncio.wait(
                 pending.values(), return_when=asyncio.FIRST_COMPLETED
             )
+
             for fut in done_futures:
                 completed_id = next(
                     tid for tid, t in pending.items() if t is fut
                 )
                 del pending[completed_id]
                 self._active_tasks.pop(completed_id, None)
+                scheduler.done(completed_id)
+
+        if pending:
+            await asyncio.gather(*pending.values())
 
     # ------------------------------------------------------------------
     # Intervention methods (COMM-05/06/07)

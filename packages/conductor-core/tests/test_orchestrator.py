@@ -1267,9 +1267,9 @@ class TestOrchestratorResume:
         spawned_specs: list = []
         spawned_resumes: list = []
 
-        async def _capture_loop(task_spec, sem, resume_session_id=None):
+        async def _capture_loop(task_spec, sem, **kwargs):
             spawned_specs.append(task_spec)
-            spawned_resumes.append(resume_session_id)
+            spawned_resumes.append(kwargs.get("resume_session_id"))
 
         with patch(f"{_ORCH}.ACPClient"):
             orch = Orchestrator(
@@ -1321,8 +1321,8 @@ class TestOrchestratorResume:
 
         spawned_resumes: list = []
 
-        async def _capture_loop(task_spec, sem, resume_session_id=None):
-            spawned_resumes.append(resume_session_id)
+        async def _capture_loop(task_spec, sem, **kwargs):
+            spawned_resumes.append(kwargs.get("resume_session_id"))
 
         with patch(f"{_ORCH}.ACPClient"):
             orch = Orchestrator(
@@ -1333,9 +1333,9 @@ class TestOrchestratorResume:
             orch._run_agent_loop = _capture_loop
             await orch.resume()
 
-        assert spawned_resumes == ["stored-sess-999"], (
-            f"Expected resume with 'stored-sess-999', got: {spawned_resumes}"
-        )
+        # Note: rewritten resume() no longer passes resume_session_id
+        # (it uses review_only for in-progress tasks instead)
+        assert len(spawned_resumes) == 1
 
     @pytest.mark.asyncio
     async def test_resume_fresh_session_when_no_session_id(self, tmp_path):
@@ -1375,8 +1375,8 @@ class TestOrchestratorResume:
 
         spawned_resumes: list = []
 
-        async def _capture_loop(task_spec, sem, resume_session_id=None):
-            spawned_resumes.append(resume_session_id)
+        async def _capture_loop(task_spec, sem, **kwargs):
+            spawned_resumes.append(kwargs.get("resume_session_id"))
 
         with patch(f"{_ORCH}.ACPClient"):
             orch = Orchestrator(
@@ -1385,9 +1385,8 @@ class TestOrchestratorResume:
             orch._run_agent_loop = _capture_loop
             await orch.resume()
 
-        assert spawned_resumes == [None], (
-            f"Expected resume=None for fresh session, got: {spawned_resumes}"
-        )
+        # Rewritten resume() no longer passes resume_session_id
+        assert len(spawned_resumes) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -1967,3 +1966,152 @@ class TestSemaphoreScope:
 
         # Semaphore should be released after completion (value back to 1)
         assert sem._value == 1
+
+
+# ---------------------------------------------------------------------------
+# Tests: Orchestrator.resume() with full scheduler reconstruction
+# ---------------------------------------------------------------------------
+
+
+class TestResumeScheduler:
+    """Tests for rewritten Orchestrator.resume() with scheduler reconstruction."""
+
+    @pytest.mark.asyncio
+    async def test_resume_skips_completed_tasks(self, tmp_path):
+        """Completed tasks should not be re-run."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import ConductorState, Task, TaskStatus
+
+        state = ConductorState(tasks=[
+            Task(id="t1", title="Done", description="d", status=TaskStatus.COMPLETED,
+                 target_file="/tmp/f1.txt"),
+            Task(id="t2", title="Pending", description="d", status=TaskStatus.PENDING,
+                 target_file="/tmp/f2.txt", requires=["t1"]),
+        ])
+
+        mgr = _make_state_manager()
+        mgr.read_state = MagicMock(return_value=state)
+        orch = Orchestrator(state_manager=mgr, repo_path=str(tmp_path))
+
+        with patch.object(orch, '_run_agent_loop', new_callable=AsyncMock) as mock_loop:
+            await orch.resume()
+
+        # Only t2 should run, not t1
+        assert mock_loop.call_count == 1
+        called_spec = mock_loop.call_args_list[0][0][0]
+        assert called_spec.id == "t2"
+
+    @pytest.mark.asyncio
+    async def test_resume_review_only_when_file_exists(self, tmp_path):
+        """In-progress tasks with existing target file should run review_only."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import ConductorState, Task, TaskStatus
+
+        # Create the target file on disk
+        target = tmp_path / "existing_file.txt"
+        target.write_text("content")
+
+        state = ConductorState(tasks=[
+            Task(id="t1", title="InProg", description="d",
+                 status=TaskStatus.IN_PROGRESS,
+                 target_file=str(target)),
+        ])
+
+        mgr = _make_state_manager()
+        mgr.read_state = MagicMock(return_value=state)
+        orch = Orchestrator(state_manager=mgr, repo_path=str(tmp_path))
+
+        with patch.object(orch, '_run_agent_loop', new_callable=AsyncMock) as mock_loop:
+            await orch.resume()
+
+        assert mock_loop.call_count == 1
+        assert mock_loop.call_args_list[0][1].get("review_only") is True
+
+    @pytest.mark.asyncio
+    async def test_resume_reruns_agent_when_file_missing(self, tmp_path):
+        """In-progress tasks with no target file should re-run agent."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import ConductorState, Task, TaskStatus
+
+        state = ConductorState(tasks=[
+            Task(id="t1", title="InProg", description="d",
+                 status=TaskStatus.IN_PROGRESS,
+                 target_file=str(tmp_path / "missing_file.txt")),
+        ])
+
+        mgr = _make_state_manager()
+        mgr.read_state = MagicMock(return_value=state)
+        orch = Orchestrator(state_manager=mgr, repo_path=str(tmp_path))
+
+        with patch.object(orch, '_run_agent_loop', new_callable=AsyncMock) as mock_loop:
+            await orch.resume()
+
+        assert mock_loop.call_count == 1
+        assert mock_loop.call_args_list[0][1].get("review_only", False) is False
+
+    @pytest.mark.asyncio
+    async def test_resume_respects_dependencies(self, tmp_path):
+        """Pending task blocked by in-progress task should wait."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import ConductorState, Task, TaskStatus
+
+        call_order: list[str] = []
+
+        state = ConductorState(tasks=[
+            Task(id="t1", title="InProg", description="d",
+                 status=TaskStatus.IN_PROGRESS,
+                 target_file=str(tmp_path / "f1.txt")),
+            Task(id="t2", title="Pending", description="d",
+                 status=TaskStatus.PENDING,
+                 target_file=str(tmp_path / "f2.txt"), requires=["t1"]),
+        ])
+
+        # Create target file for t1 so it's review_only
+        (tmp_path / "f1.txt").write_text("content")
+
+        mgr = _make_state_manager()
+        mgr.read_state = MagicMock(return_value=state)
+        orch = Orchestrator(state_manager=mgr, repo_path=str(tmp_path))
+
+        async def track_call(spec, sem, **kwargs):
+            call_order.append(spec.id)
+
+        with patch.object(orch, '_run_agent_loop', side_effect=track_call):
+            await orch.resume()
+
+        assert call_order == ["t1", "t2"]
+
+    @pytest.mark.asyncio
+    async def test_resume_noop_when_all_completed(self, tmp_path):
+        """Resume with all tasks completed should be a no-op."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import ConductorState, Task, TaskStatus
+
+        state = ConductorState(tasks=[
+            Task(id="t1", title="Done", description="d",
+                 status=TaskStatus.COMPLETED, target_file="/tmp/f1.txt"),
+        ])
+
+        mgr = _make_state_manager()
+        mgr.read_state = MagicMock(return_value=state)
+        orch = Orchestrator(state_manager=mgr, repo_path=str(tmp_path))
+
+        with patch.object(orch, '_run_agent_loop', new_callable=AsyncMock) as mock_loop:
+            await orch.resume()
+
+        mock_loop.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_resume_no_state_file(self, tmp_path):
+        """Resume with empty state should be a no-op."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import ConductorState
+
+        mgr = _make_state_manager()
+        mgr.read_state = MagicMock(return_value=ConductorState())
+        orch = Orchestrator(state_manager=mgr, repo_path=str(tmp_path))
+
+        with patch.object(orch, '_run_agent_loop', new_callable=AsyncMock) as mock_loop:
+            await orch.resume()
+
+        mock_loop.assert_not_called()
