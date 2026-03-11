@@ -102,7 +102,9 @@ Plans:
   3. BLOCKED status triggers retry with additional context or escalation to human
   4. NEEDS_CONTEXT status triggers context provision and retry
   5. Agent prompts include deviation rules: auto-fix for bugs/missing-critical (Rules 1-3), escalate for architectural changes (Rule 4)
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 28-PLAN.md — AgentReport model, status parsing, routing, deviation rules
 
 ### Phase 29: Verification & Review Pipeline
 **Goal**: Every completed task is independently verified for substance and wiring (not just file existence), and review is split into spec compliance and code quality stages for faster, more focused feedback
@@ -255,6 +257,6 @@ Phases execute in numeric order: 26 → 27 → 28 → 29 → 30 (Phase 30 can ru
 | 25. Post-Run Build Verification | v1.2 | 1/1 | Complete | 2026-03-11 |
 | 26. Models & Scheduler Infrastructure | v1.3 | 0/1 | In Progress | - |
 | 27. Execution & Routing Pipeline | v1.3 | 0/1 | Pending | - |
-| 28. Agent Communication Protocol | v1.3 | 0/0 | Pending | - |
+| 28. Agent Communication Protocol | v1.3 | 0/1 | Pending | - |
 | 29. Verification & Review Pipeline | v1.3 | 0/0 | Pending | - |
 | 30. Smart Decomposition | v1.3 | 0/0 | Pending | - |
