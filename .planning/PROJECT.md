@@ -4,9 +4,15 @@
 
 Conductor is an open-source multi-agent coding orchestration framework. You describe what to build, and Conductor's orchestrator — itself a Claude Code agent with orchestration skills — breaks the work down, spins up a dynamic team of ACP-compatible coding agents, manages their work in real-time, reviews output, and delivers coherent code. It ships with both a CLI and a web dashboard for full visibility into agent activity.
 
-## Current Milestones
+## Current Milestone: v2.2 Agent Visibility
 
-All milestones through v2.1 are complete. No active milestone.
+**Goal:** Surface real-time agent activity in the TUI transcript — when the orchestrator delegates to sub-agents, show labeled per-agent output streams with name and role, and display orchestrator status so the user always knows what's happening.
+
+**Target features:**
+- Labeled agent cells in transcript showing agent name, role, and streaming output
+- Orchestrator status indicator during planning/delegation phases
+- Tool-use event interception from SDK stream to trigger agent cells
+- Agent activity feeds from state.json watcher into transcript
 
 ### Completed Milestones
 
@@ -61,6 +67,14 @@ A product owner describes a feature, and a self-organizing team of AI coding age
 - ✓ Smooth animations and transitions — v2.1
 - ✓ Ctrl-G external editor (vim) for multiline input — v2.1
 
+### Active
+
+**v2.2 — Agent Visibility:**
+- [ ] Labeled agent cells in transcript with name, role, and streaming output
+- [ ] Orchestrator status shown during planning/delegation (not just "Assistant")
+- [ ] Tool-use events from SDK stream trigger agent activity in transcript
+- [ ] State.json agent updates feed into transcript as labeled activity
+
 ### Out of Scope
 
 - Direct agent-to-agent communication (ACP peer-to-peer) — orchestrator mediates all coordination
@@ -104,4 +118,4 @@ Known tech debt:
 | TUI and web dashboard coexist | TUI for primary terminal use, web dashboard for remote/detailed/mobile monitoring | ✓ Good — both serve distinct use cases |
 
 ---
-*Last updated: 2026-03-12 after v2.1 UX Polish milestone shipped*
+*Last updated: 2026-03-12 after v2.2 Agent Visibility milestone started*
