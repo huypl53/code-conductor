@@ -14,6 +14,47 @@ describe("InterventionPanel", () => {
     expect(screen.getByRole("button", { name: /redirect/i })).toBeInTheDocument();
   });
 
+  it("renders a Pause button", () => {
+    render(<InterventionPanel agentId={agentId} onIntervene={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /pause/i })).toBeInTheDocument();
+  });
+
+  it("clicking Pause opens inline input with correct placeholder", async () => {
+    const user = userEvent.setup();
+    render(<InterventionPanel agentId={agentId} onIntervene={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /pause/i }));
+
+    expect(screen.getByPlaceholderText("Question for the human...")).toBeInTheDocument();
+  });
+
+  it("submitting Pause sends action pause with message", async () => {
+    const user = userEvent.setup();
+    const onIntervene = vi.fn();
+    render(<InterventionPanel agentId={agentId} onIntervene={onIntervene} />);
+
+    await user.click(screen.getByRole("button", { name: /pause/i }));
+    await user.type(screen.getByPlaceholderText("Question for the human..."), "Should I continue?");
+    await user.click(screen.getByRole("button", { name: /send/i }));
+
+    expect(onIntervene).toHaveBeenCalledWith<[InterventionCommand]>({
+      action: "pause",
+      agent_id: agentId,
+      message: "Should I continue?",
+    });
+  });
+
+  it("clicking Pause again closes the inline input", async () => {
+    const user = userEvent.setup();
+    render(<InterventionPanel agentId={agentId} onIntervene={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /pause/i }));
+    expect(screen.getByPlaceholderText("Question for the human...")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /pause/i }));
+    expect(screen.queryByPlaceholderText("Question for the human...")).not.toBeInTheDocument();
+  });
+
   it("clicking Cancel calls onIntervene with cancel action", async () => {
     const user = userEvent.setup();
     const onIntervene = vi.fn();
