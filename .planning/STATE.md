@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: MVP
-status: completed
-stopped_at: Milestone v1.0 archived
+milestone: v1.1
+milestone_name: Interactive Chat TUI
+status: defining_requirements
+stopped_at: null
 last_updated: "2026-03-11"
-last_activity: "2026-03-11 — Milestone v1.0 MVP archived"
+last_activity: "2026-03-11 — Milestone v1.1 started"
 progress:
-  total_phases: 17
-  completed_phases: 17
-  total_plans: 32
-  completed_plans: 32
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,23 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** A product owner describes a feature, and a self-organizing team of AI coding agents delivers quality, reviewed, tested code — with the human staying in control when they want to be.
-**Current focus:** Planning next milestone
+**Current focus:** Defining requirements for v1.1 Interactive Chat TUI
 
 ## Current Position
 
-Milestone: v1.0 MVP — SHIPPED 2026-03-11
-Status: Complete — all 17 phases, 32 plans delivered
-
-Progress: [██████████] 100%
-
-## Performance Metrics
-
-**Velocity:**
-- Total plans completed: 32
-- Timeline: 2 days (2026-03-10 → 2026-03-11)
-- Commits: 190
-- Files: 228
-- LOC: 10,946 (8,604 Python + 2,342 TypeScript)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-11 — Milestone v1.1 started
 
 ## Accumulated Context
 
@@ -51,10 +42,10 @@ None.
 
 ### Blockers/Concerns
 
-None — milestone shipped.
+None.
 
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Milestone v1.0 MVP archived
+Stopped at: Milestone v1.1 started
 Resume file: None
