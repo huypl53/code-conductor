@@ -64,9 +64,10 @@ class ConductorApp(App):
         from conductor.tui.widgets.command_input import CommandInput
         from conductor.tui.widgets.status_footer import StatusFooter
 
+        state_path = Path(self._cwd) / ".conductor" / "state.json"
         with Horizontal(id="app-body"):
             yield TranscriptPane(id="transcript")
-            yield AgentMonitorPane(id="agent-monitor")
+            yield AgentMonitorPane(state_path=state_path, id="agent-monitor")
         yield CommandInput(id="command-input")
         yield StatusFooter(id="status-footer")
 
