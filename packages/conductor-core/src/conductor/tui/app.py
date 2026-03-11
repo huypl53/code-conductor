@@ -10,6 +10,7 @@ Phase 33: SDK streaming integration -- @work coroutine routes tokens to
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import uuid
@@ -367,6 +368,10 @@ class ConductorApp(App):
         cell = self._active_cell
         first_chunk = True
 
+        # Tool-use state machine: accumulate input_json_delta chunks by content_block_index
+        _tool_input_buffers: dict[int, list[str]] = {}
+        _tool_use_names: dict[int, str] = {}
+
         try:
             await self._ensure_sdk_connected()
             await self._sdk_client.query(text)
@@ -377,8 +382,27 @@ class ConductorApp(App):
             async for message in self._sdk_client.receive_response():
                 if isinstance(message, StreamEvent):
                     event = message.event
-                    if event.get("type") == "content_block_delta":
+                    event_type = event.get("type")
+
+                    if event_type == "content_block_start":
+                        content_block = event.get("content_block", {})
+                        if content_block.get("type") == "tool_use":
+                            idx = event.get("index", 0)
+                            name = content_block.get("name", "")
+                            _tool_use_names[idx] = name
+                            _tool_input_buffers[idx] = []
+                            if name == "conductor_delegate" and cell is not None:
+                                try:
+                                    from textual.widgets import Static
+                                    cell.query_one(".cell-label", Static).update(
+                                        "Orchestrator \u2014 delegating"
+                                    )
+                                except Exception:
+                                    pass
+
+                    elif event_type == "content_block_delta":
                         delta = event.get("delta", {})
+                        idx = event.get("index", 0)
                         if delta.get("type") == "text_delta":
                             chunk = delta.get("text", "")
                             if chunk and cell is not None:
@@ -386,6 +410,24 @@ class ConductorApp(App):
                                     await cell.start_streaming()
                                     first_chunk = False
                                 await cell.append_token(chunk)
+                        elif delta.get("type") == "input_json_delta":
+                            if idx in _tool_input_buffers:
+                                _tool_input_buffers[idx].append(
+                                    delta.get("partial_json", "")
+                                )
+
+                    elif event_type == "content_block_stop":
+                        idx = event.get("index", 0)
+                        name = _tool_use_names.pop(idx, None)
+                        buf = _tool_input_buffers.pop(idx, [])
+                        if name == "conductor_delegate":
+                            try:
+                                args = json.loads("".join(buf))
+                            except json.JSONDecodeError:
+                                args = {}
+                            task_description = args.get("task", "delegating...")
+                            from conductor.tui.messages import DelegationStarted
+                            self.post_message(DelegationStarted(task_description))
 
                 elif isinstance(message, ResultMessage):
                     if message.usage:

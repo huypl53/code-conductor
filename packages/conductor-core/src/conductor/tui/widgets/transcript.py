@@ -344,6 +344,7 @@ class TranscriptPane(VerticalScroll):
         super().__init__(**kwargs)
         self._resume_mode = resume_mode
         self._agent_cells: dict[str, "AgentCell"] = {}
+        self._orch_status_cell: "OrchestratorStatusCell | None" = None
 
     def on_mount(self) -> None:
         """Mount a welcome cell so the pane is not blank on first launch."""
@@ -383,6 +384,22 @@ class TranscriptPane(VerticalScroll):
         await self.mount(cell)
         self.scroll_end(animate=False)  # always scroll when stream starts
         return cell
+
+    async def on_delegation_started(self, event: "DelegationStarted") -> None:
+        """ORCH-02: Mount an OrchestratorStatusCell when conductor_delegate fires.
+
+        Creates and mounts an OrchestratorStatusCell with the task description
+        from the DelegationStarted message. Stores reference in _orch_status_cell.
+        """
+        from conductor.tui.messages import DelegationStarted  # noqa: F401 (import for type annotation)
+
+        cell = OrchestratorStatusCell(
+            label="Orchestrator \u2014 delegating",
+            description=event.task_description,
+        )
+        self._orch_status_cell = cell
+        await self.mount(cell)
+        self._maybe_scroll_end()
 
     async def on_agent_state_updated(self, event: "AgentStateUpdated") -> None:
         """Handle AgentStateUpdated: mount/update/finalize AgentCells in transcript."""
