@@ -1,389 +1,521 @@
 # Architecture Research
 
-**Domain:** Multi-agent coding orchestration framework
-**Researched:** 2026-03-10
-**Confidence:** HIGH (core components), MEDIUM (ACP integration specifics)
+**Domain:** Interactive Chat TUI — v1.1 addition to multi-agent orchestration framework
+**Researched:** 2026-03-11
+**Confidence:** HIGH — based on live codebase inspection + official SDK documentation
 
-## Standard Architecture
+---
 
-### System Overview
+## Context: What Already Exists (v1.0 Baseline)
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                        Human Layer                                │
-│  ┌──────────────────────┐     ┌───────────────────────────────┐  │
-│  │      CLI Interface   │     │     Web Dashboard (Node.js)   │  │
-│  │  (Python, ACP client)│     │  React UI + WebSocket client  │  │
-│  └──────────┬───────────┘     └──────────────┬────────────────┘  │
-└─────────────┼────────────────────────────────┼───────────────────┘
-              │ ACP (ndjson/stdio)              │ WebSocket / HTTP
-              ▼                                ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                     Orchestration Layer (Python)                  │
-│                                                                   │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │              Orchestrator Process                           │  │
-│  │  (Claude Code agent + orchestration skills via ACP)         │  │
-│  │                                                             │  │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌───────────────────┐ │  │
-│  │  │ ACP Server   │  │ Agent Manager│  │  State Manager    │ │  │
-│  │  │ (human link) │  │ (spawn/kill) │  │ (state.json r/w)  │ │  │
-│  │  └──────────────┘  └──────┬───────┘  └───────────────────┘ │  │
-│  └──────────────────────────┼──────────────────────────────────┘  │
-│                              │ ACP (ndjson/stdio) per agent        │
-│         ┌────────────────────┼───────────────────────┐            │
-│         ▼                    ▼                        ▼            │
-│  ┌─────────────┐    ┌─────────────────┐    ┌──────────────────┐  │
-│  │  Sub-Agent  │    │   Sub-Agent     │    │   Sub-Agent      │  │
-│  │  (ACP proc) │    │   (ACP proc)    │    │   (ACP proc)     │  │
-│  └─────────────┘    └─────────────────┘    └──────────────────┘  │
-└──────────────────────────────────────────────────────────────────┘
-              │                    │                        │
-              ▼                    ▼                        ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                      Shared State Layer (Filesystem)              │
-│                                                                   │
-│  ┌──────────────────────┐  ┌─────────────┐  ┌────────────────┐  │
-│  │ .conductor/state.json│  │  .memory/   │  │ .claude/ +     │  │
-│  │ (task coordination)  │  │ (shared kb) │  │ CLAUDE.md      │  │
-│  └──────────────────────┘  └─────────────┘  └────────────────┘  │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-### Component Responsibilities
-
-| Component | Responsibility | Implementation |
-|-----------|----------------|----------------|
-| CLI Interface | Accept human input, stream orchestrator responses, display agent status | Python, ACP client connecting to orchestrator via stdio |
-| Web Dashboard | Visual real-time view of all agents, tasks, logs; layered visibility | Node.js + React, WebSocket consumer of dashboard API |
-| Dashboard API Server | Bridge between orchestrator state and dashboard clients | Python FastAPI or equivalent, WebSocket broadcast, REST for initial state |
-| Orchestrator Process | Plan, delegate, review, intervene; respond to human via ACP; spawn/manage sub-agents | Claude Code agent process with orchestration skills |
-| ACP Server (in orchestrator) | Receive messages from human-facing CLI; send status updates upstream | Python ACP adapter, wraps orchestrator's Claude agent |
-| Agent Manager | Spawn sub-agent processes via ACP, track lifecycle, route messages | Python asyncio subprocess manager |
-| State Manager | Read/write `.conductor/state.json` with safe concurrent access; watch for changes | Python with filelock, emit events on state changes |
-| Sub-Agent Process | Execute assigned coding tasks; write status/output to state; ask questions via ACP | Any ACP-compatible agent (Claude Code, etc.) as subprocess |
-| Shared State File | Single coordination backbone: task assignments, status, outputs, interfaces, dependencies | `.conductor/state.json`, JSON, file-locked writes |
-| Shared Memory | Cross-agent knowledge: interfaces, decisions, context fragments | `.memory/` directory, Markdown/JSON files per topic |
-| Repo Config | Project instructions inherited by all agents automatically | `.claude/`, `CLAUDE.md`, standard Claude Code discovery |
-
-## Recommended Project Structure
+This document focuses on the v1.1 additions. Understanding what exists is mandatory before designing new components.
 
 ```
-conductor/                        # Python package (pip-installable)
-├── __init__.py
-├── cli/
-│   ├── __init__.py
-│   └── main.py                   # Entry point: `conductor run`, `conductor status`
-├── orchestrator/
-│   ├── __init__.py
-│   ├── process.py                # Spawn/manage orchestrator Claude Code process
-│   ├── acp_bridge.py             # ACP client: human → orchestrator, responses upstream
-│   └── skills/                   # Orchestration skills installed into Claude Code
-│       ├── plan.md
-│       ├── delegate.md
-│       └── review.md
-├── agents/
-│   ├── __init__.py
-│   ├── manager.py                # Spawn/kill/track sub-agent processes
-│   ├── acp_client.py             # ACP client per sub-agent connection
-│   └── identity.py               # Agent identity model (name, role, target, materials)
-├── state/
-│   ├── __init__.py
-│   ├── manager.py                # state.json read/write with file locking
-│   ├── models.py                 # Pydantic models for Task, Agent, Dependency
-│   └── watcher.py                # File watcher → emit events on changes
-├── dashboard/
-│   ├── __init__.py
-│   ├── server.py                 # FastAPI server: REST + WebSocket for dashboard
-│   └── broadcaster.py            # Fan-out state events to WebSocket clients
-├── memory/
-│   ├── __init__.py
-│   └── manager.py                # Read/write .memory/ shared knowledge files
-└── config.py                     # Conductor config (mode, paths, concurrency limits)
+┌──────────────────────────────────────────────────────────────────────┐
+│                     conductor CLI (Typer + Rich)                      │
+│  ┌───────────────────┐  ┌────────────────┐  ┌────────────────────┐   │
+│  │  `conductor run`  │  │  input_loop.py  │  │  display_loop.py   │   │
+│  │  (batch mode)     │  │  (cmd dispatch) │  │  (Rich Live table)  │   │
+│  └─────────┬─────────┘  └───────┬────────┘  └─────────┬──────────┘   │
+│            │                    │ human_in/out queues   │ state poll   │
+├────────────▼────────────────────▼────────────────────────▼────────────┤
+│                         Orchestrator (Python)                          │
+│  ┌─────────────────────────────────────────────────────────────────┐  │
+│  │  orchestrator.py: run() / run_auto() / resume()                  │  │
+│  │  ├── TaskDecomposer (SDK query(), structured JSON output)        │  │
+│  │  ├── DependencyScheduler (asyncio.wait FIRST_COMPLETED)         │  │
+│  │  ├── _run_agent_loop (ACPClient per task, review/revise cycle)  │  │
+│  │  ├── EscalationRouter (auto vs. human via asyncio.Queue pair)   │  │
+│  │  └── Interventions: cancel_agent, inject_guidance, pause         │  │
+│  └─────────────────────────────────────────────────────────────────┘  │
+├─────────────────────────────────────────────────────────────────────── ┤
+│                       ACP / Claude Agent SDK                           │
+│  ┌───────────────────────────────────────────────────────────────┐    │
+│  │  ACPClient (per sub-agent): ClaudeSDKClient wrapper            │    │
+│  │  send() → stream_response() → interrupt()                      │    │
+│  │  PermissionHandler → EscalationRouter.resolve()                │    │
+│  └───────────────────────────────────────────────────────────────┘    │
+├─────────────────────────────────────────────────────────────────────── ┤
+│                         State Layer (Filesystem)                       │
+│  ┌──────────────┐  ┌───────────────────────┐  ┌──────────────────┐   │
+│  │ StateManager │  │ .conductor/state.json │  │  SessionRegistry  │   │
+│  │ (filelock)   │  │ (ConductorState model)│  │ sessions.json     │   │
+│  └──────────────┘  └───────────────────────┘  └──────────────────┘   │
+├─────────────────────────────────────────────────────────────────────── ┤
+│                  Dashboard (FastAPI + React, optional)                  │
+│  ┌──────────────────────────────────────────────────────────────┐     │
+│  │  dashboard/server.py → WebSocket → conductor-dashboard npm    │     │
+│  └──────────────────────────────────────────────────────────────┘     │
+└──────────────────────────────────────────────────────────────────────┘
+```
 
-conductor-dashboard/               # Node.js package (npm-installable)
-├── package.json
-├── src/
-│   ├── App.tsx                    # Root with WebSocket provider
-│   ├── components/
-│   │   ├── AgentCard.tsx          # Per-agent status: collapsed → expanded → live stream
-│   │   ├── TaskBoard.tsx          # Task dependency graph, status overview
-│   │   ├── LogStream.tsx          # Live log viewer with virtualization
-│   │   └── Notifications.tsx      # Smart alerts: errors, completions, interventions
-│   ├── hooks/
-│   │   ├── useAgentState.ts       # Consume WebSocket state updates
-│   │   └── useTaskGraph.ts        # Derive dependency graph from state
-│   └── lib/
-│       └── wsClient.ts            # WebSocket connection, reconnect logic
-└── vite.config.ts
+**Critical observation:** `cli/__init__.py` sets `no_args_is_help=True`, so `conductor` with no arguments currently prints help text. The v1.1 TUI requires a new default path when no args are given.
+
+---
+
+## Target Architecture (v1.1 additions in context)
+
+The TUI adds a **conversational loop** execution mode where the orchestrator itself operates as a stateful, multi-turn Claude session with direct tool access — rather than as a one-shot decomposer that spawns agents.
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                     conductor CLI (Typer + Rich)                      │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐   │
+│  │ `conductor run`  │  │  `conductor`      │  │ `conductor       │   │
+│  │ (batch mode,     │  │  (no args →      │  │  status`         │   │
+│  │  UNCHANGED)      │  │  chat TUI NEW)    │  │  UNCHANGED)      │   │
+│  └──────────────────┘  └────────┬─────────┘  └──────────────────┘   │
+│                                  │ NEW                                 │
+├──────────────────────────────────▼─────────────────────────────────── ┤
+│                        Chat TUI Layer (NEW)                            │
+│  ┌─────────────────────────────────────────────────────────────────┐  │
+│  │  cli/chat.py — ChatSession                                       │  │
+│  │  ├── _chat_loop(): async REPL — send prompt, stream response     │  │
+│  │  ├── _render_stream(): incremental Rich output per message       │  │
+│  │  ├── delegation hook: PostToolUse on Delegate custom tool        │  │
+│  │  └── _spawn_agents(): await Orchestrator.run(task_desc)          │  │
+│  └────────┬──────────────────────────────────────┬──────────────── ┘  │
+│           │ persistent ClaudeSDKClient session    │ fresh Orchestrator │
+├───────────▼──────────────────────────────────────▼─────────────────── ┤
+│     ClaudeSDKClient (orchestrator chat)      Orchestrator (batch)      │
+│  ┌─────────────────────────────┐  ┌──────────────────────────────┐   │
+│  │  Persistent session_id       │  │  orchestrator.run(task_desc) │   │
+│  │  Tools: Read/Edit/Bash/etc   │  │  (existing v1.0 path,        │   │
+│  │  Custom tool: Delegate       │  │   UNCHANGED)                 │   │
+│  │  setting_sources: ["project"]│  └──────────────────────────────┘   │
+│  └─────────────────────────────┘                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## New Components
+
+### Component 1: `cli/chat.py` — ChatSession
+
+The central new component. Owns the conversational loop end-to-end.
+
+| Responsibility | Implementation |
+|---------------|----------------|
+| Maintain orchestrator's persistent SDK session | `ClaudeSDKClient` (not `query()`), kept open for the full session lifetime |
+| Accept user input | `asyncio.to_thread(input, "> ")` — same pattern as existing `_ainput()` in input_loop.py |
+| Send to SDK and stream response | `client.query(user_input)` then `client.receive_response()` |
+| Render streaming output | Rich `Console.print()` incremental output per `AssistantMessage` |
+| Intercept delegation decisions | `PostToolUse` hook registered on the `Delegate` custom tool |
+| Call `Orchestrator.run()` on delegation | `await orchestrator.run(task_desc)` inside the async hook |
+| Resume sessions across restarts | Read `session_id` from `chat_persistence.py`, pass `resume=session_id` to `ClaudeSDKClient` |
+
+`ClaudeSDKClient` is the correct API here. The official SDK docs are explicit: `query()` creates a new session each call; `ClaudeSDKClient` is for "continuous conversations, chat interfaces, REPLs" with context preserved across `.query()` calls.
+
+**Confidence:** HIGH — ClaudeSDKClient is the explicitly documented API for this use case.
+
+### Component 2: `cli/commands/chat.py` — Typer command wiring
+
+CLI entry point for the interactive mode. Registers a `chat` command on the Typer app. The `cli/__init__.py` modification also sets `invoke_without_command=True` and a default callback so `conductor` (no args) calls `chat` rather than printing help.
+
+```python
+# cli/__init__.py change
+app = typer.Typer(
+    name="conductor",
+    help="Conductor: AI agent orchestration",
+    invoke_without_command=True,
+)
+
+@app.callback()
+def main_callback(ctx: typer.Context):
+    if ctx.invoked_subcommand is None:
+        chat()  # default to chat mode
+```
+
+This preserves all existing subcommands without change.
+
+**Confidence:** HIGH — Typer `invoke_without_command` is a documented feature.
+
+### Component 3: `cli/chat_persistence.py` — Chat session store
+
+Reads/writes `.conductor/chat_session.json` with `{"session_id": "...", "started_at": "..."}`. Used to resume the orchestrator's chat session across `conductor` invocations. Follows the same pattern as the existing `SessionRegistry` for sub-agents. Single writer (the one chat session), no filelock required.
+
+### Component 4: Chat system prompt
+
+The orchestrator's identity in chat mode differs from its batch decomposer role. The chat system prompt establishes:
+- Role as a senior engineer / coding agent with direct tool access
+- Permission to use tools directly for simple/focused tasks
+- When to delegate: multi-file features, tasks requiring a team, complex dependency graphs
+- How to signal delegation: call the `Delegate` custom tool with a task description
+
+This is a prompt artifact, not a code module, but it drives the smart delegation behavior. Requires iterative tuning.
+
+### Component 5: `Delegate` custom in-process tool
+
+An in-process custom tool (MCP-style, no subprocess) defined using the SDK's tool definition API. The orchestrator SDK session calls this tool when it decides to spawn sub-agents. `ChatSession` intercepts the `PostToolUse` hook, runs `Orchestrator.run(task)`, and returns a summary as the tool result.
+
+```python
+DELEGATE_TOOL_SCHEMA = {
+    "name": "Delegate",
+    "description": "Spawn a team of sub-agents to implement a complex multi-file feature.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "task": {
+                "type": "string",
+                "description": "Feature description for the agent team (as if passed to conductor run)"
+            }
+        },
+        "required": ["task"]
+    }
+}
+```
+
+**Confidence:** HIGH — custom in-process tools are a first-class SDK feature, already used conceptually in the existing `ACPClient` via `PermissionHandler`.
+
+---
+
+## What Changes vs. What Stays Unchanged
+
+| Module | Status | Change |
+|--------|--------|--------|
+| `cli/__init__.py` | MODIFY | Add `chat` command; set `invoke_without_command=True`, add default callback |
+| `cli/commands/run.py` | UNCHANGED | Batch mode stays identical |
+| `cli/commands/status.py` | UNCHANGED | Status display stays identical |
+| `cli/display.py` | UNCHANGED, REUSED | `_build_table()` reused to show agent progress during delegation |
+| `cli/input_loop.py` | UNCHANGED | Still used exclusively by `conductor run` |
+| `orchestrator/orchestrator.py` | UNCHANGED | `run()`, `run_auto()` called as-is when delegating |
+| `acp/client.py` | UNCHANGED | Sub-agents still use `ACPClient` |
+| `state/` (all files) | UNCHANGED | `StateManager` + `ConductorState` models unchanged |
+| `dashboard/` | UNCHANGED | Optional, still started via `--dashboard-port` |
+| **NEW: `cli/chat.py`** | NEW | `ChatSession` class, chat loop, streaming, delegation hook |
+| **NEW: `cli/chat_persistence.py`** | NEW | Load/save `.conductor/chat_session.json` |
+| **NEW: `cli/commands/chat.py`** | NEW | Typer command wiring |
+
+---
+
+## Data Flow
+
+### Flow 1: Direct Task (Orchestrator Handles Itself)
+
+```
+User types: "Show me what files auth.py imports"
+    │
+    ▼
+ChatSession._chat_loop() → client.query(user_input)
+    │
+    ▼
+SDK agent loop: Claude calls Read tool on auth.py
+    │
+    ▼
+client.receive_response() yields AssistantMessage (text + tool calls)
+    │
+    ▼
+ChatSession._render_stream() prints incrementally to terminal
+    │
+    ▼
+ResultMessage received: session complete
+    │
+    ▼
+Session context preserved for next turn (context window accumulates)
+```
+
+### Flow 2: Delegated Task (Orchestrator Spawns Sub-Agents)
+
+```
+User types: "Implement OAuth login with Google, include tests"
+    │
+    ▼
+ChatSession._chat_loop() → client.query(user_input)
+    │
+    ▼
+SDK agent loop: Claude decides this is multi-file/complex work
+Claude calls: Delegate(task="Implement OAuth login with Google, include tests")
+    │
+    ▼
+PostToolUse hook fires in ChatSession._delegation_hook()
+    │
+    ▼
+ChatSession._spawn_agents(task_desc):
+    fresh_orchestrator = Orchestrator(state_manager, repo_path, ...)
+    await fresh_orchestrator.run(task_desc)  ← existing v1.0 path
+    │  spawns agent-A (auth module)
+    │  spawns agent-B (tests)
+    │  review/revise cycle per agent (unchanged)
+    │
+    ▼
+Orchestrator.run() completes
+    │
+    ▼
+Hook returns: {"result": "Completed 2 tasks: src/auth.py, tests/test_auth.py"}
+    │
+    ▼
+SDK agent loop resumes: Claude reads tool result, produces final response
+    │
+    ▼
+ChatSession._render_stream() displays Claude's summary to user
+    │
+    ▼
+Full delegation captured in orchestrator's context window
+```
+
+### Flow 3: Session Resume (Restart Continuity)
+
+```
+User closes terminal, reopens next day, runs `conductor`
+    │
+    ▼
+ChatSession.__init__: read .conductor/chat_session.json → session_id found
+    │
+    ▼
+ClaudeSDKClient(options=..., resume=session_id)
+    │
+    ▼
+Full prior context restored by SDK (files read, tasks delegated, decisions)
+    │
+    ▼
+User types: "How did the auth implementation go?"
+Claude has full context: answers accurately referencing prior work
+```
+
+### Flow 4: Agent Escalation During Delegation
+
+```
+Delegation running: Orchestrator.run() active
+    │
+Sub-agent hits low-confidence action (e.g., "delete production data")
+    │
+    ▼
+EscalationRouter: interactive mode → push HumanQuery to human_out queue
+    │
+    ▼
+ChatSession: human_out queue watcher wakes up
+    │
+    ▼
+Terminal prints: "\n[Agent question]: Are you sure you want to delete X?"
+    │
+    ▼
+User types answer → human_in queue
+    │
+    ▼
+EscalationRouter reads answer, resumes sub-agent
+    │
+    ▼
+Delegation continues, eventually hook returns result to SDK session
+```
+
+---
+
+## Project Structure (new files only)
+
+```
+packages/conductor-core/src/conductor/
+├── acp/                              # UNCHANGED
+├── dashboard/                        # UNCHANGED
+├── orchestrator/                     # UNCHANGED
+├── state/                            # UNCHANGED
+└── cli/
+    ├── __init__.py                   # MODIFY: invoke_without_command, default callback
+    ├── display.py                    # UNCHANGED (reused)
+    ├── input_loop.py                 # UNCHANGED
+    ├── chat.py                       # NEW: ChatSession, _chat_loop, hooks, delegation
+    ├── chat_persistence.py           # NEW: .conductor/chat_session.json read/write
+    └── commands/
+        ├── __init__.py               # UNCHANGED
+        ├── run.py                    # UNCHANGED
+        ├── status.py                 # UNCHANGED
+        └── chat.py                   # NEW: Typer command wiring
 ```
 
 ### Structure Rationale
 
-- **orchestrator/**: The orchestrator is a Claude Code process managed externally — this keeps process lifecycle separate from agent logic
-- **agents/**: Each sub-agent is an independent process connected via ACP; the manager tracks them as a pool
-- **state/**: State management is isolated because it's the coordination backbone — file locking and change detection must be reliable
-- **dashboard/**: Separate Python server bridges the Python orchestration world to the Node.js dashboard world via WebSocket; avoids tight coupling
-- **conductor-dashboard/**: Independent npm package — can be installed and run separately, or bundled as a Python package asset
+- **`cli/chat.py`** is separate from `cli/commands/chat.py` following the existing pattern (`run.py` wires the command; the actual logic is in `commands/run.py` calling functions from `cli/`). Core logic in `chat.py` is independently unit-testable.
+- **`cli/chat_persistence.py`** mirrors the `SessionRegistry` pattern already in the codebase. Small and focused.
+- **All new code in `cli/`** because chat is a presentation/interaction concern. Orchestration logic stays in `orchestrator/`.
+
+---
 
 ## Architectural Patterns
 
-### Pattern 1: ACP All The Way Down
+### Pattern 1: ClaudeSDKClient for the Persistent Orchestrator Session
 
-**What:** Use ACP as the single inter-process communication protocol at both layers. The human talks to the orchestrator via ACP. The orchestrator talks to each sub-agent via ACP. Same protocol, same primitives, same tooling.
+**What:** Use `ClaudeSDKClient` (not `query()`) for the orchestrator's chat session. `ClaudeSDKClient` maintains a persistent SDK process with full conversation history across `.query()` calls.
 
-**When to use:** Always — this is the core architectural constraint.
+**When to use:** Any time the orchestrator needs context continuity across user messages. "It" needs to refer back to files it read, decisions it made, tasks it ran.
 
-**Trade-offs:**
-- Pro: orchestrator can observe sub-agent tool calls in real-time, stream agent activity to dashboard, intervene at any message boundary
-- Pro: no custom protocol to maintain; interoperability with any ACP-compatible agent
-- Con: ACP is relatively new; implementation details may shift; requires careful subprocess lifecycle management
+**Trade-offs:** More complex lifecycle (must manage `async with ClaudeSDKClient`) but necessary for chat. `query()` would close and reopen the SDK process each message, losing context despite `resume=session_id` because in-process hook registrations are lost.
 
-**Example:**
 ```python
-# Orchestrator as ACP client connecting to a sub-agent
-async def spawn_agent(self, identity: AgentIdentity) -> AgentConnection:
-    process = await asyncio.create_subprocess_exec(
-        "claude", "--acp",  # Sub-agent speaks ACP over stdio
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-    )
-    conn = ACPClient(process.stdin, process.stdout)
-    await conn.send_spawn_prompt(identity.system_prompt)
-    return AgentConnection(identity=identity, process=process, acp=conn)
+async with ClaudeSDKClient(options=ClaudeAgentOptions(
+    cwd=str(repo_path),
+    system_prompt=CHAT_SYSTEM_PROMPT,
+    allowed_tools=["Read", "Edit", "Write", "Bash", "Glob", "Grep"],
+    custom_tools=[DELEGATE_TOOL_SCHEMA],
+    setting_sources=["project"],
+    resume=prior_session_id,  # None on first run
+)) as client:
+    while True:
+        user_input = await _ainput("> ")
+        if user_input.lower() in ("exit", "quit"):
+            break
+        await client.query(user_input)
+        async for message in client.receive_response():
+            render(message)
 ```
 
-### Pattern 2: Shared State File as Coordination Backbone
+**Confidence:** HIGH — official SDK docs explicitly list "interactive applications, chat interfaces, REPLs" as the ClaudeSDKClient use case.
 
-**What:** `.conductor/state.json` is the single source of truth. The orchestrator writes task assignments and dependency graphs. Sub-agents write status, outputs, and interface declarations. All agents can read the full state to understand the team's work. Writes are file-locked to prevent corruption.
+### Pattern 2: PostToolUse Hook for Delegation Interception
 
-**When to use:** For all inter-agent coordination that doesn't need real-time interaction — task assignment, status tracking, output publishing.
+**What:** Register a `PostToolUse` hook on the `Delegate` custom tool. When the orchestrator SDK session calls `Delegate`, the hook captures the call, runs `Orchestrator.run()`, and returns a summary as the tool result.
 
-**Trade-offs:**
-- Pro: durable (filesystem survives crashes); asynchronous reads (agents check when ready); simple mental model
-- Pro: all agents can see the whole picture without message routing
-- Con: not suitable for real-time question/answer (use ACP for that); requires file locking discipline; state can grow large on long runs
+**When to use:** Any time you need Python code to execute in response to Claude calling a specific tool. The hook runs in-process, supports `async`, and controls the tool result that Claude sees.
 
-**Example:**
+**Trade-offs:** Elegant decoupling — Claude decides when to delegate; Python decides how to execute it. The tool result summary is critical: Claude forms its final response based on what the hook returns.
+
 ```python
-from filelock import FileLock
-
-class StateManager:
-    def __init__(self, state_path: Path):
-        self.path = state_path
-        self.lock = FileLock(str(state_path) + ".lock")
-
-    def update_task(self, task_id: str, update: dict):
-        with self.lock:
-            state = self._read()
-            state["tasks"][task_id].update(update)
-            self._write(state)
+async def _delegation_hook(input_data, tool_use_id, context):
+    task_desc = input_data["tool_input"]["task"]
+    orchestrator = Orchestrator(state_manager=self._state, repo_path=self._repo)
+    await orchestrator.run(task_desc)
+    state = self._state.read_state()
+    completed = [t for t in state.tasks if t.status == "completed"]
+    summary = f"Completed {len(completed)} tasks: " + ", ".join(t.target_file for t in completed)
+    return {"result": summary}
 ```
 
-### Pattern 3: Layered Visibility for Verbose Agent Output
+**Confidence:** HIGH — PostToolUse hooks are a first-class SDK feature documented officially.
 
-**What:** Agent conversations are extremely verbose. The dashboard presents three layers: (1) collapsed status card showing agent name, role, current task, status; (2) expanded view showing recent messages and tool calls; (3) live stream of full conversation. Each layer is opt-in.
+### Pattern 3: Fresh Orchestrator Per Delegation
 
-**When to use:** Always in the dashboard. Avoid surfacing raw conversation dumps at the top level.
+**What:** Construct a new `Orchestrator` instance for each delegation call, sharing only the `StateManager` and `repo_path`.
 
-**Trade-offs:**
-- Pro: prevents information overload; users see signal not noise
-- Con: requires summary extraction from raw agent output (inference or heuristics)
+**When to use:** Always for delegation calls. Never reuse an `Orchestrator` instance across `run()` calls.
 
-### Pattern 4: Supervisor Pattern with Escalation Modes
+**Trade-offs:** Adds construction overhead (negligible — no I/O in `__init__`). Prevents stale `_active_clients`, `_active_tasks`, `_semaphore` state from a prior run contaminating a new one.
 
-**What:** Orchestrator mediates all coordination — sub-agents never communicate peer-to-peer. The orchestrator has two escalation modes: `--auto` (best judgment, log decisions) and interactive (ask the human when uncertain).
+**Confidence:** HIGH — from direct inspection of `Orchestrator.__init__` which initializes mutable dict state.
 
-**When to use:** Always — no direct sub-agent communication is an explicit design constraint.
+### Pattern 4: Rich Live Rendering Over Textual for v1.1
 
-**Trade-offs:**
-- Pro: all coordination visible to orchestrator; single intervention point; simpler reasoning about system state
-- Con: orchestrator becomes bottleneck for high-frequency coordination; adds latency on question/answer cycles
+**What:** Use Rich `Console.print()` for incremental streaming output during chat, and `_build_table()` from `display.py` for delegation progress. No Textual dependency in v1.1.
 
-## Data Flow
+**When to use:** v1.1 baseline. Textual can be added in a later phase for full TUI widgets (scrollable history, input line, status panel).
 
-### Task Assignment Flow
+**Trade-offs:** Rich is already a dependency; zero new packages; proven in `conductor run`. Textual would give a richer layout (scrollable message history, persistent input bar) but requires owning the event loop (incompatible with bare `asyncio.to_thread(input)` pattern).
 
-```
-Human describes feature
-    ↓ ACP message
-Orchestrator (Claude Code) plans work
-    ↓ writes to .conductor/state.json
-  [task_id: "auth-module", status: "assigned", agent: "agent-1", deps: ["..."] ]
-    ↓ ACP spawn_prompt
-Sub-Agent process starts, reads identity + task from state.json
-    ↓ executes coding task (file edits, tests, etc.)
-    ↓ writes to .conductor/state.json
-  [task_id: "auth-module", status: "complete", output: "src/auth.py", interfaces: {...}]
-    ↓ ACP idle notification → orchestrator
-Orchestrator reviews output, gives feedback or marks done
-    ↓ ACP message to human
-Human sees result in CLI or dashboard
-```
-
-### Dashboard Real-Time Flow
-
-```
-State change (sub-agent writes state.json)
-    ↓ State watcher detects file change
-    ↓ State Manager reads new state
-    ↓ Emits event internally (asyncio event bus or queue)
-Dashboard API Server (Python FastAPI)
-    ↓ Receives event
-    ↓ Broadcasts delta via WebSocket
-Web Dashboard (Node.js/React)
-    ↓ Receives WebSocket message
-    ↓ Updates component state
-Human sees live agent status
-```
-
-### Human Intervention Flow (Interactive Mode)
-
-```
-Sub-agent encounters ambiguity
-    ↓ ACP permission/question request → orchestrator
-Orchestrator evaluates:
-  [--auto mode] → uses best judgment → responds via ACP → logs decision
-  [interactive mode] → escalates to human via ACP upstream
-    ↓ CLI prints prompt / Dashboard shows notification
-Human responds
-    ↓ ACP message → orchestrator → ACP message → sub-agent
-Sub-agent resumes
-```
-
-### Agent Lifecycle Flow
-
-```
-Orchestrator decides to spawn agent
-    ↓ Agent Manager creates AgentIdentity (name, role, target, materials)
-    ↓ Spawns subprocess (e.g., `claude --acp`)
-    ↓ Sends spawn prompt via ACP
-    ↓ Writes agent record to state.json
-Agent works autonomously
-    ↓ Writes status updates to state.json
-    ↓ Asks questions via ACP (orchestrator answers)
-Agent signals completion / goes idle
-    ↓ Orchestrator reviews output
-    ↓ Sends feedback or marks task complete in state.json
-    ↓ Orchestrator either reassigns agent or sends shutdown via ACP
-Agent acknowledges shutdown
-    ↓ Process exits cleanly
-    ↓ Agent Manager removes from pool
-```
-
-## Build Order (Dependencies)
-
-The components have clear build dependencies. Build in this order:
-
-```
-Phase 1: Shared Foundation
-  state/models.py          ← no dependencies
-  state/manager.py         ← depends on models
-  agents/identity.py       ← depends on models
-  config.py                ← no dependencies
-
-Phase 2: ACP Communication Layer
-  agents/acp_client.py     ← depends on ACP library, identity
-  orchestrator/acp_bridge.py ← depends on ACP library
-
-Phase 3: Orchestrator Lifecycle
-  orchestrator/process.py  ← depends on acp_bridge, state/manager
-  orchestrator/skills/     ← plain text, no code dependencies
-  agents/manager.py        ← depends on acp_client, state/manager, identity
-
-Phase 4: CLI + Basic Loop
-  cli/main.py              ← depends on orchestrator/process, agents/manager
-
-Phase 5: State Watching + Dashboard Backend
-  state/watcher.py         ← depends on state/manager
-  dashboard/broadcaster.py ← depends on state/watcher
-  dashboard/server.py      ← depends on broadcaster
-
-Phase 6: Dashboard Frontend
-  conductor-dashboard/     ← depends on dashboard/server being running
-```
-
-**Key dependency constraint:** The CLI provides a working product before the dashboard exists. Build phases 1-4 first to validate the core loop (human → orchestrator → agents → results) before investing in dashboard infrastructure.
-
-## Scaling Considerations
-
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| 1-5 agents | Current design; state.json is fine; single orchestrator process |
-| 5-20 agents | Monitor state.json file size; consider write batching; dashboard needs virtual list rendering for agent cards |
-| 20+ agents | state.json write contention becomes real; consider splitting into per-agent files with a manifest; orchestrator may need sub-orchestrators |
-
-### Scaling Priorities
-
-1. **First bottleneck:** State file write contention. With many agents writing concurrently, file locking creates serialization. Fix: per-agent state files with an index, merge on read.
-2. **Second bottleneck:** Orchestrator context window. Tracking many tasks/agents in one context hits limits. Fix: summarization/rolling context in orchestrator skills; sub-orchestrator delegation.
+---
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Peer-to-Peer Agent Communication
+### Anti-Pattern 1: Using `query()` for the Chat Loop
 
-**What people do:** Allow agents to message each other directly when they need to coordinate.
-**Why it's wrong:** Loses observability; orchestrator can't see or intervene in side-channel conversations; creates coordination cycles that are hard to reason about; explicitly out of scope per design.
-**Do this instead:** All inter-agent coordination goes through state.json (async) or via orchestrator as ACP intermediary (real-time questions).
+**What people do:** Use the existing `query()` function with `resume=session_id` for each user message, since the decomposer and reviewer already use `query()`.
 
-### Anti-Pattern 2: Raw Log Dumps in Dashboard
+**Why it's wrong:** `query()` creates and destroys a `ClaudeSDKClient` per call. While `resume=session_id` restores remote message history, it loses in-process hook registrations on every call. The `Delegate` hook would need to be re-registered each turn — error-prone and non-obvious.
 
-**What people do:** Stream every ACP message directly to the dashboard UI.
-**Why it's wrong:** Agent conversations are extremely verbose; raw dumps cause information overload; important signals (errors, completions) get buried.
-**Do this instead:** Implement layered visibility — status summary by default, expandable to messages, with opt-in live stream. Surface smart notifications for errors, completions, and intervention requests.
+**Do this instead:** Use `ClaudeSDKClient` as an `async with` context manager for the entire chat session lifetime.
 
-### Anti-Pattern 3: Blocking the Orchestrator on Sub-Agent Work
+### Anti-Pattern 2: `asyncio.run()` Inside a Running Event Loop
 
-**What people do:** Have the orchestrator await each agent's completion sequentially before assigning the next task.
-**Why it's wrong:** Eliminates the core value of multi-agent parallelism; makes orchestrator unavailable for human interaction and other agents' questions.
-**Do this instead:** Orchestrator assigns tasks and monitors asynchronously via state.json changes and ACP idle notifications. Use asyncio event loop; never block on agent completion.
+**What people do:** Call `asyncio.run(orchestrator.run(...))` from inside the `PostToolUse` hook handler.
 
-### Anti-Pattern 4: Skipping File Locking on State Writes
+**Why it's wrong:** `asyncio.run()` creates a new event loop and raises `RuntimeError: This event loop is already running` when called from inside a running loop.
 
-**What people do:** Write to state.json directly without locking because "it's fast enough."
-**Why it's wrong:** Multiple agents writing simultaneously causes JSON corruption or partial writes. State corruption during a long run can destroy all work in progress.
-**Do this instead:** Always use filelock (or equivalent) for state.json writes. Read-modify-write inside the lock. Keep critical sections short.
+**Do this instead:** `await orchestrator.run(task_desc)` directly inside the async hook callback. The hook is already running in the asyncio event loop.
 
-### Anti-Pattern 5: Hard-Coding Agent Count
+### Anti-Pattern 3: Reusing an Orchestrator Instance Across Delegations
 
-**What people do:** Spawn a fixed number of agents at startup.
-**Why it's wrong:** Over-allocates tokens on simple tasks; under-allocates on complex ones; orchestrator intelligence about team sizing is lost.
-**Do this instead:** Let the orchestrator decide team size based on the work. Pass the orchestrator skills/instructions that teach it to reason about parallelism and cost.
+**What people do:** Pass a single `Orchestrator` instance to `ChatSession` and call `run()` on it multiple times across chat turns.
+
+**Why it's wrong:** `Orchestrator.__init__` initializes `_active_clients`, `_active_tasks`, and `_semaphore` for one run. A second `run()` call may see stale `_active_tasks` from a previous completed run, causing state management errors.
+
+**Do this instead:** Construct a fresh `Orchestrator(state_manager, repo_path)` inside the delegation hook. Cheap — `__init__` does no I/O.
+
+### Anti-Pattern 4: Skipping Session Persistence
+
+**What people do:** Start a fresh `ClaudeSDKClient` on every `conductor` invocation (no `resume`).
+
+**Why it's wrong:** The orchestrator loses all context from prior conversation turns: files it read, tasks it ran, decisions it made. Users cannot continue a work session after closing the terminal.
+
+**Do this instead:** Read `chat_session.json` on startup, pass `resume=session_id` to `ClaudeSDKClient`. Capture `session_id` from the `SystemMessage(subtype="init")` on first run and persist it.
+
+### Anti-Pattern 5: Blocking Input Inside Textual
+
+**What people do:** Use `asyncio.to_thread(input)` inside a Textual app to get user input.
+
+**Why it's wrong:** Textual owns the event loop. Its `Input` widget handles user text through `on_input_submitted` events. Blocking `input()` in a thread fights Textual's rendering thread.
+
+**Do this instead:** Use `asyncio.to_thread(input)` only in a pure asyncio context (no Textual). If Textual is added later, use the `Input` widget and handle `on_input_submitted`.
+
+---
 
 ## Integration Points
 
-### External Services
-
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| Claude Code (orchestrator) | Subprocess with ACP stdio | Orchestrator IS a Claude Code process; spawn with `claude --acp` |
-| Sub-agents (ACP-compatible) | Subprocess with ACP stdio per agent | Any ACP agent; identity injected via spawn prompt |
-| @zed-industries/claude-agent-acp | npm adapter, imported by orchestrator Node.js shim if needed | Adapter between Claude Agent SDK and ACP; verify current package name |
-
-### Internal Boundaries
+### New-to-Existing Boundaries
 
 | Boundary | Communication | Notes |
 |----------|---------------|-------|
-| CLI ↔ Orchestrator Process | ACP over stdio | Human messages in, orchestrator responses + status out |
-| Orchestrator ↔ Agent Manager | Python in-process function calls | Same Python process; agent manager is a library not a service |
-| Agent Manager ↔ Sub-Agents | ACP over stdio per subprocess | One ACP connection per agent; asyncio-managed |
-| State Manager ↔ All Agents | Filesystem (state.json) | File-locked writes; watched by state watcher for events |
-| Orchestrator Process ↔ Dashboard Server | Python in-process event queue | State events fan out to WebSocket broadcaster |
-| Dashboard Server ↔ Dashboard UI | WebSocket (delta events) + HTTP (initial load) | Node.js client subscribes; receives state diffs not full state |
-| Python Package ↔ Node.js Dashboard | HTTP/WebSocket (dashboard server) | Two separate installable packages; dashboard connects to Python server |
+| `ChatSession` → `Orchestrator` | `await orchestrator.run(task_desc)` inside delegation hook | Fresh instance per delegation; share only `StateManager` and `repo_path` |
+| `ChatSession` → `StateManager` | Shared instance passed into `ChatSession.__init__` | Chat mode reads state to show delegation progress |
+| `ChatSession` → `ClaudeSDKClient` | `async with ClaudeSDKClient(options)` | One persistent session per `conductor` invocation |
+| `ChatSession` → `display.py._build_table()` | Direct import, no modification | Delegation progress shown using existing table builder |
+| `cli/commands/chat.py` → `cli/__init__.py` | Typer `app.command("chat")` | Minimal wiring change; existing commands unchanged |
+| `chat_persistence.py` → filesystem | `.conductor/chat_session.json` (JSON) | Single reader/writer; no filelock needed |
+| `ChatSession` → `EscalationRouter` | `human_out`/`human_in` asyncio.Queue passed through to Orchestrator | Agent questions surface in the chat terminal during delegation |
+
+### External Service Boundaries
+
+| Service | Integration Pattern | Notes |
+|---------|---------------------|-------|
+| Claude Agent SDK (chat) | `ClaudeSDKClient` persistent session | Orchestrator's chat session; lives for the `conductor` process lifetime |
+| Claude Agent SDK (sub-agents) | Existing `ACPClient` wrapper (unchanged) | Sub-agents spawned by `Orchestrator.run()` during delegation |
+| `.conductor/state.json` | Existing `StateManager.mutate()` + `read_state()` | Delegation writes task/agent records; chat mode reads for progress |
+| `.conductor/chat_session.json` | Simple JSON via `chat_persistence.py` | Chat-mode-only; not shared with batch mode |
+
+---
+
+## Build Order
+
+This ordering minimizes integration risk by building from pure data modules outward to complex interaction.
+
+1. **`cli/chat_persistence.py`** — Pure data, no dependencies. Load/save `{session_id, started_at}`. Testable in isolation.
+
+2. **Chat system prompt** (constant in `cli/chat.py`) — Draft the orchestrator's chat identity and delegation heuristics. Not runnable yet; needed for step 3.
+
+3. **`ChatSession` skeleton in `cli/chat.py`** — `ClaudeSDKClient` wiring, system prompt, basic `_chat_loop()` with `asyncio.to_thread(input)` and `receive_response()` rendering. No delegation. Smoke test: direct tool use (read file, run shell command).
+
+4. **`cli/commands/chat.py` + `cli/__init__.py` changes** — Register `chat` command, wire `invoke_without_command`. Validate that `conductor` with no args launches the loop.
+
+5. **`Delegate` custom tool + delegation hook** — Define the in-process tool schema, write `_delegation_hook()` calling `Orchestrator.run()`. End-to-end test: type a delegation request, watch agents run.
+
+6. **Escalation integration during delegation** — Pass `human_out`/`human_in` queues through to `Orchestrator` inside the hook. Test that agent questions surface correctly during delegation.
+
+7. **Session persistence** — Load `chat_session.json` on startup, pass `resume=session_id`, save `session_id` from init `SystemMessage`. Test restart continuity.
+
+8. **Smart delegation heuristics** — Tune the system prompt so the orchestrator makes accurate direct vs. delegate decisions for representative inputs. Iterative prompt engineering; no architecture change.
+
+---
+
+## Confidence Assessment
+
+| Area | Confidence | Reason |
+|------|------------|--------|
+| `ClaudeSDKClient` for chat loop | HIGH | Official docs explicitly list chat/REPL as its use case; `query()` comparison table confirms |
+| `PostToolUse` hook for delegation | HIGH | Hooks are first-class SDK features; same pattern already used in `ACPClient` |
+| `Delegate` custom in-process tool | HIGH | Custom tools documented officially; returns async-compatible hook results |
+| Rich Live rendering (no Textual) | HIGH | Already proven in `conductor run`, same library, no new deps |
+| Fresh `Orchestrator` per delegation | HIGH | Direct inspection of `Orchestrator.__init__` confirms mutable state that must not be reused |
+| Session persistence via JSON file | HIGH | Mirrors existing `SessionRegistry` pattern exactly |
+| Textual for richer TUI (future) | MEDIUM | Textual is mature but requires re-owning the event loop; not v1.1 scope |
+
+---
 
 ## Sources
 
-- [Claude Code Agent Teams Documentation](https://code.claude.com/docs/en/agent-teams) — official architecture reference for multi-agent coordination with shared task lists and ACP
-- [Agent Client Protocol Overview](https://agentclientprotocol.com/) — ACP: ndjson over stdio, JSON-RPC 2.0, session lifecycle
-- [ACP Protocol Deep Dive (KiloCode)](https://deepwiki.com/Kilo-Org/kilocode/13.3-acp-protocol) — ACP server/client message flow, permission handling, SSE events
-- [Supervisor Agent Pattern](https://rajatpandit.com/agent-supervisor-pattern/) — Supervisor pattern: orchestrator mediates all coordination
-- [Azure Scheduler-Agent-Supervisor Pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/scheduler-agent-supervisor) — Durable state store for task status; supervisor monitors for failures
-- [Filesystem-Based Agent State](https://agentic-patterns.com/patterns/filesystem-based-agent-state/) — Using filesystem as coordination backbone for agents
-- [FastAPI + WebSockets Real-Time Dashboard](https://testdriven.io/blog/fastapi-postgres-websockets/) — Python WebSocket broadcast architecture for real-time dashboards
-- [Multi-Agent Orchestration Patterns (Azure)](https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns) — Supervisor, sequential, parallel patterns with trade-offs
-- [Python asyncio Subprocess Management](https://docs.python.org/3/library/asyncio-subprocess.html) — Subprocess spawning, SIGTERM/SIGKILL lifecycle, graceful shutdown
+- [Claude Agent SDK overview](https://platform.claude.com/docs/en/agent-sdk/overview) — official overview, custom tools, hooks, sessions
+- [How the agent loop works](https://platform.claude.com/docs/en/agent-sdk/agent-loop) — message types, PostToolUse hooks, session continuity
+- [Python SDK reference: ClaudeSDKClient vs query()](https://platform.claude.com/docs/en/agent-sdk/python) — explicit comparison table; confirms ClaudeSDKClient for chat
+- [Textual workers guide](https://textual.textualize.io/guide/workers/) — async worker patterns for future Textual integration
+- [Textual App Basics](https://textual.textualize.io/guide/app/) — event loop ownership considerations
+- Live codebase inspection: `conductor-core/src/conductor/` (2026-03-11)
 
 ---
-*Architecture research for: Conductor — multi-agent coding orchestration framework*
-*Researched: 2026-03-10*
+
+*Architecture research for: Interactive Chat TUI — Conductor v1.1*
+*Researched: 2026-03-11*

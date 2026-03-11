@@ -1,265 +1,195 @@
 # Project Research Summary
 
-**Project:** Conductor — multi-agent coding orchestration framework
-**Domain:** Multi-agent coding orchestration (Python core + Node.js dashboard monorepo)
-**Researched:** 2026-03-10
+**Project:** Conductor v1.1 — Interactive Chat TUI
+**Domain:** Interactive conversational coding agent TUI added to existing multi-agent orchestration CLI
+**Researched:** 2026-03-11
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Conductor is a multi-agent coding orchestration framework built on top of the Agent Client Protocol (ACP). The established approach is a supervisor architecture: a single orchestrator Claude Code process plans work, spawns sub-agents via ACP stdio, mediates all inter-agent coordination through a shared state file, and answers sub-agent questions in real time. This is not a new pattern — CrewAI, AutoGen, LangGraph, and ccswarm all follow hierarchical coordinator models — but Conductor's differentiation lies in three things no existing tool does well: ACP-native bidirectional orchestration (same protocol at every layer), layered web dashboard visibility (not raw log dumps), and orchestrator-mediated file ownership that prevents concurrent edit conflicts.
+Conductor v1.1 adds an interactive chat REPL on top of a fully operational v1.0 multi-agent orchestration foundation. The core problem being solved is giving users a persistent conversational entry point (`conductor` with no args) rather than forcing every task through the fire-and-forget `conductor run "task"` batch mode. The recommended approach closely mirrors how Claude Code, Codex CLI, and Aider are built: a persistent SDK session (`ClaudeSDKClient`) with streaming token output, `prompt_toolkit` for input handling, and an explicit delegation boundary that distinguishes between tasks the orchestrator handles directly (file read/edit/shell in-context) versus tasks it escalates to sub-agent teams. Only one new runtime dependency is required — `prompt-toolkit>=3.0.52` — because `ClaudeSDKClient`, `include_partial_messages`, `rich.markdown`, and `rich.syntax` are already present in the existing stack.
 
-The recommended stack is unambiguous: `claude-agent-sdk` 0.1.48 (`ClaudeSDKClient`, not the deprecated `query()`) for agent process management, `asyncio.TaskGroup` for concurrency, Pydantic v2 + `filelock` for safe shared state, FastAPI + Uvicorn for the WebSocket bridge, and React 19 + Zustand + TanStack Query for the dashboard. The monorepo uses `uv` for Python and `pnpm` workspaces for Node.js. The CLI is the minimum viable interface; the web dashboard is a core product promise, not an afterthought.
+The recommended architecture adds three new modules under `cli/` (`chat.py`, `chat_persistence.py`, `commands/chat.py`) and one small modification to `cli/__init__.py`. All v1.0 components — the orchestrator, ACP client, state manager, session registry, and dashboard — are used unchanged. The delegation pattern is clean: the orchestrator's chat session defines a `Delegate` custom in-process tool; when Claude calls it, a `PostToolUse` hook runs `Orchestrator.run()` with a fresh instance and returns a summary as the tool result. This separates the LLM's decision about when to delegate from the Python code that executes the delegation.
 
-The dominant risks are concrete and well-documented: shared state file corruption from concurrent writes (an open bug in Claude Code itself), runaway token costs from unbounded agent proliferation (887K tokens/minute case study exists), missed sequential dependencies that cause incompatible parallel outputs, and orchestrator context drift where the LLM starts coding instead of coordinating. All four must be addressed in the infrastructure and orchestrator intelligence phases before any parallel agent work begins — retrofitting these protections is significantly harder than building them in from day one.
-
----
+The highest-risk area is the input/display layer, not the business logic. Three pitfalls can corrupt or hang the terminal before a single chat turn completes: mixing `Rich.Live` concurrent refresh with streaming output, using `asyncio.to_thread(input)` for a persistent session (uncancellable thread), and failing to restore terminal raw mode on crash or exception. These must be addressed in Phase 1 before any feature work begins. Context window exhaustion from unbounded chat history is the second major risk and must be addressed in Phase 2 before the system is usable beyond 20-30 turns.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The stack is split between a Python core (orchestration, ACP, state, API bridge) and a Node.js dashboard (React SPA). The two packages are independently installable (`pip install conductor-ai` / `npm install -g conductor-dashboard`) but communicate via WebSocket. `claude-agent-sdk` 0.1.48 is the only supported programmatic interface to Claude Code — the previously common `claude-code-sdk` was deprecated in September 2025. The dashboard is a Vite SPA (not Next.js) served by the Python backend; there is no need for SSR. Key deprecated or anti-recommended paths: LangChain/LangGraph/CrewAI (wrong abstraction for ACP subprocess model), `asyncio.create_subprocess_shell` (injection risk), threading (wrong concurrency model), Celery (adds Redis dependency for a problem `asyncio.TaskGroup` solves in-process).
+The existing v1.0 stack (claude-agent-sdk, rich, typer, asyncio, pydantic, fastapi, watchfiles) requires only one addition: `prompt-toolkit>=3.0.52`. This library provides `PromptSession.prompt_async()` for cancellable async input, `patch_stdout()` to serialize concurrent Rich output safely alongside the active input prompt, and `FileHistory` for persistent arrow-key recall across restarts. Replacing `asyncio.to_thread(input)` with `PromptSession.prompt_async()` is the single most important foundation decision; the existing `_ainput()` in `input_loop.py` must remain unchanged (batch mode still uses it), and the new chat loop is built in a separate module.
 
 **Core technologies:**
-- `claude-agent-sdk` 0.1.48 (`ClaudeSDKClient`): spawn and converse with sub-agents via ACP — the only official programmatic interface
-- Python 3.11+ / `asyncio.TaskGroup`: concurrent subprocess management without threading pitfalls
-- Pydantic v2 + `filelock`: state schema validation and safe concurrent file writes
-- FastAPI + Uvicorn: dual REST + WebSocket bridge to dashboard; first-class async, no impedance mismatch
-- `watchfiles` 1.1.1: Rust-backed async file watcher for pushing state changes to dashboard clients
-- React 19 + Zustand 5 + TanStack Query 5: dashboard UI with targeted re-renders for high-frequency WebSocket updates
-- `shadcn/ui` + Tailwind CSS 4: copy-owned component library; collapsible panel pattern built in
-- `uv` + `pnpm` workspaces: fast, deterministic dependency management for both language ecosystems
+- `ClaudeSDKClient` (already in claude-agent-sdk 0.1.48): persistent multi-turn session for the orchestrator — the correct API for chat/REPL, not `query()` which closes and reopens the session per call
+- `include_partial_messages=True` (ClaudeAgentOptions field, no new dep): token-by-token streaming output; without this users see nothing until Claude finishes the entire response
+- `prompt_toolkit 3.0.52` (only new dep): cancellable async input with history, multiline support, and `patch_stdout()` for concurrent-output-safe prompt rendering
+- `rich.markdown.Markdown` + `rich.syntax.Syntax` (already in rich>=13): render assistant text responses with proper headings, code fences, and syntax highlighting
+- `Delegate` custom in-process tool (new, no dep): signals the orchestrator SDK session when to spawn sub-agents; intercepted by a `PostToolUse` hook that calls `Orchestrator.run()`
 
 ### Expected Features
 
-The full feature breakdown with dependency graph and competitor analysis is in `.planning/research/FEATURES.md`. Summary below.
+**Must have (table stakes for v1.1):**
+- REPL input loop with `prompt_toolkit` — the entire premise; nothing works without this
+- Streaming response output with activity indicator — waiting for full response feels broken
+- Ctrl+C to interrupt running agent (stop agent, not quit TUI) — users muscle-memory this
+- Input history (arrow keys via `FileHistory("~/.conductor_history")`) — standard shell expectation
+- Orchestrator direct tool use (read/edit files, run shell) — the new capability in v1.1
+- Smart delegation (direct vs. spawn sub-agents) with visible announcement — the key differentiator
+- Slash commands: `/help`, `/exit`, `/status` — minimum discoverability
+- Session resumption via `resume=session_id` — every restart should pick up prior context
 
-**Must have (table stakes):**
-- Orchestrator agent that plans, decomposes work, delegates, and reviews — without this, nothing works
-- ACP client/server runtime — the protocol layer for all inter-process communication
-- Agent identity system (name, role, target, materials) — prevents agents trampling each other's scope
-- Shared state file (`.conductor/state.json`) — single coordination backbone
-- Task list with status tracking and dependency management — parallel work without this breaks
-- Conflict prevention for concurrent file edits — orchestrator-enforced file ownership per agent
-- Orchestrator-as-ACP-client answering sub-agent questions — key differentiator, prevents agent stalling
-- Session persistence (state + `.memory/`) — long sessions must survive restarts
-- CLI interface — minimum viable interface for human interaction
-- Web dashboard with layered visibility (summary → expanded → live stream) — core product promise
-
-**Should have (competitive differentiators, add at v1.x):**
-- Dynamic team sizing: orchestrator decides agent count based on task complexity, not user config
-- Quality review loops with feedback before marking tasks complete
-- Multi-level intervention vocabulary: cancel, reassign, inject mid-stream, pause/escalate
-- Smart notifications: only completions, errors, and escalations — not every event
-- Per-task GSD scope flexibility: simple tasks execute directly, complex tasks get full planning
+**Should have (competitive, add when P1 is stable):**
+- Live sub-agent activity feed in TUI during delegation — progress visibility
+- Escalation interrupt from sub-agents surfacing in TUI — requires async interrupt bridge
+- Per-task GSD scope display — low effort, depends on orchestrator judgment being tuned
+- Quality review loop status line — display only, depends on review loop implementation
 
 **Defer (v2+):**
-- Multi-user / team collaboration — requires auth, access control, entirely new product surface
-- Additional ACP-compatible agent types beyond Claude Code — wait for ACP ecosystem to mature
-- CI integration (auto-fix failing builds) — powerful but complex; defer until core is solid
-- Git worktree isolation per agent — useful but adds complexity; evaluate after v1 usage data
-
-**Explicit anti-features (do not build):**
-- Direct agent-to-agent peer messaging — creates coordination chaos, loses observability
-- Custom LLM provider support (non-ACP) — scope explosion with no v1 payoff
-- Raw conversation log streaming as primary dashboard UI — information overload, the core UX problem to solve
+- Multi-session support — requires session namespacing across all shared state
+- Voice input — niche use case, high platform complexity
+- Inline diff review in TUI — web dashboard already covers this
 
 ### Architecture Approach
 
-The system has four layers: Human Layer (CLI + Web Dashboard), Orchestration Layer (Python orchestrator process with Agent Manager and State Manager), Sub-Agent Layer (ACP subprocess pool), and Shared State Layer (filesystem: `state.json`, `.memory/`, `.claude/`). The dashboard is a separate Node.js package that connects to a FastAPI WebSocket server embedded in the Python core. All inter-process communication uses ACP (ndjson over stdio); there is no custom protocol. The build order follows clear dependencies: shared state models → ACP communication layer → orchestrator lifecycle → CLI → state watching + dashboard backend → dashboard frontend. The CLI produces a working product at phase 4, before the dashboard exists — validate the core loop first.
+Three new files under `cli/` implement the entire chat TUI. `cli/chat.py` contains `ChatSession` (the async REPL, streaming renderer, and `PostToolUse` delegation hook). `cli/chat_persistence.py` handles reading and writing `.conductor/chat_session.json` for session resumption. `cli/commands/chat.py` wires the Typer command. The single modification to `cli/__init__.py` switches from `no_args_is_help=True` to `invoke_without_command=True` with a callback that routes no-args invocation to chat mode. Every other module in the codebase is unchanged.
 
 **Major components:**
-1. **Orchestrator Process** — Claude Code agent with orchestration skills; plans, delegates, reviews, mediates all coordination; never writes code directly
-2. **Agent Manager** — asyncio subprocess pool; spawns/kills/tracks sub-agent processes via ACP stdio; one `ClaudeSDKClient` instance per agent
-3. **State Manager** — file-locked read/write of `.conductor/state.json`; emits events on changes; the coordination backbone
-4. **Dashboard API Server** — FastAPI + Uvicorn; broadcasts state change events over WebSocket; REST for initial state load
-5. **Web Dashboard** — React 19 SPA; Zustand for WebSocket state, TanStack Query for REST; AgentCard with three-tier visibility
-6. **Shared Memory** — `.memory/` per-agent-keyed files; cross-agent persistent knowledge; merged by orchestrator on demand
+1. `cli/chat.py` (`ChatSession`) — owns the async REPL loop, `ClaudeSDKClient` lifetime, streaming output rendering, and the `PostToolUse` hook that calls `Orchestrator.run()` for delegation
+2. `cli/chat_persistence.py` — reads/writes `.conductor/chat_session.json`; mirrors the existing `SessionRegistry` pattern; enables `resume=session_id` on startup
+3. `Delegate` custom tool + `PostToolUse` hook — the delegation bridge; Claude calls the tool when it decides to spawn agents; the hook executes a fresh `Orchestrator` instance and returns a text summary as the tool result
+4. Chat system prompt — defines the orchestrator's identity in chat mode (direct-tool engineer vs. batch decomposer), delegation heuristics, and structured "decisions made" section; requires iterative tuning
 
 ### Critical Pitfalls
 
-The full pitfall catalog with warning signs, recovery strategies, and phase-to-pitfall mapping is in `.planning/research/PITFALLS.md`. Top six critical pitfalls:
+1. **Rich Live + streaming terminal corruption** — Do not run `Rich.Live` concurrent with streaming token output in chat mode. Drop the `_display_loop`/Live layer entirely in chat mode; route all output through `prompt_toolkit`'s `patch_stdout()`. Establish this in Phase 1 before any streaming work.
 
-1. **State file corruption from concurrent writes** — Use orchestrator-mediated writes or per-agent namespaced keys with `filelock`; never allow two processes to write the same key simultaneously. This is an active production bug in Claude Code itself (GitHub #28847, #29036).
-2. **Runaway token costs from unbounded agent proliferation** — Enforce hard `max_agents` cap (6-8), per-session `max_turns`, agent idle timeouts, and token velocity alerts. Use cheaper models for sub-agents; reserve expensive models for orchestrator planning only.
-3. **Over-parallelization with missed sequential dependencies** — Require a contracts-first step: orchestrator defines shared interfaces before any sub-agent begins coding. Every task must declare explicit `requires:` and `produces:` fields.
-4. **Context window exhaustion mid-task with silent state loss** — Require sub-agents to write progress notes to `.memory/[agent-id].md` at regular intervals. Design tasks to be resumable from checkpoints.
-5. **Orchestrator intelligence drift (LLM starts coding instead of coordinating)** — Repeatedly re-anchor the orchestrator's role in skills/prompts: "You are a coordinator. Do not write code." Route sub-agent output summaries, not full outputs, to orchestrator context.
-6. **ACP permission prompt deadlock** — Pre-authorize common tool classes at session start. Implement async fast-path for permission responses separate from LLM inference. Set timeout with safe-default (deny) if no response within N seconds.
+2. **`asyncio.to_thread(input)` is uncancellable** — Never use `asyncio.to_thread(input)` for the chat input loop. The thread cannot be cancelled from Python (CPython #107505); on Ctrl+C the process hangs until Enter is pressed. Replace with `PromptSession.prompt_async()` as the first implementation step.
 
----
+3. **Terminal raw mode left dirty on crash** — Wrap the entire chat session entry point in `try/finally` catching `BaseException` (not just `Exception`) to restore terminal state. Test explicitly by force-crashing mid-prompt and verifying `stty -a` shows `echo` on.
+
+4. **Chat history grows unbounded, silently exhausting context** — Track approximate token count client-side after each turn. Warn at 60% utilization; offer session summarization at 75%. Store full history to `.conductor/chat_history.json` separately from what is sent to the API. Must be designed in Phase 2 before any real usage.
+
+5. **Smart delegation is non-deterministic and leaks Orchestrator state** — Define an explicit rule-based delegation policy for the system prompt. Always construct a fresh `Orchestrator` instance per delegation call (never reuse; `__init__` initializes mutable `_active_clients` and `_active_tasks`). Use separate state namespaces for chat-triggered tasks vs. batch tasks.
 
 ## Implications for Roadmap
 
-Based on the architecture's explicit build order, feature dependencies, and pitfall-to-phase mapping from research:
+Based on research, the build order follows a clear dependency chain: fix the CLI entry point and input layer first (nothing else is testable until `conductor` with no args reaches the chat loop), then implement the streaming display and session lifecycle (prerequisites for any real interaction), then add the delegation logic (requires the REPL and display to already work), then tune the orchestrator's intelligence.
 
-### Phase 1: Shared Foundation and State Infrastructure
+### Phase 1: CLI Foundation and Input Layer
 
-**Rationale:** Everything depends on safe, reliable state management. The concurrent-write corruption pitfall (Pitfall 1) must be solved before any multi-agent work begins — it cannot be retrofitted. This phase has no external dependencies and produces immediately testable components.
+**Rationale:** Three pitfalls (Rich Live corruption, uncancellable input, terminal dirty state, Typer no-args conflict) all share the same root cause — the input/display infrastructure — and must be solved together before any feature work. Nothing else is testable until `conductor` alone reaches the chat loop and accepts input cleanly.
 
-**Delivers:** Pydantic models for Task/Agent/Dependency; `StateManager` with `filelock`; agent identity model; project config structure.
+**Delivers:** `conductor` (no args) enters an interactive REPL with safe input handling, clean terminal lifecycle, and proof that streaming output and the input prompt can coexist without corruption.
 
-**Addresses features:** Shared state file (`.conductor/state.json`), agent identity system, task list data model.
+**Addresses:** REPL input loop (table stakes), Ctrl+C interrupt semantics, input history, slash commands MVP (`/help`, `/exit`)
 
-**Avoids:** State file corruption (Pitfall 1) — enforce write discipline from day one, not as a patch later.
+**Avoids:** Pitfalls 1 (Rich Live corruption), 2 (uncancellable input), 5 (terminal dirty state), 7 (Typer no-args conflict)
 
-**Research flag:** Standard patterns — file locking with `filelock` and Pydantic v2 are well-documented. No deeper research needed.
+**Files:** `cli/__init__.py` (modify), `cli/chat.py` (skeleton with `PromptSession`), `cli/commands/chat.py` (new), `cli/chat_persistence.py` (new skeleton)
 
----
+**Research flag:** Standard patterns — `prompt_toolkit` integration is fully documented with official examples. HIGH confidence. No additional research needed.
 
-### Phase 2: ACP Communication Layer
+### Phase 2: Streaming Display and Session Lifecycle
 
-**Rationale:** The orchestrator and all sub-agents communicate exclusively via ACP. This layer must exist before any agent can be spawned. `ClaudeSDKClient` (not `query()`) is required for persistent sessions and mid-stream interrupts — getting this right early prevents a costly migration.
+**Rationale:** Streaming output and session persistence are co-dependent: streaming requires correct handling of all SDK message types (including `ToolUseBlock`), and session persistence requires capturing `session_id` from the `SystemMessage(subtype="init")` that fires on the first streaming turn. Context management must also be addressed here because it silently degrades quality after 20-30 turns.
 
-**Delivers:** `agents/acp_client.py` per sub-agent ACP connection; `orchestrator/acp_bridge.py` for human-to-orchestrator link; ACP permission flow with timeout and safe default.
+**Delivers:** Real-time token streaming with human-readable tool activity indicators, session resumption across restarts, and client-side context utilization tracking with user warning.
 
-**Addresses features:** ACP client/server runtime, orchestrator-as-ACP-client for answering sub-agent questions.
+**Addresses:** Streaming response display, session resumption, clear working indicator, tool use display in chat
 
-**Avoids:** ACP permission deadlock (Pitfall 6) — async permission fast-path and timeout must be built into this layer, not the orchestrator layer.
+**Avoids:** Pitfalls 3 (context exhaustion), 6 (streaming blocks event loop), 9 (tool call JSON in chat display)
 
-**Research flag:** Needs verification — `ClaudeSDKClient` API details (session management, interrupt semantics) should be validated against current SDK 0.1.48 docs before implementation. ACP ndjson parsing edge cases (partial lines, SIGPIPE on subprocess exit) need careful handling.
+**Uses:** `include_partial_messages=True`, `ClaudeSDKClient`, `chat_persistence.py`, `rich.markdown.Markdown`
 
----
+**Research flag:** The distinction between text stream events, tool use events, and result events requires deliberate mapping to UX states. Reference `ARCHITECTURE.md` data flow diagrams for all four flow types. SDK streaming docs are HIGH confidence but the display mapping requires careful design.
 
-### Phase 3: Orchestrator Lifecycle and Skills
+### Phase 3: Smart Delegation and Orchestrator Integration
 
-**Rationale:** The orchestrator's planning quality and role discipline determine correctness of the entire system. Orchestrator intelligence drift (Pitfall 5) and over-parallelization (Pitfall 3) both originate here. Cost controls (Pitfall 2) must be baked into orchestrator skills from day one.
+**Rationale:** Delegation depends on the chat loop and streaming display both being stable (Phases 1 and 2). A fresh `Orchestrator` must be instantiated per delegation call. The `Delegate` custom tool and `PostToolUse` hook must be registered before the SDK session starts. The delegation system prompt heuristics require iterative tuning that can only happen once the basic dispatch works.
 
-**Delivers:** `orchestrator/process.py` for Claude Code subprocess lifecycle; orchestrator skills files (`plan.md`, `delegate.md`, `review.md`) with explicit role anchoring, dependency declaration requirements, contracts-first step, and `max_agents` enforcement; `agents/manager.py` asyncio subprocess pool.
+**Delivers:** Orchestrator direct tool use for simple tasks, sub-agent spawning for complex tasks via the `Delegate` tool, transparent delegation announcement ("Spinning up a team for this..."), and `/status` slash command.
 
-**Addresses features:** Orchestrator agent (planning + delegation), dependency management, conflict prevention via file ownership, output coherence / integration review, `--auto` vs interactive mode.
+**Addresses:** Smart delegation (direct vs. spawn), orchestrator direct tool use, transparent delegation announcement
 
-**Avoids:** Over-parallelization (Pitfall 3) via contracts-first and explicit task dependency declaration; orchestrator role drift (Pitfall 5) via re-anchoring language in skills; runaway costs (Pitfall 2) via `max_agents` cap and model tiering in skills.
+**Avoids:** Pitfalls 4 (non-deterministic delegation, Orchestrator state leakage), 8 (chat/batch state isolation)
 
-**Research flag:** Needs phase research — orchestrator skill/prompt engineering for role anchoring under long sessions is not well-documented. Recommend research-phase during planning for orchestrator prompt design and dependency declaration schema.
+**Files:** `cli/chat.py` (add `Delegate` tool schema, `_delegation_hook`, `_spawn_agents`), chat system prompt (new constant)
 
----
+**Research flag:** Delegation heuristic tuning is empirical — requires testing against representative inputs. Plan a prompt-tuning sub-phase after basic dispatch works. The system prompt rules for "handle directly vs. delegate" cannot be resolved through research alone.
 
-### Phase 4: CLI and Core Loop Validation
+### Phase 4: Enhanced TUI Feedback and Escalation Bridge
 
-**Rationale:** Architecture research explicitly states the CLI provides a working product before the dashboard exists. This phase validates the end-to-end loop (human → orchestrator → agents → results) with a minimal interface. All subsequent phases build on a proven foundation.
+**Rationale:** These features depend on Phase 3 delegation working. Live sub-agent activity feed requires state file watching (already in v1.0) integrated with a non-blocking TUI display. Escalation surfacing requires the `human_out`/`human_in` asyncio queues to be wired through the delegation hook, which requires Phase 3 to be complete.
 
-**Delivers:** `cli/main.py` with Typer; `conductor run` and `conductor status` commands; Rich live display for agent status in terminal; working multi-agent session from CLI.
+**Delivers:** Live sub-agent activity status lines during delegation, escalation questions from sub-agents surfacing interactively in the TUI, per-task GSD scope display.
 
-**Addresses features:** CLI interface, `--auto` mode + interactive mode, repo context inheritance (CLAUDE.md discovery), session persistence.
+**Addresses:** Live sub-agent activity feed, escalation interrupt in TUI, UX turn separators and progress clarity
 
-**Avoids:** Context exhaustion mid-task (Pitfall 4) — `.memory/` checkpoint writes must be implemented here, tested before dashboard distracts focus.
+**Avoids:** UX pitfalls (no distinction between thinking/delegating, no turn separators, escalation interrupting streaming response)
 
-**Research flag:** Standard patterns — Typer + Rich are well-documented and the Conductor authors are familiar with the stack.
-
----
-
-### Phase 5: State Watching and Dashboard Backend
-
-**Rationale:** The dashboard frontend cannot be built until the Python server exists. The state watcher is the bridge between filesystem state changes and real-time WebSocket events. This phase must implement event filtering at the backend — not the frontend — to prevent streaming full ACP events to the dashboard (a performance trap that breaks at 3+ active agents).
-
-**Delivers:** `state/watcher.py` with `watchfiles` `awatch()`; `dashboard/broadcaster.py` fan-out; `dashboard/server.py` FastAPI REST + WebSocket; delta events (not full state) over WebSocket.
-
-**Addresses features:** Web dashboard data feed, smart notifications (server-side filtering), session history REST endpoint.
-
-**Avoids:** Verbose output UX overload (UX pitfall) — event aggregation/filtering must be implemented at backend before the frontend renders anything.
-
-**Research flag:** Standard patterns — FastAPI WebSocket broadcast and `watchfiles` async API are well-documented.
-
----
-
-### Phase 6: Web Dashboard Frontend
-
-**Rationale:** The dashboard is a core product differentiator — layered visibility is what sets Conductor apart from tools that dump raw logs. Build last because it depends on all previous phases, but it is not an optional add-on.
-
-**Delivers:** `conductor-dashboard` npm package; AgentCard with three-tier visibility (collapsed → expanded → live stream); TaskBoard with dependency graph; LogStream with virtual list rendering; smart notifications (completions, errors, escalations only); WebSocket reconnect logic.
-
-**Addresses features:** Web dashboard with layered visibility, multi-level intervention UI, smart notifications, per-agent status hierarchy.
-
-**Avoids:** Raw log dump as primary UI (anti-feature), identical visual treatment for all agents (UX pitfall), missing error states for crashed agents (looks-done-but-isn't checklist).
-
-**Research flag:** Standard patterns for React 19 + Zustand + TanStack Query + shadcn/ui. The virtual list rendering for agent cards at 5-20 agents scale may need research into `@tanstack/react-virtual` or equivalent.
-
----
-
-### Phase 7: v1.x Enhancements
-
-**Rationale:** Add after the core loop is proven working in phases 1-6. These features add significant value but require a stable base to tune correctly.
-
-**Delivers:** Dynamic team sizing; quality review loops with feedback; full multi-level intervention vocabulary; per-task GSD scope flexibility.
-
-**Addresses features:** All P2 features from FEATURES.md prioritization matrix.
-
-**Research flag:** Dynamic team sizing needs research — the orchestrator judgment for "how many agents for this task" is not well-documented and will likely require experimentation.
-
----
+**Research flag:** Standard patterns — async queue integration is well-documented. No additional research needed.
 
 ### Phase Ordering Rationale
 
-- **Foundation-first:** State management and ACP communication must be correct before orchestrator logic, which must be correct before the CLI, which must work before the dashboard. The architecture's build order is non-negotiable because each layer has hard dependencies on the layer below.
-- **Validate before invest:** Phase 4 (CLI) produces a working product. Dashboard work in phases 5-6 is significant investment — validate that the core agent loop actually works before committing to frontend build.
-- **Pitfall timing:** The three most costly pitfalls (state corruption, cost explosion, parallelization failures) must all be addressed in phases 1-3. These cannot be patched in after agents are running in parallel.
-- **Skills before scaling:** Orchestrator intelligence (Phase 3) precedes adding more features. An orchestrator that drifts into coding behavior or over-parallelizes makes everything built on top of it unreliable.
+- Phase 1 is non-negotiable first: the Typer entry conflict and input mechanism are blocking issues; nothing is end-to-end testable without resolving them.
+- Phase 2 before Phase 3: streaming and session persistence must be in place before delegation because delegation involves streaming sub-results back through the same rendering path.
+- Phase 3 before Phase 4: live activity feed and escalation bridge both require the delegation hook infrastructure to be operational.
+- Context management (Pitfall 3) belongs in Phase 2, not Phase 4 — it is a session lifecycle concern that will silently cause failures at 20-30 turns even in basic usage.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 2 (ACP Layer):** `ClaudeSDKClient` session management, interrupt semantics, and ACP ndjson edge cases should be validated against current SDK 0.1.48 docs before implementation begins.
-- **Phase 3 (Orchestrator Skills):** Orchestrator prompt engineering for role anchoring under long (50+ turn) sessions is not well-documented. Recommend `/gsd:research-phase` focused on multi-agent prompt patterns, contracts-first step design, and dependency declaration schema.
-- **Phase 7 (Dynamic Team Sizing):** Orchestrator judgment criteria for "how many agents" is experimental territory. Recommend `/gsd:research-phase` when approaching this feature.
+Phases likely needing closer attention during implementation:
+- **Phase 2 (streaming display):** SDK stream event type handling (`TextChunk`, `ToolUseBlock`, `ToolResultBlock`, `ResultMessage`) needs deliberate mapping to UX states. Reference `ARCHITECTURE.md` data flow diagrams before implementing the renderer.
+- **Phase 3 (delegation heuristics):** System prompt tuning is empirical. Plan a dedicated tuning sub-phase with representative test cases (single-file fix, multi-file feature, ambiguous request).
 
-Phases with standard patterns (skip research-phase):
-- **Phase 1 (State Foundation):** Pydantic v2, `filelock`, Pydantic models — all well-documented.
-- **Phase 4 (CLI Core Loop):** Typer + Rich patterns are established.
-- **Phase 5 (Dashboard Backend):** FastAPI WebSocket + `watchfiles` are well-documented.
-- **Phase 6 (Dashboard Frontend):** React 19 + Zustand + shadcn/ui patterns are established; virtual list rendering is the only potential gap.
-
----
+Phases with well-established patterns (minimal additional research needed):
+- **Phase 1:** `prompt_toolkit` + Typer `invoke_without_command` integration is fully documented with official examples. HIGH confidence.
+- **Phase 4:** Async queue bridging and state file watching already exist in v1.0 infrastructure; this is wiring, not novel design.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Core Python and Node.js stack verified against official docs and PyPI. `claude-agent-sdk` 0.1.48 confirmed as correct SDK. Only medium-confidence items are ACP third-party wiki and community articles on TanStack Query + WebSocket hybrid pattern. |
-| Features | HIGH | Primary sources are official Anthropic Claude Code docs and peer-reviewed research. Competitor analysis covers all major frameworks. MVP definition is well-grounded in feature dependencies. |
-| Architecture | HIGH (core), MEDIUM (ACP integration specifics) | Supervisor pattern, shared state backbone, and layered dashboard are well-established. ACP stdio integration specifics (partial line handling, SIGPIPE, interrupt semantics) have medium confidence — need validation against live SDK. |
-| Pitfalls | HIGH | State corruption pitfall verified via official GitHub issues. Token cost explosion verified via real-world case study. Over-parallelization failure rate backed by peer-reviewed research (arXiv 2503.13657). Security pitfalls from OWASP official. |
+| Stack | HIGH | All recommendations from official Anthropic SDK docs, prompt_toolkit official docs, and PyPI release data. Only one new dependency. No conflicting sources found. |
+| Features | HIGH | Cross-validated against Claude Code, Codex CLI, Aider, and OpenCode official docs plus practitioner post-mortems. Competitor feature matrix is complete. |
+| Architecture | HIGH | Based on live codebase inspection and official SDK documentation. All integration boundaries (`ClaudeSDKClient`, `PostToolUse`, custom tools) are from confirmed API surfaces. |
+| Pitfalls | HIGH | Derived from direct codebase analysis (existing `input_loop.py` limitations documented in code comments), official Rich/prompt_toolkit issue trackers, CPython issue tracker, and Claude Agent SDK streaming docs. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **ACP `ClaudeSDKClient` interrupt semantics:** Exactly how mid-stream interrupts work (can orchestrator interrupt a sub-agent mid-tool-call?), and how session IDs are managed for restart recovery, needs live SDK validation during Phase 2 planning.
-- **Orchestrator role anchoring prompt design:** No definitive source documents optimal prompt structure for keeping an LLM in a coordinator role over 100+ turns. This is the highest-risk unknown and warrants dedicated research-phase before Phase 3 implementation.
-- **State.json write architecture decision:** Two valid approaches (orchestrator-mediated writes vs. per-agent namespaced keys with `filelock`) have different complexity/latency tradeoffs. The decision needs to be made explicitly during Phase 1 planning, not deferred.
-- **Dashboard virtual rendering at scale:** At 5-20 agents the dashboard needs virtual list rendering. `@tanstack/react-virtual` is the likely solution but needs confirmation during Phase 6 planning.
-
----
+- **Delegation system prompt heuristics:** The exact rules for "handle directly vs. delegate" are not resolvable through research alone — they require empirical tuning against representative inputs. Plan time in Phase 3 for a prompt-engineering sub-phase.
+- **Context window utilization tracking:** The SDK does not surface a token count to the caller by default. Client-side approximation (character count / 4 as token estimate) is the recommended approach, but the accuracy threshold for triggering warnings should be validated in Phase 2.
+- **State isolation schema for chat-triggered delegation:** `ARCHITECTURE.md` recommends session-scoped task ID prefixes (`chat-[session-id]-task-001`). The exact schema extension to `ConductorState` for chat metadata needs to be decided before Phase 3 writes any state. Flag for requirements definition.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [Claude Agent SDK Python Reference](https://platform.claude.com/docs/en/agent-sdk/python) — ClaudeSDKClient API, session management, streaming
-- [claude-agent-sdk PyPI](https://pypi.org/project/claude-agent-sdk/) — version 0.1.48, Python 3.10+
-- [Claude Code Agent Teams Documentation](https://code.claude.com/docs/en/agent-teams) — official architecture reference for multi-agent coordination
-- [Manage costs effectively — Claude Code official docs](https://code.claude.com/docs/en/costs) — token cost controls
-- [Race condition: .claude.json corruption — GitHub Issues #28847, #29036, #29153](https://github.com/anthropics/claude-code/issues/28847) — verified state corruption bug
-- [Why Do Multi-Agent LLM Systems Fail? — arXiv 2503.13657](https://arxiv.org/html/2503.13657v1) — peer-reviewed, 150+ execution traces, 79% failure from spec/coordination failures
-- [Effective harnesses for long-running agents — Anthropic Engineering](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) — official Anthropic guidance
-- [OWASP AI Agent Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/AI_Agent_Security_Cheat_Sheet.html) — security pitfalls
-- [Prompt injection / cross-agent trust boundary attacks — arXiv 2506.23260](https://arxiv.org/html/2506.23260v1) — peer-reviewed security research
-- [watchfiles PyPI](https://pypi.org/project/watchfiles/) — version 1.1.1, asyncio `awatch()` API
-- [FastAPI PyPI](https://pypi.org/project/fastapi/) — version 0.135.1
-- [Pydantic v2.12 release notes](https://pydantic.dev/articles/pydantic-v2-12-release) — v2 stability
+- [Claude Agent SDK Python reference](https://platform.claude.com/docs/en/agent-sdk/python) — `ClaudeSDKClient` vs `query()` comparison, session continuity, chat/REPL use case confirmation
+- [Claude Agent SDK streaming docs](https://platform.claude.com/docs/en/agent-sdk/streaming-output) — `include_partial_messages`, `StreamEvent`, `text_delta` pattern
+- [Claude Agent SDK agent loop docs](https://platform.claude.com/docs/en/agent-sdk/agent-loop) — `PostToolUse` hooks, message types, custom tools
+- [prompt_toolkit official docs](https://python-prompt-toolkit.readthedocs.io/en/stable/) — `PromptSession`, `prompt_async()`, `patch_stdout()`, `FileHistory`, asyncio integration
+- [PyPI: claude-agent-sdk 0.1.48](https://pypi.org/project/claude-agent-sdk/) — confirmed current release, 2026-03-07
+- [PyPI: prompt-toolkit 3.0.52](https://pypi.org/project/prompt-toolkit/) — confirmed current release, 2025-08-27
+- [Claude Code official docs](https://code.claude.com/docs/en/overview) — feature baseline comparison
+- [Codex CLI docs](https://developers.openai.com/codex/cli/features/) — Ctrl+C double-press pattern, input history
+- [Aider docs](https://aider.chat/docs/usage.html) — slash commands, session patterns
+- [OpenCode TUI docs](https://opencode.ai/docs/tui/) — session resume patterns
+- Rich official docs + issue tracker (#1530, discussion #1791) — Live display + concurrent input limitations confirmed
+- prompt_toolkit issue #787 — terminal cleanup on async cancellation confirmed
+- CPython issue #107505 — `asyncio.to_thread` non-cancellability confirmed
+- Live codebase inspection: `conductor-core/src/conductor/` (2026-03-11)
 
 ### Secondary (MEDIUM confidence)
-- [zed-industries/claude-code-acp DeepWiki](https://deepwiki.com/zed-industries/claude-code-acp/2.2-basic-usage) — ACP protocol, NDJSON over stdio
-- [ACP Server Protocol](https://acpserver.org/) — JSON-RPC message format
-- [Claude Code Sub-Agent Cost Explosion — AICosts.ai](https://www.aicosts.ai/blog/claude-code-subagent-cost-explosion-887k-tokens-minute-crisis) — real-world 887K tokens/minute case study
-- [TanStack Query + WebSockets](https://blog.logrocket.com/tanstack-query-websockets-real-time-react-data-fetching/) — hybrid React Query + WebSocket pattern
-- [React State Management 2025](https://dev.to/cristiansifuentes/react-state-management-in-2025-context-api-vs-zustand-385m) — Zustand as default for dashboards
-- [ccswarm GitHub](https://github.com/nwiizo/ccswarm) — active OSS multi-agent reference implementation
-- [ComposioHQ agent-orchestrator](https://github.com/ComposioHQ/agent-orchestrator) — active OSS reference for CI-integrated orchestration
-- [Multi-agent workflows often fail — GitHub Blog](https://github.blog/ai-and-ml/generative-ai/multi-agent-workflows-often-fail-heres-how-to-engineer-ones-that-dont/) — practical guidance
-- [Simon Willison — Agentic Engineering Patterns: Anti-patterns](https://simonwillison.net/guides/agentic-engineering-patterns/anti-patterns/) — authoritative practitioner
-- [Human-In-The-Loop Software Development Agents — arXiv 2025](https://arxiv.org/abs/2411.12924) — peer-reviewed research on intervention patterns
+- [Claude Code vs Codex CLI vs Gemini CLI — codeant.ai](https://www.codeant.ai/blogs/claude-code-cli-vs-codex-cli-vs-gemini-cli-best-ai-cli-tool-for-developers-in-2025) — feature matrix cross-check
+- [Context window management strategies — getmaxim.ai](https://www.getmaxim.ai/articles/context-window-management-strategies-for-long-context-ai-agents-and-chatbots/) — aligns with Anthropic official guidance on context management
+- [Claude Code GitHub issue #3455](https://github.com/anthropics/claude-code/issues/3455) — Ctrl+C interrupt bug, confirmed limitation to avoid replicating
+
+### Tertiary
+- [Building AI Coding Agents for the Terminal — arXiv 2603.05344](https://arxiv.org/html/2603.05344v1) — engineering paper, cross-validates feature set
+- [Minimal agent post-mortem — mariozechner.at](https://mariozechner.at/posts/2025-11-30-pi-coding-agent/) — practitioner anti-feature rationale (full-screen TUI, built-in plan display)
 
 ---
-*Research completed: 2026-03-10*
+*Research completed: 2026-03-11*
 *Ready for roadmap: yes*

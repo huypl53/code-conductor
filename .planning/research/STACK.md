@@ -1,77 +1,170 @@
 # Stack Research
 
-**Domain:** Multi-agent coding orchestration framework (Python core + Node.js dashboard monorepo)
-**Researched:** 2026-03-10
-**Confidence:** HIGH (core Python agent stack verified against official docs; Node.js dashboard stack verified against current sources)
+**Domain:** Interactive chat TUI additions — v1.1 milestone (Conductor)
+**Researched:** 2026-03-11
+**Confidence:** HIGH
 
 ---
 
-## Recommended Stack
+## Existing Stack (Validated in v1.0 — Do Not Re-research)
 
-### Python Core — Agent Orchestration
+| Technology | Version | Role |
+|------------|---------|------|
+| `claude-agent-sdk` | `>=0.1.48` | ACP comms, agent spawning |
+| `rich` | `>=13` | Terminal display, Live tables |
+| `typer` | `>=0.12` | CLI command routing |
+| `asyncio` | stdlib | Async event loop |
+| `pydantic v2` | `>=2.10` | Data models |
+| `fastapi` + `uvicorn` | `>=0.135` / `>=0.41` | Dashboard API server |
+| `watchfiles` | `>=1.1` | File watching |
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| `claude-agent-sdk` | 0.1.48 | Spawn and converse with Claude Code sub-agents; receive streaming ACP messages | Official Anthropic SDK — the only supported way to drive Claude Code programmatically. Bundles Claude Code CLI, handles session management, interrupts, and streaming. `ClaudeSDKClient` (not `query()`) is the right class because Conductor needs persistent sessions and mid-stream interrupts. |
-| Python | 3.11+ | Runtime | 3.11+ for `asyncio.TaskGroup` (clean parallel agent concurrency), tomllib stdlib, and better error messages. SDK requires 3.10+; 3.11 is the safe minimum for production features. |
-| `asyncio` (stdlib) | 3.11 | Concurrent process management | The natural event loop for managing multiple ACP stdio streams without threads. `asyncio.create_subprocess_exec` + `StreamReader` is the idiomatic pattern for line-by-line NDJSON parsing from subprocesses. |
-| `pydantic` | 2.12.x | State schema validation + JSON serialization | v2 is Rust-backed (10× faster). Models `state.json` schema precisely with `.model_dump_json()` for atomic file writes. Required for FastAPI integration. Use `model_config = ConfigDict(validate_assignment=True)` to catch state corruption at assignment time. |
-| `fastapi` | 0.135.x | REST + WebSocket API bridge to dashboard | Dual-role: serves REST endpoints for state snapshots AND WebSocket connections for live agent event streaming. First-class async support, no impedance mismatch with asyncio subprocess management. |
-| `uvicorn` | 0.34.x | ASGI server | The standard production ASGI server for FastAPI. Run with `--lifespan on` to wire FastAPI startup events to the orchestrator event loop. |
-| `typer` | 0.24.x | CLI interface | Type-hint–based CLI on top of Click. Matches FastAPI's style (same author), autocompletion built in, `async` command support added in 0.10.0. For Conductor's `conductor chat` and `conductor status` commands. |
-| `rich` | 14.x | Terminal output / live CLI display | Live multi-panel CLI display (`rich.live.Live`) for showing agent status in the terminal without a full TUI. Paired with Typer for the `conductor chat` interactive mode. Typer uses Rich internally so it's a zero-cost dependency. |
-| `watchfiles` | 1.1.1 | Watch `.conductor/state.json` for changes | Rust-backed file watcher, asyncio-native (`awatch` async API). Used by dashboard backend to push state changes to WebSocket clients without polling. Faster and lighter than `watchdog`. |
+Current input handling (`input_loop.py`) uses `asyncio.to_thread(input, "> ")`. This works for the current command-dispatch loop but cannot support readline history, multiline input, or a stable prompt line that survives concurrent Rich output printing above it.
 
-### Node.js Dashboard
+---
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| React | 19.x | UI framework | React 19 makes concurrent rendering the default, not opt-in. Handles high-frequency WebSocket updates without manual batching. `useTransition` prevents agent activity streams from blocking input. |
-| Vite | 6.x | Build tool + dev server | De-facto standard for React SPAs in 2025. HMR is instant. No Next.js overhead needed — Conductor dashboard is a SPA served by the Python backend, not a Next.js app. |
-| TypeScript | 5.x | Type safety | Shared ACP message types between dashboard and Python schema (via generated JSON Schema → TypeScript types) prevent contract drift. |
-| `shadcn/ui` | latest | Component library | Copy-owned components (not a black-box dependency). Ships Tailwind CSS v4 compatible primitives. The collapsible panel pattern needed for layered agent visibility is built in. Use `Accordion` + `Sheet` for the expand-on-demand agent detail view. |
-| Tailwind CSS | 4.x | Styling | Required by shadcn/ui. v4 uses native CSS cascade layers, no separate config file needed for most projects. |
-| Zustand | 5.x | Client state management | Minimal boilerplate for managing real-time state from WebSocket messages. Zustand's `subscribeWithSelector` middleware enables targeted component re-renders when only one agent's status changes — critical for preventing full-tree re-renders in a multi-agent dashboard. |
-| TanStack Query | 5.x | Server state + REST polling | Manages REST endpoint state (agent list, task history, session data). Use alongside Zustand: TanStack Query for REST, Zustand for WebSocket push. `refetchInterval` as WebSocket fallback. |
-| `@zed-industries/claude-code-acp` | 0.16.0 | ACP protocol adapter (Node.js) | The reference ACP implementation for JavaScript. Only needed if the dashboard's Node.js layer needs to speak ACP directly (e.g., if the Node.js server acts as an ACP relay). For v1, this is optional — the Python backend handles all ACP communication and exposes WebSocket to the dashboard. Include in `devDependencies` for ACP message type reference. |
+## New Stack Additions for v1.1
 
-### Monorepo Tooling
+### Core Technologies
 
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| `pnpm` workspaces | 9.x | Node.js monorepo dependency management | Disk-efficient content-addressable store. Built-in workspace protocol (`workspace:*`) for internal package references. No Turborepo needed for a two-package monorepo. |
-| `uv` | 0.5.x | Python dependency management + packaging | 10–100× faster than pip. Generates deterministic `uv.lock` cross-platform lockfiles. `uv build` + `uv publish` replaces setuptools for distributing the pip package. Standard in 2025 Python ecosystem. |
-| `pyproject.toml` (uv_build backend) | — | Python package definition | Standard since PEP 517. `uv_build` is the zero-config backend for pure-Python packages. Defines the `conductor` CLI entry point. |
-| `package.json` + `npm` | — | Node.js dashboard package | Standard. `conductor-dashboard` npm package for the web UI. |
+| `prompt_toolkit` | `3.0.52` | Interactive terminal input with history, multiline, and concurrent-output safety | The standard for Python TUI input — used by IPython, pgcli, Poetry shell, and Claude Code's own CLI. Provides `PromptSession.prompt_async()` which awaits without blocking the event loop (unlike `asyncio.to_thread(input)`). `patch_stdout()` context manager intercepts all writes to stdout and redraws the prompt correctly when Rich or async code prints mid-turn — this is the critical capability that prevents garbled output when streaming tokens appear alongside an active input line. `FileHistory` persists command history to disk across restarts. |
+| `ClaudeSDKClient` (already in `claude-agent-sdk 0.1.48`) | — (no new dep) | Multi-turn conversation with persistent session state | `query()` (used today) creates a fresh Claude Code session each call — no memory of previous turns. `ClaudeSDKClient` reuses the same session across turns, maintains full conversation context, supports `interrupt()` to stop mid-stream, and is the correct API for an interactive chat loop. Already in the existing SDK at the pinned version — no new package needed. |
+| `include_partial_messages=True` (SDK option on `ClaudeAgentOptions`) | — (no new dep) | Token-by-token streaming output | Causes the SDK to emit `StreamEvent` messages containing raw `content_block_delta` / `text_delta` events as tokens arrive, before the complete `AssistantMessage` is assembled. Required for the "response streams in real-time" experience that Claude Code and Codex CLI deliver. Without this, the user sees nothing until Claude finishes the entire response. Already in the existing SDK — a one-field change to `ClaudeAgentOptions`. |
+
+### Supporting Libraries
+
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| `prompt_toolkit.history.FileHistory` | bundled in `prompt_toolkit` | Persist chat prompts across sessions | Always — store at `~/.conductor_history` so `Up` arrow recalls previous prompts across restarts |
+| `prompt_toolkit.patch_stdout` | bundled | Route concurrent Rich output through prompt redraw | Always in chat mode — without it, streaming token output and Rich status messages overwrite the input line |
+| `rich.markdown.Markdown` | bundled in `rich>=13` | Render Claude's markdown responses in the terminal | Use when printing assistant text responses — headings, code fences, bullet lists render correctly; already a zero-cost dep |
+| `rich.syntax.Syntax` | bundled in `rich>=13` | Syntax-highlight code blocks in streamed output | For detected code blocks in chat responses; already present |
 
 ### Development Tools
 
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| `pytest` + `pytest-asyncio` | Python test runner with async support | `asyncio_mode = "auto"` in `pyproject.toml` avoids per-test decorators. |
-| `ruff` | Python linting + formatting | Replaces flake8, isort, black in one Rust-backed tool. Run via `uv run ruff check`. |
-| `mypy` | Python static type checking | Catches pydantic model misuse at CI time. |
-| Vitest | Node.js test runner | Vite-native, same config as build. Jest-compatible API. |
-| ESLint + `typescript-eslint` | TypeScript linting | Standard for React/TypeScript projects. |
+No new dev tools needed — `pytest-asyncio` with `asyncio_mode = "auto"` already configured handles async test coverage for the new chat loop.
 
 ---
 
 ## Installation
 
 ```bash
-# Python core (development)
-uv sync
-# or: uv add claude-agent-sdk fastapi "uvicorn[standard]" pydantic typer rich watchfiles
+# Single new runtime dependency
+uv add "prompt-toolkit>=3.0.52"
 
-# Python core (user install from pip)
-pip install conductor-ai
-
-# Node.js dashboard (development)
-pnpm install
-
-# Node.js dashboard (user install from npm)
-npm install -g conductor-dashboard
+# No other new deps:
+# - ClaudeSDKClient is already in claude-agent-sdk>=0.1.48
+# - include_partial_messages is a ClaudeAgentOptions field, not a new package
+# - rich.markdown / rich.syntax are already in rich>=13
 ```
+
+---
+
+## Integration Pattern: How New Stack Fits the Existing Code
+
+### 1. Replace `_ainput()` in `input_loop.py`
+
+Current code:
+```python
+async def _ainput(prompt: str = "") -> str:
+    return await asyncio.to_thread(input, prompt)
+```
+
+The problem: `asyncio.to_thread(input)` blocks the OS thread until Enter is pressed and cannot be cancelled cleanly. It has no readline history and its prompt line is overwritten when Rich or streaming tokens write to stdout.
+
+Replace with `PromptSession.prompt_async()` for the new chat command. The existing `_ainput` and `_input_loop` in `input_loop.py` serve the `conductor run` batch-mode command-dispatch loop and should remain unchanged. The new chat loop lives in a separate module.
+
+```python
+# cli/chat.py (new module)
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.patch_stdout import patch_stdout
+from pathlib import Path
+
+_session = PromptSession(
+    history=FileHistory(str(Path.home() / ".conductor_history"))
+)
+
+async def chat_loop(repo_path: Path) -> None:
+    with patch_stdout():  # all print()/Rich output redraws the prompt safely
+        async with ClaudeSDKClient(options=_build_options(repo_path)) as client:
+            while True:
+                try:
+                    text = await _session.prompt_async("conductor> ")
+                except (KeyboardInterrupt, EOFError):
+                    break
+                if not text.strip():
+                    continue
+                await _send_and_stream(client, text)
+```
+
+`patch_stdout()` wraps stdout so that when streaming token output or Rich `console.print()` calls fire during the `await`, they print above the prompt line and the prompt redraws below — the same mechanism used by IPython, Poetry, and similar async CLI tools.
+
+### 2. Switch from `query()` to `ClaudeSDKClient` for chat mode
+
+`conductor run "..."` (batch mode) keeps `query()` — correct for one-shot tasks.
+
+New `conductor` (no args, chat mode) uses `ClaudeSDKClient`:
+
+```python
+from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions, AssistantMessage, ResultMessage
+from claude_agent_sdk.types import StreamEvent
+
+def _build_options(repo_path: Path) -> ClaudeAgentOptions:
+    return ClaudeAgentOptions(
+        include_partial_messages=True,   # streaming tokens
+        permission_mode="acceptEdits",   # direct tool use
+        cwd=str(repo_path),
+    )
+
+async def _send_and_stream(client: ClaudeSDKClient, prompt: str) -> None:
+    await client.query(prompt)
+    in_tool = False
+    async for message in client.receive_response():
+        if isinstance(message, StreamEvent):
+            event = message.event
+            etype = event.get("type")
+            if etype == "content_block_start":
+                block = event.get("content_block", {})
+                if block.get("type") == "tool_use":
+                    print(f"\n[{block.get('name')}...]", end="", flush=True)
+                    in_tool = True
+            elif etype == "content_block_delta":
+                delta = event.get("delta", {})
+                if delta.get("type") == "text_delta" and not in_tool:
+                    print(delta.get("text", ""), end="", flush=True)
+            elif etype == "content_block_stop" and in_tool:
+                print(" done", flush=True)
+                in_tool = False
+        elif isinstance(message, ResultMessage):
+            print()  # final newline after streamed response
+```
+
+The `ClaudeSDKClient` session retains full conversation context across turns for the lifetime of the `async with` block — the orchestrator remembers what was said earlier in the same `conductor` invocation.
+
+### 3. Typer entrypoint: route no-args to chat
+
+Current `__init__.py` sets `no_args_is_help=True`. Change to route no-args invocation to the new chat command:
+
+```python
+# cli/__init__.py
+app = typer.Typer(
+    name="conductor",
+    help="Conductor: AI agent orchestration",
+    invoke_without_command=True,   # changed from no_args_is_help=True
+)
+
+@app.callback(invoke_without_command=True)
+def default(ctx: typer.Context) -> None:
+    if ctx.invoked_subcommand is None:
+        asyncio.run(_chat_async())
+
+app.command("run")(run)
+app.command("status")(status)
+```
+
+`conductor run "..."` continues to work unchanged. `conductor` (no args) opens the interactive chat TUI.
 
 ---
 
@@ -79,83 +172,63 @@ npm install -g conductor-dashboard
 
 | Recommended | Alternative | When to Use Alternative |
 |-------------|-------------|-------------------------|
-| `claude-agent-sdk` (`ClaudeSDKClient`) | Direct `asyncio.create_subprocess_exec` + raw NDJSON parsing | Only if ACP protocol changes and SDK lags behind; adds significant protocol maintenance burden |
-| `fastapi` WebSocket bridge | Separate Node.js Express server that reads `state.json` | If dashboard needed to be fully standalone with no Python runtime dependency; increases deployment complexity for v1 |
-| `watchfiles` | Polling `state.json` on a timer | If the file lives on a remote/network filesystem where inotify isn't available |
-| `zustand` | Redux Toolkit | Redux appropriate for teams >5 or complex undo/redo workflows; Zustand is sufficient and far simpler for a single-user dashboard |
-| `shadcn/ui` | Radix UI directly | Use Radix directly only if Tailwind CSS is rejected; shadcn/ui is just Radix + Tailwind with pre-styled examples |
-| Vite SPA | Next.js | Next.js adds SSR/routing complexity with no benefit for a locally-run dashboard that's always online |
-| `uv` + `uv_build` | Poetry | Poetry is fine but slower; uv is the 2025 default for new Python projects |
-| `pydantic` v2 | `dataclasses` + `json` stdlib | Only if runtime validation overhead is measured as a bottleneck (unlikely for state.json sizes) |
+| `prompt_toolkit` | Keep `asyncio.to_thread(input)` | Only acceptable if no streaming output, no readline history, and no concurrent Rich printing needed. All three are needed for the chat TUI. |
+| `prompt_toolkit` | `readline` (stdlib) | `readline` has no async support and cannot coexist with Rich Live or concurrent async prints. Avoid. |
+| `prompt_toolkit` | `Textual` | Textual is better when building a full TUI application with panels, widgets, and mouse events. Overkill here — it would require rewriting the entire display layer. Rich + prompt_toolkit achieves the target UX with ~1 new dependency. |
+| `ClaudeSDKClient` | `query()` with manual history | Would require serializing and replaying conversation turns as context every call — brittle, loses tool-use history context, and doesn't support `interrupt()`. `ClaudeSDKClient` handles session continuity natively. |
+| `include_partial_messages=True` | Wait for complete `AssistantMessage` | Complete messages only arrive after Claude finishes all thinking and tool execution — no streaming feel, defeats the primary UX goal. |
 
 ---
 
-## What NOT to Use
+## What NOT to Add
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `claude-code-sdk` (PyPI) | Deprecated in September 2025, no longer maintained | `claude-agent-sdk` 0.1.48+ |
-| LangChain / LangGraph | Heavyweight abstraction built for LLM chains, not ACP subprocess orchestration. Adds >50 transitive dependencies for features Conductor doesn't need | Direct `claude-agent-sdk` + asyncio |
-| CrewAI / AutoGen | Prescriptive agent frameworks that assume their own communication model; ACP is the required protocol, not optional | Direct `claude-agent-sdk` |
-| Socket.io | Adds polling fallback + room abstraction overhead; browser native WebSocket API + Zustand is sufficient | Native `WebSocket` + Zustand |
-| Redux / Redux Toolkit | Excessive for a single-user dashboard; verbose boilerplate slows feature velocity | Zustand |
-| `asyncio.create_subprocess_shell` | Shell injection risk when constructing agent commands with user-provided paths | `asyncio.create_subprocess_exec` with args as list |
-| `threading` for agent concurrency | Thread safety with subprocess stdio streams is error-prone; asyncio is the right model | `asyncio.TaskGroup` |
-| Celery / task queues | Adds Redis/broker dependency for a problem that asyncio.TaskGroup solves in-process | `asyncio.TaskGroup` |
+| `aioconsole` | Provides async `ainput()` but no history, completion, or `patch_stdout` equivalent — same fundamental limitation as the current code | `prompt_toolkit` |
+| `Textual` | Full TUI framework — compelling but requires rewriting the display layer. Rich + prompt_toolkit achieves the chat TUI with far less disruption to existing code. | Rich (existing) + prompt_toolkit (new) |
+| `anthropic` Python SDK (direct) | Bypasses the Claude Agent SDK, loses ACP compatibility, tool execution, and the orchestrator's existing permission model | `claude-agent-sdk` (existing) |
+| Any conversation-history store (SQLite, JSON file, etc.) | `ClaudeSDKClient` manages session state internally per-invocation. Cross-session "memory" is already handled by the `.memory/` folder convention from v1.0 | Existing `.memory/` pattern |
+| `click` directly | Already have Typer (which wraps Click). Double-dependency confusion. | Typer (already present) |
 
 ---
 
-## Stack Patterns by Variant
+## Stack Patterns by Mode
 
-**For the orchestrator's sub-agent lifecycle (spawn → converse → complete):**
-- Use `ClaudeSDKClient` (not `query()`) — needs persistent session + interrupt support
-- One `ClaudeSDKClient` instance per sub-agent, managed in an asyncio TaskGroup
-- Session IDs persisted to `state.json` for restart recovery
+**Chat mode (`conductor` with no args — NEW):**
+- `ClaudeSDKClient` (persistent session across turns) + `include_partial_messages=True`
+- `PromptSession.prompt_async()` inside `patch_stdout()` context
+- Stream `text_delta` chunks to stdout; show `[tool_name...]` indicator during tool calls
+- `FileHistory("~/.conductor_history")` for cross-session prompt history
 
-**For the dashboard ↔ Python bridge:**
-- Use FastAPI WebSocket endpoint at `/ws/events`
-- Python backend broadcasts state change events (derived from `watchfiles` + pydantic diffs)
-- Dashboard Zustand store subscribes to WebSocket and applies event patches
-- TanStack Query handles REST polling for initial state load and session history
+**Batch mode (`conductor run "..."` — UNCHANGED):**
+- Keep existing `query()` + `_display_loop` + `_input_loop` as-is
+- No `prompt_toolkit` needed — batch mode is command-dispatch, not a chat prompt
 
-**For the CLI interactive mode (`conductor chat`):**
-- Use Typer command with `rich.live.Live` context manager
-- The CLI itself speaks to the orchestrator's ACP server (same pattern as sub-agents)
-- Avoid mixing stdout with ACP NDJSON — route logs to stderr, ACP messages to stdout
-
-**For the Python pip distribution:**
-- Entry point: `[project.scripts] conductor = "conductor.cli:app"`
-- `uv_build` backend in `pyproject.toml`
-- Bundle `@zed-industries/claude-code-acp` Node binary is NOT needed — `claude-agent-sdk` bundles Claude Code CLI directly
+**Smart delegation (orchestrator logic — NOT a stack decision):**
+- No new library — the system prompt on `ClaudeSDKClient` instructs the orchestrator when to handle directly vs. spawn sub-agents
+- Sub-agent spawning when delegating reuses the existing `Orchestrator` class unchanged
 
 ---
 
 ## Version Compatibility
 
-| Package A | Compatible With | Notes |
-|-----------|-----------------|-------|
-| `claude-agent-sdk` ≥0.1.48 | Python 3.10–3.13 | Use Python 3.11 minimum for `TaskGroup` |
-| `fastapi` 0.135.x | `pydantic` 2.x only | FastAPI 0.100+ dropped pydantic v1 support |
-| `pydantic` 2.12.x | Python 3.10–3.14 | v2.13 in beta; use 2.12.x for stability |
-| `shadcn/ui` latest | Tailwind CSS 4.x, React 19 | Tailwind v4 is required from shadcn/ui late-2025 releases onward |
-| `watchfiles` 1.1.1 | Python 3.9–3.14 | Asyncio `awatch()` API is stable |
-| `typer` 0.24.x | `rich` ≥10.x | Typer bundles Rich for help output; explicit `rich` dep for `Live` display |
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| `prompt-toolkit==3.0.52` | Python 3.12/3.13, `rich>=13` | No known conflicts. `patch_stdout()` uses stdout wrapping that is compatible with Rich's `Console`. Latest release: 2025-08-27. |
+| `claude-agent-sdk>=0.1.48` (current: 0.1.48, released 2026-03-07) | Python 3.12/3.13 | `ClaudeSDKClient` and `include_partial_messages` both confirmed in official docs for this version. |
+| `typer>=0.12` with `invoke_without_command=True` | Typer 0.12+ | `@app.callback(invoke_without_command=True)` pattern is stable in Typer 0.12. |
 
 ---
 
 ## Sources
 
-- [Claude Agent SDK Python Reference](https://platform.claude.com/docs/en/agent-sdk/python) — ClaudeSDKClient API, session management, streaming (HIGH confidence, official Anthropic docs)
-- [claude-agent-sdk PyPI](https://pypi.org/project/claude-agent-sdk/) — version 0.1.48, Python 3.10+, bundled CLI (HIGH confidence, verified)
-- [zed-industries/claude-code-acp DeepWiki](https://deepwiki.com/zed-industries/claude-code-acp/2.2-basic-usage) — ACP protocol, NDJSON over stdio, `@zed-industries/claude-code-acp` 0.16.0 (MEDIUM confidence, third-party wiki)
-- [ACP Server Protocol](https://acpserver.org/) — JSON-RPC message format, stdio subprocess model (MEDIUM confidence, official protocol site)
-- [watchfiles PyPI](https://pypi.org/project/watchfiles/) — version 1.1.1, asyncio `awatch()` API (HIGH confidence, verified)
-- [FastAPI PyPI](https://pypi.org/project/fastapi/) — version 0.135.1, Python 3.10+ (HIGH confidence, verified)
-- [Pydantic v2.12 release notes](https://pydantic.dev/articles/pydantic-v2-12-release) — v2 stability, Python 3.14 support (HIGH confidence, official)
-- [Python Build Backends 2025](https://medium.com/@dynamicy/python-build-backends-in-2025-what-to-use-and-why-uv-build-vs-hatchling-vs-poetry-core-94dd6b92248f) — uv vs hatchling recommendation (MEDIUM confidence, community article)
-- [TanStack Query + WebSockets](https://blog.logrocket.com/tanstack-query-websockets-real-time-react-data-fetching/) — hybrid React Query + WebSocket pattern (MEDIUM confidence, verified against TanStack docs)
-- [React State Management 2025](https://dev.to/cristiansifuentes/react-state-management-in-2025-context-api-vs-zustand-385m) — Zustand as default for dashboards (MEDIUM confidence, community consensus)
+- [Agent SDK reference - Python](https://platform.claude.com/docs/en/agent-sdk/python) — `ClaudeSDKClient` API, `query()` vs `ClaudeSDKClient` comparison, session continuity — HIGH confidence (official Anthropic docs, verified 2026-03-11)
+- [Stream responses in real-time](https://platform.claude.com/docs/en/agent-sdk/streaming-output) — `include_partial_messages`, `StreamEvent`, `text_delta` pattern, streaming UI example — HIGH confidence (official Anthropic docs, verified 2026-03-11)
+- [PyPI: claude-agent-sdk](https://pypi.org/project/claude-agent-sdk/) — confirmed current version 0.1.48, released 2026-03-07 — HIGH confidence
+- [PyPI: prompt-toolkit](https://pypi.org/project/prompt-toolkit/) — confirmed current version 3.0.52, released 2025-08-27 — HIGH confidence
+- [prompt_toolkit docs: Asking for input](https://python-prompt-toolkit.readthedocs.io/en/stable/pages/asking_for_input.html) — `prompt_async()`, `patch_stdout()`, `FileHistory`, `PromptSession` API — HIGH confidence (official docs, verified 2026-03-11)
+- [prompt_toolkit asyncio docs](https://python-prompt-toolkit.readthedocs.io/en/master/pages/advanced_topics/asyncio.html) — event loop integration — HIGH confidence (official docs)
 
 ---
-*Stack research for: Conductor — multi-agent coding orchestration framework*
-*Researched: 2026-03-10*
+*Stack research for: Conductor v1.1 — interactive chat TUI additions*
+*Researched: 2026-03-11*

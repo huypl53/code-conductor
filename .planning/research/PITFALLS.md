@@ -1,156 +1,223 @@
 # Pitfalls Research
 
-**Domain:** Multi-agent coding orchestration (Claude Code orchestrator + ACP sub-agents)
-**Researched:** 2026-03-10
-**Confidence:** HIGH (critical pitfalls verified via multiple sources including official docs, GitHub issues, and research papers)
+**Domain:** Interactive chat TUI added to existing multi-agent orchestration CLI (Conductor v1.1)
+**Researched:** 2026-03-11
+**Confidence:** HIGH — pitfalls derived from existing codebase analysis, official Rich/prompt_toolkit docs, CPython issues, and Claude Agent SDK official docs. Pitfalls specific to integrating chat mode into this exact existing system.
+
+> **Note:** This file covers v1.1-specific pitfalls (adding interactive chat TUI). For v1.0 multi-agent orchestration pitfalls (state corruption, agent proliferation, ACP deadlock, etc.), see the original PITFALLS.md content preserved in `PITFALLS-v1.0.md`. Both apply to v1.1 work.
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Shared State File Corruption from Concurrent Writes
+### Pitfall 1: Rich Live Display + Input Prompt = Terminal Corruption
 
 **What goes wrong:**
-Multiple sub-agents writing to `.conductor/state.json` simultaneously without coordination produce corrupted JSON — truncated files, partial writes caught mid-stream, or last-writer-wins collisions. Claude Code's own `.claude.json` has this exact bug in production (GitHub issues #28847, #29036, #29153). Once corrupted, recovery attempts that re-read the broken file compound the problem, producing progressively smaller broken files until all state is lost.
+The existing `conductor run` command mixes a `Rich.Live` status table (on stdout) with `input()` calls in `_input_loop` (via `asyncio.to_thread`). When the TUI adds streaming token output (chat response printed character-by-character), both the Live table refreshes and the streaming print compete to write to the same terminal. The result: partial ANSI escape sequences interleaved with output, garbled display, cursor jumping, and the input prompt appearing mid-token-stream. The user sees a corrupted screen that never recovers without clearing.
 
 **Why it happens:**
-Developers treat a JSON file as a simple shared variable. The atomic write pattern (write to `.tmp`, rename to target) is the right instinct, but it fails under concurrent contention: on Linux, rename() is atomic per POSIX but concurrent reads can still see stale data; multiple simultaneous writers can each write to differently-named temp files and one rename overwrites the other's data silently.
+Rich Live uses ANSI cursor manipulation to overwrite its area in-place. When another coroutine (streaming token display) calls `console.print()` or writes to stdout simultaneously, it writes at whatever cursor position the Live refresh left, not at the bottom. The existing codebase already separates `input_console = Console(stderr=True)` from `Live(console=Console(stderr=False))` to dodge this — but chat mode introduces a third stream (streaming LLM tokens) that must also be routed without colliding. Developers miss that Rich Live redirects stdout by default, so a naive `print()` call in a streaming handler goes through Live's redirect and hits the table area.
 
 **How to avoid:**
-- Use orchestrator-mediated state writes: sub-agents send state update requests to the orchestrator via ACP, and the orchestrator serializes all writes
-- Alternatively, use per-agent namespaced state keys (each agent owns its own key, never overwrites another's section) with the orchestrator writing to shared/coordination sections exclusively
-- Implement write-with-validation: read → validate checksum → merge → write → verify checksum on every mutation
-- Never allow two processes to write to the same JSON key simultaneously
+- Do not use `Rich.Live` in interactive chat mode. In chat mode, the display is a scrolling conversation log, not a live-updating table. Drop the `_display_loop`/`Live` layer entirely when running chat mode.
+- If the status table is still desired in chat mode (background agent status), use Rich's `Console(stderr=True)` or a `Rich.Panel` appended to output after each turn — never a concurrent `Live` while streaming to the same terminal.
+- Route all LLM streaming tokens through a single `Console` instance that is not under a `Live` context manager.
+- Use `prompt_toolkit`'s `patch_stdout()` context manager when mixing asynchronous prompt and print output — it serializes all output through prompt_toolkit's renderer.
 
 **Warning signs:**
-- JSON parse errors in any consumer of state.json
-- Agents reporting stale task statuses (reading outdated state)
-- "Task completed" appearing simultaneously with "Task in progress" for the same task
-- State file size shrinking unexpectedly
+- Terminal shows garbled ANSI codes (`[?25l`, `[A`, etc.) interleaved with response text.
+- Chat prompt appears mid-response line.
+- Screen flickers or goes blank during streaming.
+- `Rich.Live` raises `LiveError: Only one live display may be active at once` when chat mode is entered while batch mode status display is running.
 
-**Phase to address:** Core infrastructure phase (state management design) — before any multi-agent parallelism is implemented
+**Phase to address:** TUI entry point and display architecture phase — establish the display model before implementing any streaming output.
 
 ---
 
-### Pitfall 2: Runaway Token Costs from Unbounded Agent Proliferation
+### Pitfall 2: `asyncio.to_thread(input)` Cannot Be Cleanly Cancelled
 
 **What goes wrong:**
-Each spawned sub-agent maintains its own context window, and the orchestrator's context grows with every agent communication it processes. A real-world example: 887,000 tokens/minute during a 2.5-hour session when 23 sub-agents were spawned without lifecycle limits. Enterprise teams report 300-500% higher costs than expected. Because there is no per-agent token attribution in Claude Code's `/cost` command, the explosion is invisible until the monthly bill arrives.
+The existing `_ainput()` uses `asyncio.to_thread(input, prompt)`. When the user presses Ctrl+C, the `asyncio.gather()` raises `KeyboardInterrupt` in the event loop, the orchestrator task is cancelled, and `_input_loop` receives `CancelledError` — but the blocking `input()` thread keeps running, holding the process open waiting for Enter. The run.py comment already documents this: "asyncio.to_thread(input) cannot be cancelled from Python — the thread blocks until Enter is pressed." For `conductor run`, this is acceptable because the process exits. For an interactive TUI with a persistent loop, this becomes a session lifecycle bug: the user cannot gracefully exit or restart a chat session without pressing Enter.
 
 **Why it happens:**
-The orchestrator is an LLM that has been told to "break work down and delegate." With no hard constraints, it will spawn as many agents as it thinks useful for the problem. Sub-agents themselves may spawn additional sub-agents. Neither the orchestrator nor sub-agents have built-in cost awareness.
+Python threads are not cancelable from outside the thread. `asyncio.to_thread` submits the blocking call to the default `ThreadPoolExecutor`; cancelling the outer `asyncio.Task` prevents the future from being awaited, but the OS thread continues running `input()`. This is a CPython architectural limitation documented in issue #107505.
 
 **How to avoid:**
-- Enforce a hard `max_agents` cap (recommended: 6-8 for typical features, configurable)
-- Implement per-session and per-agent `max_turns` limits
-- Add agent lifecycle timeouts: auto-terminate agents idle >N minutes
-- Track tokens-per-minute velocity (not just total) and trigger alerts at thresholds
-- Use cheaper models for sub-agents (Haiku/Sonnet) and reserve expensive models (Opus) for orchestrator planning steps only
-- Lazy agent creation: start with 2-3 agents, scale up only when parallelism is clearly needed
+- Replace `asyncio.to_thread(input)` with `prompt_toolkit`'s `PromptSession.prompt_async()`. prompt_toolkit uses its own event loop integration that responds to cancellation and restores terminal state properly.
+- If prompt_toolkit is not adopted, use `sys.stdin` with `asyncio.get_event_loop().add_reader()` for non-blocking stdin — this is cancellable because it is I/O-based not thread-based.
+- Never rely on `asyncio.to_thread(input)` as the input mechanism for a persistent interactive session. It is acceptable only for one-shot blocking prompts (like the existing escalation "Your answer:" prompt) where process exit is the intended outcome on cancellation.
 
 **Warning signs:**
-- Orchestrator spawning more than 8-10 agents for a single feature
-- Sub-agents spawning their own sub-agents (unbounded recursion)
-- Session cost doubling every 10 minutes
-- Agents generating output with no visible progress on actual code
+- After Ctrl+C to exit chat mode, the terminal hangs waiting for Enter.
+- `ps aux` shows the conductor process still running after the user pressed Ctrl+C.
+- Re-running `conductor` immediately after exit fails because the previous process is still holding the TTY.
 
-**Phase to address:** Orchestrator intelligence phase — cost controls must be baked into orchestrator skills/prompts from day one, not added later
+**Phase to address:** Input handling foundation phase — choose the input mechanism before building any interaction logic.
 
 ---
 
-### Pitfall 3: Over-Parallelization with Missed Sequential Dependencies
+### Pitfall 3: Chat History Grows Unbounded, Silently Exhausting Context
 
 **What goes wrong:**
-The orchestrator incorrectly determines two tasks can run in parallel when one depends on the other's output (e.g., implementing a function before its interface contract is defined, or writing tests before the module structure is settled). Sub-agents proceed, produce incompatible work, and the integration phase requires throwing away one agent's output entirely. This is the multi-agent equivalent of a merge conflict at the architecture level — extremely costly.
+In chat mode, every user message and assistant response is appended to the conversation history passed to the Claude Agent SDK. After 20-30 turns of a complex coding session (especially with tool use results being large), the accumulated history can exceed Claude's context window. The SDK may silently apply auto-compaction, losing critical earlier context (e.g., "we decided NOT to use class-based approach" from turn 3). The orchestrator's delegation decisions in turn 25 then contradict the early architectural decisions the user established, producing wrong code or re-doing already-completed work.
 
 **Why it happens:**
-LLM-based task decomposition is optimistic about parallelism. The orchestrator may not have full visibility into implicit dependencies (naming conventions, shared types, database schema changes that affect multiple modules). Research shows specification failures and coordination breakdowns account for ~79% of multi-agent failures.
+Developers building chat interfaces treat conversation history as an ever-growing list. The Claude Agent SDK does not surface a token count warning to the caller by default; auto-compaction happens server-side without a client event. There is no visible signal to the user that their earlier instructions have been lost from the model's effective context.
 
 **How to avoid:**
-- Define dependency chains explicitly in orchestrator skills: "Task B cannot start until Task A has committed its interface to state.json"
-- Establish a "contracts-first" step at the start of any multi-agent session: orchestrator defines shared interfaces, types, and conventions before any sub-agent begins coding
-- Require dependency declaration in task descriptions: every task must list "requires:" and "produces:" explicitly
-- Use a "stub-then-implement" dependency strategy: generate interface stubs first (shared), then parallelize implementations
+- Track approximate token count client-side after each turn (user message + assistant response + tool outputs). Warn the user at 60% context utilization ("Context is 60% full — consider starting a new session for major new features").
+- Implement a session summary mechanism: at 75% utilization, offer to summarize the session so far into a compact "session brief" that replaces the full history, preserving decisions and constraints but compressing rationale.
+- Store full conversation history to `.conductor/chat_history.json` for the user's record (separate from the truncated context sent to the API).
+- Design the orchestrator's "chat mode" system prompt to include a "decisions made" structured section that the model updates each turn — a durable summary that survives compaction better than raw conversation history.
 
 **Warning signs:**
-- Two sub-agents both creating a new module with the same name
-- Sub-agent A importing from a path that sub-agent B hasn't created yet
-- TypeScript compilation errors after merging parallel agent outputs
-- Orchestrator log shows tasks starting simultaneously that share the same files
+- After many turns, the model starts contradicting earlier decisions.
+- The model "forgets" the codebase context established at session start.
+- Response quality degrades noticeably after 30+ turns.
+- Tool outputs (file reads, shell results) in history are very large and accumulate quickly.
 
-**Phase to address:** Orchestrator skills phase — dependency modeling must be a first-class skill, not an afterthought
+**Phase to address:** Chat session lifecycle phase — context management design must precede any long-running chat capability.
 
 ---
 
-### Pitfall 4: Context Window Exhaustion Mid-Task with Silent State Loss
+### Pitfall 4: Smart Delegation Decision Is Non-Deterministic and Leaks Between Modes
 
 **What goes wrong:**
-A sub-agent working on a complex task runs out of context window space mid-implementation. Auto-compaction kicks in and summarizes prior work — but the summary loses critical implementation details (specific edge cases handled, design decisions made, error patterns fixed). The agent continues but produces inconsistent code: the second half of the implementation contradicts the first half. The orchestrator sees "task completed" in state.json but the delivered code is subtly broken.
+The orchestrator must decide: handle this task directly (read/edit files inline) vs. spawn sub-agents. This decision is made by the LLM and is non-deterministic. The failure mode has two variants: (1) The orchestrator delegates a trivial one-liner change to a sub-agent, introducing seconds of latency and unnecessary cost. (2) The orchestrator handles a complex multi-file refactor directly (in-context), producing incomplete work because a single agent pass cannot atomically handle the full scope. Additionally, the delegation decision references the existing batch-mode `Orchestrator` class, which holds state (`_active_clients`, `_active_tasks`) from any concurrent `conductor run` session — sharing this instance between batch and chat modes corrupts both.
 
 **Why it happens:**
-Long-running coding tasks naturally accumulate large contexts: tool call results, file contents read, compilation errors iterated on, test output. Complex feature implementations can easily exceed 100K tokens. Compaction is lossy by design — it cannot preserve every detail.
+LLMs make delegation decisions based on prompt framing and context. Without an explicit, rule-based pre-filter (e.g., "if task touches >2 files → delegate") the model makes inconsistent decisions across similar inputs. The state leakage happens because developers reuse the existing `Orchestrator` singleton across both modes rather than instantiating separate scoped instances.
 
 **How to avoid:**
-- Set explicit context budgets per task: break tasks that would require >50K tokens into subtasks
-- Require sub-agents to write "progress notes" to `.memory/[agent-id].md` at regular intervals — durable checkpoints outside the context window
-- Design tasks to be resumable: output artifacts should be self-describing so a fresh agent can pick up where the previous left off
-- Monitor context utilization via ACP streaming and warn the orchestrator before compaction triggers
+- Define a clear, rule-based delegation policy that the LLM applies before deciding: "If the task requires creating or modifying more than 1 file, spawns from a single conceptual change, or requires running tests — delegate. Otherwise, handle directly."
+- Implement a lightweight heuristic pre-filter in Python (before LLM decision): count implied file modifications from the user's message. Use it to gate whether to even ask the LLM.
+- Chat mode and batch mode must use separate `Orchestrator` instances with separate state. Never share an `Orchestrator` instance between `conductor` (chat) and `conductor run` (batch) invocations.
+- In chat mode, sub-agent delegation is a discrete action with a visible status update ("Spawning 2 agents for this task...") — not a silent background decision.
 
 **Warning signs:**
-- Sub-agent output quality degrades noticeably midway through a file
-- Functions defined in one part of output contradict function signatures established earlier
-- Sub-agent "forgets" constraints it acknowledged at task start
-- Compaction events in ACP event stream for tasks that were supposed to be straightforward
+- Simple "rename this variable" requests spin up sub-agents.
+- Complex multi-file refactors are handled in-context with incomplete results.
+- After a `conductor run` session, starting `conductor` shows stale agent statuses from the batch run.
+- `_active_clients` dict has entries from a previous session when a new chat session starts.
 
-**Phase to address:** Sub-agent runtime phase — checkpointing and task sizing must be designed before long-running tasks are supported
+**Phase to address:** Delegation logic and orchestrator scoping phase.
 
 ---
 
-### Pitfall 5: Orchestrator Intelligence Drift — The LLM Forgetting Its Coordination Role
+### Pitfall 5: Terminal Raw Mode Left Dirty on Crash or Exception
 
 **What goes wrong:**
-The orchestrator is itself an LLM (Claude Code with skills). Under certain conditions it starts behaving like a coding agent rather than a coordinator: it writes code directly, makes architectural decisions without delegating for review, or narrows focus on a single agent's thread while losing track of other agents. This is a variant of the "specification failure" category (42% of multi-agent failures per research). The orchestrator essentially defects from its coordination role.
+Interactive TUI tools (prompt_toolkit, readline, or any library that enters raw/cbreak terminal mode for arrow key navigation and history) modify the terminal's tty settings. If the process crashes with an unhandled exception, a `KeyboardInterrupt` outside the input handler's cleanup path, or an `asyncio.CancelledError` propagated incorrectly, the terminal is left in raw mode. All subsequent shell input appears with no echo, no line buffering, and keyboard shortcuts behave strangely. The user must manually run `stty sane` or `reset` to recover. This is a highly visible, jarring failure mode.
 
 **Why it happens:**
-The orchestrator's skills and system prompt define its role, but LLMs are susceptible to context drift in long sessions. If early messages heavily feature code discussion, the model anchors on coding behavior. Skills/instructions that are far back in the context are deprioritized.
+Raw mode is entered via a context manager (e.g., `with prompt_toolkit.input.create_input() as input:`) but exceptions that bypass the `__exit__` call leave the terminal modified. Additionally, `asyncio.CancelledError` is a `BaseException` subclass — standard `try/except Exception` blocks do not catch it, meaning cleanup code in `except Exception:` blocks is skipped. A known prompt_toolkit issue (#787) documents that `prompt_async()` does not clean up terminal state if cancelled, leaving echo off.
 
 **How to avoid:**
-- Structure orchestrator skills to repeatedly re-anchor on coordination responsibilities: "You are a coordinator. Do not write code. Your job is to assign, review, and unblock."
-- Implement a periodic "role check" in orchestrator workflow: before every action, the orchestrator states its current coordination objective
-- Keep the orchestrator's context lean: route sub-agent output summaries (not full outputs) to the orchestrator
-- Define strict output format expectations for the orchestrator: its responses should be task assignments, reviews, or escalations — never raw code
+- Wrap the entire chat session entry point in a `try/finally` block that explicitly calls `terminal.restore()` or equivalent in the `finally` clause — not just in `except`.
+- Use `prompt_toolkit`'s `PromptSession` which has its own cleanup, but additionally catch `BaseException` (not just `Exception`) in the outermost chat loop to ensure cleanup runs on `CancelledError`, `SystemExit`, and `KeyboardInterrupt`.
+- Test explicitly: force a crash (raise an unhandled exception) mid-prompt and verify `stty -a` shows normal terminal settings afterward.
+- Register a `signal.signal(signal.SIGTERM, ...)` handler that triggers the same cleanup path as Ctrl+C.
 
 **Warning signs:**
-- Orchestrator output contains code blocks rather than task assignments
-- Orchestrator stops updating state.json with delegation decisions
-- Only one sub-agent is receiving new tasks while others are idle
-- CLI shows orchestrator "thinking" for long periods without spawning agents or updating status
+- After an unexpected exit from `conductor`, shell input is invisible (no echo).
+- Backspace and arrow keys produce `^H`, `^[[A` visible characters instead of navigating.
+- Users report needing to run `reset` after `conductor` crashes.
 
-**Phase to address:** Orchestrator skills/prompts phase — role anchoring must be explicit from day one
+**Phase to address:** Input handling foundation phase — terminal cleanup must be a first-class concern, not an afterthought.
 
 ---
 
-### Pitfall 6: ACP Permission Prompt Deadlock — Agents Blocked Waiting for Responses
+### Pitfall 6: Streaming Token Display Blocks the Event Loop
 
 **What goes wrong:**
-Sub-agents encounter tool-use permission prompts (file deletion, running scripts, network requests) and pause, waiting for the orchestrator to respond via ACP. The orchestrator is simultaneously waiting on other agents and doesn't process the blocked agent's prompt for minutes. The blocked agent times out, marks its task failed, and the orchestrator must decide whether to retry — potentially causing cascading retries. In `--auto` mode, if the orchestrator also encounters a permission prompt and pauses, the entire system can deadlock.
+Streaming LLM response tokens arrives via `async for message in client.stream_response()`. Developers display each token with `console.print(token)` or `sys.stdout.write(token)` inside the `async for` loop. `Rich.Console.print()` acquires an internal thread lock and does terminal I/O — it is a blocking call. Under normal conditions this is fast enough to be invisible, but when the terminal is slow (SSH session, Windows Terminal with many columns, large response chunks), the lock acquisition and I/O block the event loop long enough to miss incoming ACP events from background agents. The existing background monitoring loop (`_display_loop`, agent question queue) can starve.
 
 **Why it happens:**
-ACP's bidirectional permission flow is powerful but requires the orchestrator to be always-responsive. A single-threaded or busy orchestrator naturally creates queues. Orchestrators that are themselves LLMs add LLM inference latency to every permission response.
+Rich's `Console.print()` is not async-aware. Inside an `async for` loop, synchronous I/O that takes >1ms effectively blocks all other coroutines for that duration. With fast typing and large responses (code blocks), this adds up to hundreds of milliseconds of event loop blockage per turn.
 
 **How to avoid:**
-- Pre-authorize common tool classes at session start: define an explicit allowlist of operations each agent can perform without asking (e.g., "read any file, write to your designated output directory, run tests")
-- Implement async permission processing: the orchestrator must have a separate fast-path for permission responses, not the same LLM inference loop as planning
-- Set permission response timeouts: if no response in N seconds, apply a safe default (deny, and route to human if interactive mode)
-- In `--auto` mode, grant broader pre-authorization to reduce prompt frequency
+- Buffer streaming tokens and flush in batches using `asyncio.to_thread(console.print, buffered_text)` every N tokens or every M milliseconds.
+- Alternatively, use `sys.stdout.write()` + `sys.stdout.flush()` directly for streaming token output (bypassing Rich's lock) and reserve `Console.print()` for formatted non-streaming output.
+- Use `asyncio.sleep(0)` periodically inside the streaming loop to yield control to other coroutines between token batches.
+- Benchmark: measure event loop latency (`asyncio.get_event_loop().call_later(0, ...)`) during active streaming to detect blockage.
 
 **Warning signs:**
-- ACP event stream shows `permission_request` events not followed by `permission_response` within expected time
-- Agent status stuck on "awaiting_permission" for >30 seconds
-- Multiple agents simultaneously in "awaiting_permission" state
-- System throughput drops to near zero despite all agents showing as "running"
+- Agent question prompts arrive with noticeable delay while a response is streaming.
+- Background agent status updates are visibly delayed during chat responses.
+- Event loop monitoring shows >50ms gaps during streaming.
 
-**Phase to address:** ACP integration phase — permission flow design must be explicit, not assumed
+**Phase to address:** Streaming output display phase.
+
+---
+
+### Pitfall 7: Typer `no_args_is_help=True` Conflicts with Chat Mode Entry
+
+**What goes wrong:**
+The existing CLI has `no_args_is_help=True` on the Typer app. Running `conductor` with no arguments currently shows the help text. V1.1 goal is for `conductor` with no arguments to enter interactive chat mode. These two behaviors are mutually exclusive — the Typer setting must be changed or overridden. If the developer forgets this, `conductor` still shows help text and the chat mode entry is unreachable via the primary invocation path. Additionally, changing `no_args_is_help` to False means that `conductor --help` must remain discoverable, or users lose the help entry point entirely.
+
+**Why it happens:**
+Typer's `no_args_is_help` is a Typer-level setting that intercepts the no-arguments case before any command dispatch. There is no hook to "check if args are empty and then do something custom" — the setting is binary. Developers testing the change in isolation do not notice because `conductor chat` (a subcommand) works, but `conductor` alone still shows help until the Typer app config is updated.
+
+**How to avoid:**
+- Change `no_args_is_help=False` on the Typer app when adding chat mode.
+- Implement the default-to-chat behavior by overriding the Typer app's `result_callback` or by adding a default command that is invoked when no subcommand is given.
+- The cleanest pattern: use Typer's `invoke_without_command=True` with a callback that checks `ctx.invoked_subcommand is None` and starts chat mode.
+- Ensure `conductor --help` still works and prominently documents the no-args chat mode entry.
+
+**Warning signs:**
+- `conductor` with no args shows help text instead of starting chat mode.
+- `conductor` with no args starts chat, but `conductor --help` no longer works.
+- Subcommand `conductor run "..."` behavior changes unexpectedly after the Typer config update.
+
+**Phase to address:** CLI entry point restructuring phase — must be addressed before any chat mode implementation is testable.
+
+---
+
+### Pitfall 8: Chat Mode Session State Is Not Isolated from Batch State File
+
+**What goes wrong:**
+Batch mode (`conductor run`) writes task and agent records to `.conductor/state.json`. If a user starts `conductor` (chat mode) while a batch session's state is in `.conductor/state.json` — or if chat mode writes its conversation metadata to the same file — the state file becomes ambiguous. The dashboard reads `state.json` and displays both chat-mode interactions and batch agent records in the same view, creating a confusing mixed display. Worse, if chat mode triggers sub-agent delegation (which writes to `state.json`), the batch-run's task records may be overwritten or merged incorrectly.
+
+**Why it happens:**
+The state file path `.conductor/state.json` is hardcoded as the single coordination file. Batch mode and chat mode both use `StateManager` pointing to the same path. Developers add chat-mode metadata to the same `ConductorState` model without considering that the dashboard was designed to display batch-mode records exclusively.
+
+**How to avoid:**
+- Use a separate state namespace for chat mode. Options: a separate file (`.conductor/chat_state.json`), a separate key in the state model (`chat_sessions` alongside `tasks` and `agents`), or a separate directory (`.conductor/sessions/[session-id]/`).
+- Chat-triggered sub-agent delegation that writes task records should use a session-scoped prefix on task IDs to avoid collisions (`chat-[session-id]-task-001` vs. `batch-task-001`).
+- The dashboard should explicitly handle the case of mixed batch + chat state and either filter to the active session or display them in separate panels.
+
+**Warning signs:**
+- Dashboard shows both chat conversation metadata and batch agent tasks in the same table.
+- Task IDs from a previous batch run appear in chat-mode status displays.
+- State file grows without bound across multiple chat sessions because old chat records are never cleaned up.
+
+**Phase to address:** State model extension phase — before any chat-mode state is written.
+
+---
+
+### Pitfall 9: Tool Use in Chat Mode Breaks the Conversation Flow Display
+
+**What goes wrong:**
+When the orchestrator handles a task directly in chat mode (reading files, editing code, running shell commands), the ACP streaming response includes tool call events interspersed with text tokens. If the display layer naively streams everything, the user sees raw tool call JSON (`{"type": "tool_use", "name": "edit_file", "input": {...}}`) mixed into the conversation. Alternatively, if tool events are filtered entirely, the user has no visibility into what the agent is doing during a "thinking" period, which feels like a frozen UI. Neither extreme is good UX.
+
+**Why it happens:**
+The Claude Agent SDK's streaming output includes `TextChunk`, `ToolUseBlock`, `ToolResultBlock`, and `ResultMessage` events in the same stream. The existing `StreamMonitor` (in v1.0) processes these for batch mode but does not produce user-facing output — it accumulates result text for the reviewer. Chat mode needs a different rendering strategy: tool calls should be shown as progress indicators, not raw JSON, and text tokens should be streamed character by character.
+
+**How to avoid:**
+- Build a chat-mode stream renderer that handles each event type distinctly:
+  - `TextChunk`: stream character by character to the conversation display.
+  - `ToolUseBlock`: show a compact progress line ("Reading `src/auth.py`...") that updates in-place.
+  - `ToolResultBlock`: show a collapsed summary ("Read 245 lines") with an expand option.
+  - `ResultMessage`: mark the turn complete and update the conversation.
+- Render tool activity in a separate display zone (e.g., a status line above the prompt) rather than inline in the conversation.
+- Do not use the existing `StreamMonitor` for chat mode — it was designed for batch review, not interactive display.
+
+**Warning signs:**
+- Chat output contains raw JSON tool call payloads.
+- Long pauses with no visual feedback while the agent reads files or runs commands.
+- Users report the terminal "hanging" during tool execution even though the agent is actively working.
+
+**Phase to address:** Streaming output display phase — concurrent with tool use implementation.
 
 ---
 
@@ -160,28 +227,27 @@ Shortcuts that seem reasonable but create long-term problems.
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Direct file writes from sub-agents (no orchestrator mediation) | Simpler code, less latency | State corruption under any real concurrency | Never — architecture must enforce this from day one |
-| Passing full conversation history to orchestrator | Orchestrator has full context | Context explosion, cost blowup, role drift | Never at scale — always summarize |
-| Single state.json for all coordination | Simple mental model | Race conditions, no partial failure recovery | Prototype only, must be replaced before multi-agent parallelism |
-| Polling state.json for status updates | Simple implementation | High I/O, stale reads, missed events | Acceptable in MVP if polling interval is reasonable (>1s) |
-| Hardcoded max_agents limit | Prevents runaway costs | Inflexible for different task sizes | Acceptable if configurable per-session |
-| Identical model for orchestrator and all sub-agents | Simpler deployment | Unnecessary cost — orchestrator needs expensive model, sub-agents don't | Never — tier models by role from day one |
-| Using exceptions for all ACP error signaling | Simple error handling | Silent failures when ACP stream drops | Only if combined with dead-letter detection |
+| Reusing `asyncio.to_thread(input)` for chat input | No new dependencies | Thread cannot be cancelled; graceful exit broken; terminal corruption on crash | Never for persistent chat sessions — acceptable only for one-shot blocking prompts |
+| Keeping `Rich.Live` table running during chat mode | Reuse existing display code | Terminal corruption when streaming text mixes with Live refresh | Never — drop Live in chat mode or display in separate panel |
+| Single global `Orchestrator` instance for both modes | Simpler instantiation | State leakage between chat and batch sessions; `_active_clients` dict corruption | Never — always scope Orchestrator instances to session |
+| Appending all tool output verbatim to conversation history | Complete audit trail in context | Context exhaustion within 10-15 turns if tool outputs are large (file reads, shell output) | Acceptable in early prototype only; must be replaced before any real usage |
+| Storing chat history only in SDK session (no local persistence) | Simplest implementation | User loses entire conversation on process crash; no history browsing | Never — persist to `.conductor/chat_history.json` from day one |
+| Using subprocess `input()` poll for Ctrl+C handling | No new async logic | Race condition between KeyboardInterrupt and CancelledError cleanup | Never — use signal handlers with explicit cleanup |
 
 ---
 
 ## Integration Gotchas
 
-Common mistakes when connecting to external services.
+Common mistakes when connecting chat mode to the existing system.
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| ACP stdio transport | Assuming stdio never drops or blocks; not handling SIGPIPE when sub-process exits | Wrap all stdio reads in timeout + EOF detection; treat sub-process death as task failure, not hang |
-| ACP ndjson streaming | Buffering entire response before parsing; missing partial-line events | Parse line-by-line as events arrive; handle partial lines across buffer boundaries |
-| Claude Code as ACP client | Assuming synchronous request-response semantics | ACP is async and event-driven; design around event handlers, not await patterns |
-| `.conductor/state.json` | Reading the file directly in sub-agents without knowing if a write is in progress | Use a versioned read protocol: read + check version field; retry if version changed during read |
-| `.memory/` shared folder | Multiple agents appending to same memory file | Each agent writes to its own keyed file; orchestrator merges on demand |
-| `@zed-industries/claude-agent-acp` adapter | Assuming it handles all Claude Code tool types; not pinning version | Verify tool coverage for all tools sub-agents will use; pin adapter version in lockfile |
+| Typer CLI entry | Setting `no_args_is_help=True` conflicts with no-args chat mode; changing it breaks help discoverability | Use `invoke_without_command=True` with callback checking `ctx.invoked_subcommand is None`; keep `--help` explicit |
+| Claude Agent SDK in chat mode | Using `query()` one-shot function (as in spec review) for multi-turn chat | Use `ACPClient` with a persistent session and `send()`/`stream_response()` per turn — the same pattern used for sub-agents |
+| `StateManager.mutate()` in chat mode | Calling `mutate()` from chat async code without `asyncio.to_thread()` wrapper | All `mutate()` calls require `asyncio.to_thread()` — it uses `filelock` which is blocking |
+| Rich Live + streaming | Calling `console.print()` inside a `Rich.Live` context from a streaming handler | Never print to Live's console from outside the Live refresh callback; use a separate Console instance |
+| `_input_loop` reuse for chat | Adapting the existing command-dispatch `_input_loop` for free-form chat | Chat input is free-form text, not command tokens; the existing dispatch table must not apply in chat mode |
+| Dashboard in chat mode | Dashboard reads `state.json` and expects batch-mode schema | Either update dashboard to handle chat mode state or isolate chat state from dashboard's data path |
 
 ---
 
@@ -191,56 +257,56 @@ Patterns that work at small scale but fail as usage grows.
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Broadcasting full sub-agent output to orchestrator | Works fine with 2 agents, slow with 6+ | Summarize sub-agent output before routing to orchestrator; only escalate key artifacts | >4 concurrent agents |
-| Synchronous state.json reads on every tool call | Acceptable with 1-2 agents | Cache state with TTL; only re-read when event signals a write | >3 agents making frequent tool calls |
-| Orchestrator re-planning entire task graph after any agent update | Fine when simple, catastrophic when complex | Implement incremental planning: only re-evaluate tasks affected by the completed task | Task graphs >10 nodes |
-| Streaming full ACP events to web dashboard | Demo-friendly, overwhelming in production | Apply event filtering/aggregation at dashboard backend; only stream summary events by default | >3 active agents |
-| Using a single ACP connection pool for all agents | Negligible difference at small scale | Per-agent connection isolation prevents one agent's backpressure blocking others | >5 concurrent agents with heavy tool use |
+| `console.print()` per token in streaming loop | Fine for slow LLM responses, lags with fast streaming | Buffer tokens, flush every 50ms or every newline | Immediately visible on fast network / small responses |
+| Awaiting full response before displaying | Response appears all at once, feels slow | Stream token-by-token from SDK `include_partial_messages=True` | Any response >2 seconds |
+| Loading full `.conductor/state.json` on every turn to check background agent status | Fast for small state, slow as state grows after many sessions | Cache last-known state; only reload on state file change event (watchfiles) | State file >50KB (~10 accumulated sessions) |
+| Chat history as flat list with no summarization | Works for 5 turns, context exhaustion at 20-30 turns | Sliding window with summarization at 75% utilization | Turn 20-30 of any complex session |
+| Spawning sub-agents for every delegation decision in chat mode | Fast when agents complete quickly, blocks chat responsiveness | Show agent status async; do not block chat loop waiting for agent completion | Agents taking >10 seconds per task |
 
 ---
 
 ## Security Mistakes
 
-Domain-specific security issues beyond general web security.
+Domain-specific security issues in chat mode (beyond the v1.0 pitfalls).
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Trusting sub-agent output unconditionally as orchestrator input | Prompt injection: code in a file sub-agent read could instruct the orchestrator to take unauthorized actions | Treat all sub-agent output as untrusted data; never interpolate it directly into orchestrator system prompts |
-| Granting all sub-agents identical tool permissions | A compromised or misbehaving agent can perform actions outside its scope (delete unrelated files, exfiltrate code) | Define per-role permission manifests: "frontend agent can only write to `src/` and read from `types/`" |
-| Storing API keys in `.conductor/state.json` | State file is readable by all agents; a prompt-injected agent could exfiltrate it | Never store credentials in state; use environment variables or secrets manager |
-| No audit log for agent actions | Cannot determine what an agent did during a runaway session | Log all tool calls with agent identity, timestamp, and parameters to append-only log before executing |
-| Inter-agent message passthrough without sanitization | A malicious file on disk could inject instructions that cascade through multiple agents | Sanitize/quote all file content before including in inter-agent messages |
+| Trusting user's chat input as safe shell commands without review | Chat input could instruct the orchestrator to run `rm -rf` or exfiltrate files | In chat mode, shell commands are still subject to ACP permission flow — do not bypass `PermissionHandler` |
+| Including full file contents verbatim in chat history sent to API | Large files in history waste tokens; sensitive credentials in read files get sent | Strip or truncate file contents in history; never persist raw API messages containing sensitive paths |
+| Chat history stored in plaintext `.conductor/chat_history.json` | History may contain code, credentials, or architectural details | Document that `chat_history.json` should be in `.gitignore`; warn user on first run |
+| Accepting user-specified `--repo` path in chat mode without canonicalization | Relative paths or symlinks could escape intended directory | Always `Path(repo).resolve()` before passing to agents (already done in batch mode — must be carried over) |
 
 ---
 
 ## UX Pitfalls
 
-Common user experience mistakes in this domain.
+Common user experience mistakes specific to chat TUI mode.
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Raw ACP event streams shown in dashboard | Information overload; user cannot find signal in noise; 90% of events are tool call results with no user value | Layered visibility: collapsed status by default, expandable to detail, opt-in to raw stream |
-| Identical visual treatment for all agents | User cannot determine which agent is doing critical work vs. background tasks | Hierarchy: orchestrator at top, sub-agents below with role labels; visual distinction by status |
-| Notifying on every agent event | Alert fatigue; user learns to ignore notifications | Smart notifications: only escalation requests, task completions, errors, and explicit human-needed events |
-| No progress indication during long LLM inference | User thinks system is hung | Show "thinking" state with elapsed time; if >30s, surface what the agent is currently attempting |
-| Blocking the CLI while waiting for agent responses | User cannot cancel or inspect state during a long run | CLI always-responsive: separate input thread from agent monitoring; Ctrl+C should pause and offer options |
-| Hiding error details in "Task failed" status | User cannot diagnose failures without digging through raw logs | Surface the last error message and the tool call that triggered it in the collapsed card view |
+| No distinction between "orchestrator thinking" and "orchestrator delegating" | User cannot tell if a 10-second pause is inference or sub-agent spawning | Show explicit status: "Planning..." → "Delegating to 2 agents..." → "Waiting for agents..." → "Done" |
+| Streaming tokens interrupted by agent question prompt | Mid-response, a sub-agent escalation appears, breaking the readable text | Queue escalation events; display them after the current response completes unless urgency requires interrupt |
+| No turn separator in conversation display | After 10+ turns, conversation is a wall of text with no structure | Print `---` or a Rich Panel border between turns; include turn number and timestamp |
+| `KeyboardInterrupt` mid-streaming aborts without cleanup message | User sees a traceback or silent hang | Catch `KeyboardInterrupt` in the streaming loop; print "Response interrupted." and restore prompt cleanly |
+| Chat mode and `conductor run` look identical on startup | Users accidentally run the wrong mode | Chat mode should have a distinct greeting/banner; batch mode should state "Starting orchestration for: [task]..." |
+| Long tool execution with spinner but no details | User cannot tell if agent is stuck or making progress | Show the specific tool being called: "Running: `pytest tests/`" not just "Working..." |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-Things that appear complete but are missing critical pieces.
+Things that appear complete but are missing critical pieces specific to v1.1.
 
-- [ ] **Multi-agent parallelism:** Often missing write coordination — verify that two agents can simultaneously complete tasks without corrupting state.json
-- [ ] **Orchestrator role:** Often missing role anchoring under long sessions — verify orchestrator still makes delegation decisions (not code decisions) after 50+ turns
-- [ ] **Cost controls:** Often missing velocity monitoring — verify that a runaway sub-agent triggers an alert before hitting a per-session budget limit
-- [ ] **ACP permission flow:** Often missing timeout handling — verify that a permission prompt with no response eventually resolves (fails safely) rather than hanging
-- [ ] **Session persistence:** Often missing mid-task resumability — verify that restarting the orchestrator mid-session restores sub-agent contexts and in-progress tasks
-- [ ] **Context compaction:** Often missing post-compaction consistency — verify that sub-agent output quality is equivalent before and after a compaction event
-- [ ] **Web dashboard:** Often missing error states — verify that a crashed sub-agent is visually distinguished from an idle one
-- [ ] **`.memory/` folder:** Often missing write conflict prevention — verify that two agents writing to memory simultaneously doesn't corrupt entries
-- [ ] **Dependency management:** Often missing implicit dependency detection — verify that the orchestrator rejects or serializes tasks that touch the same files
+- [ ] **Chat entry point:** `conductor` with no args opens chat mode — verify `conductor --help` still works and documents the no-args behavior.
+- [ ] **Terminal cleanup:** Force-crash the process mid-prompt — verify terminal echo and line mode are restored (`stty -a` shows `echo` and `icanon`).
+- [ ] **Streaming display:** Stream a 2000-token response — verify no other coroutines (agent question queue, status updates) are starved during streaming.
+- [ ] **Context management:** Run 30 turns in one session — verify the user receives a warning before context exhaustion, not a silent mid-session failure.
+- [ ] **Delegation boundary:** Ask for a single-line fix — verify no sub-agents are spawned. Ask for a multi-file feature — verify sub-agents are spawned with visible status.
+- [ ] **State isolation:** Run `conductor run "task"` and `conductor` (chat mode) in parallel — verify state files and agent records do not collide.
+- [ ] **Tool output display:** Execute a chat turn that triggers file reads — verify the user sees human-readable progress, not raw JSON tool call payloads.
+- [ ] **Session persistence:** Start a chat session, answer 5 turns, kill the process (`kill -9`), restart `conductor` — verify chat history is recoverable from `.conductor/chat_history.json`.
+- [ ] **Ctrl+C behavior:** Press Ctrl+C once during active streaming — verify clean stop with no zombie threads and no terminal corruption.
+- [ ] **Input mechanism:** Verify arrow key history navigation and Ctrl+R search work (requires prompt_toolkit or readline — not achievable with `asyncio.to_thread(input)`).
 
 ---
 
@@ -250,49 +316,50 @@ When pitfalls occur despite prevention, how to recover.
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| State.json corruption | MEDIUM | Detect via JSON parse failure; restore from last valid checkpoint (maintain rolling backups every N writes); replay any events since checkpoint |
-| Runaway token cost | LOW-MEDIUM | Kill all sub-agents via process management; audit orchestrator log to determine which agent triggered proliferation; restart with tighter max_agents config |
-| Over-parallelization merge conflict | HIGH | Identify canonical implementation via orchestrator review; assign a "merge agent" with both outputs as context to produce reconciled version; update contracts file |
-| Context exhaustion mid-task | MEDIUM | Load latest progress notes from `.memory/[agent-id].md`; spawn fresh agent with notes as context + explicit instruction to continue from checkpoint |
-| Orchestrator role drift | MEDIUM | Inject a correction message via CLI: "You are the orchestrator. Stop writing code. Review current agent statuses and issue your next delegation decision." |
-| ACP deadlock | LOW | Identify blocked agents via status monitoring; send explicit permission responses via orchestrator API; implement watchdog that auto-resolves stale permission prompts |
-| Prompt injection cascade | HIGH | Kill all agents immediately; review audit log for scope of injected instructions; manually verify all files touched after the injection point |
+| Terminal corruption from Live + streaming conflict | LOW | User runs `reset` or `stty sane`; fix requires removing Live context from chat mode path |
+| Thread leak from `asyncio.to_thread(input)` | LOW | Process will exit normally after user presses Enter; fix requires switching to prompt_toolkit |
+| Context exhaustion (silent compaction) | MEDIUM | Load `.conductor/chat_history.json` to review full history; start new session with explicit "session brief" context |
+| Delegation decision loops (trivial tasks spawning agents) | LOW | User can ask "do this yourself" to force direct handling; fix requires delegation policy rules |
+| Chat + batch state collision | MEDIUM | Delete or rename `.conductor/state.json`; restart clean; fix requires session-scoped state namespacing |
+| Terminal left in raw mode after crash | LOW | `stty sane` or `reset` restores terminal; fix requires `finally` block with explicit terminal restore |
+| Tool call JSON appearing in chat display | LOW | No user recovery needed; cosmetic fix in stream renderer layer |
 
 ---
 
 ## Pitfall-to-Phase Mapping
 
-How roadmap phases should address these pitfalls.
+How v1.1 roadmap phases should address these pitfalls.
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| State.json corruption | State management design (early infrastructure) | Integration test: two agents write concurrently 100 times; state must be valid and complete each time |
-| Runaway token costs | Orchestrator intelligence / skills | Test: run orchestrator on complex task; verify agent count never exceeds configured max and cost alerts fire |
-| Over-parallelization dependency misses | Orchestrator skills: task decomposition | Test: feed orchestrator a task with implicit sequential dependencies; verify it detects and serializes them |
-| Context exhaustion mid-task | Sub-agent runtime design | Test: assign a task requiring >80K tokens; verify compaction event triggers a memory checkpoint |
-| Orchestrator role drift | Orchestrator skills + prompting | Long-run test: 100-turn session; verify orchestrator's last 10 actions are all coordination (not coding) |
-| ACP permission deadlock | ACP integration layer | Test: sub-agent issues permission request; block orchestrator; verify safe default applies after timeout |
-| Verbose output UX overload | Web dashboard: layered visibility | UX test: dashboard with 6 active agents; verify collapsed view shows only status summaries |
-| Prompt injection cross-agent | Security design phase | Test: inject malicious instruction in a file sub-agent reads; verify orchestrator does not execute it |
-| Interface contract drift | Pre-coding contracts step in orchestrator workflow | Test: two sub-agents implement same interface; types must match without orchestrator correction |
+| Rich Live + input terminal corruption | CLI entry point restructuring (Phase 1) | Test: stream 500 tokens while Live display is active — screen must not corrupt |
+| `asyncio.to_thread(input)` uncancellable | Input handling foundation (Phase 1) | Test: press Ctrl+C during active prompt — verify clean exit without requiring Enter key |
+| Chat history context exhaustion | Chat session lifecycle (Phase 2) | Test: 30-turn session — verify warning fires before API returns context error |
+| Smart delegation non-determinism | Delegation logic phase (Phase 3) | Test: 10 identical "rename this variable" requests — verify 0 sub-agents spawned each time |
+| Terminal raw mode left dirty | Input handling foundation (Phase 1) | Test: `kill -9` the process mid-prompt — run `stty -a` — verify echo is on |
+| Streaming blocks event loop | Streaming output display (Phase 2) | Test: measure event loop latency during 2000-token stream — verify <10ms gaps |
+| Typer `no_args_is_help` conflict | CLI entry point restructuring (Phase 1) | Test: `conductor` with no args enters chat; `conductor --help` shows help; `conductor run "..."` still works |
+| Chat/batch state isolation | State model extension (Phase 1) | Test: parallel `conductor run` + `conductor` session — verify state.json shows no cross-contamination |
+| Tool use display in chat | Streaming output display (Phase 2) | Test: trigger file read in chat turn — verify human-readable status, no raw JSON |
+| Session persistence on crash | Chat session lifecycle (Phase 2) | Test: kill -9 mid-turn — verify history recoverable from disk on next start |
 
 ---
 
 ## Sources
 
-- [Multi-agent workflows often fail — GitHub Blog](https://github.blog/ai-and-ml/generative-ai/multi-agent-workflows-often-fail-heres-how-to-engineer-ones-that-dont/) — MEDIUM confidence (official GitHub, practical guidance)
-- [Why Do Multi-Agent LLM Systems Fail? — arXiv 2503.13657](https://arxiv.org/html/2503.13657v1) — HIGH confidence (peer-reviewed research, 150+ execution traces)
-- [Claude Code Subagent Cost Explosion — AICosts.ai](https://www.aicosts.ai/blog/claude-code-subagent-cost-explosion-887k-tokens-minute-crisis) — MEDIUM confidence (real-world case study, single source)
-- [Race condition: .claude.json corruption — GitHub Issue #28847](https://github.com/anthropics/claude-code/issues/28847) — HIGH confidence (official Anthropic repository issue)
-- [Race condition: .claude.json corruption (Windows) — GitHub Issue #29036](https://github.com/anthropics/claude-code/issues/29036) — HIGH confidence (official Anthropic repository issue)
-- [Multi-Agent Coordination Strategies — Galileo](https://galileo.ai/blog/multi-agent-coordination-strategies) — MEDIUM confidence (practitioner guidance, multiple sources agree)
-- [Effective harnesses for long-running agents — Anthropic Engineering](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) — HIGH confidence (official Anthropic)
-- [Claude Code Sub-Agents: Parallel vs Sequential Patterns — ClaudeFast](https://claudefa.st/blog/guide/agents/sub-agent-best-practices) — MEDIUM confidence (community, aligns with official patterns)
-- [OWASP AI Agent Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/AI_Agent_Security_Cheat_Sheet.html) — HIGH confidence (OWASP official)
-- [Prompt injection / cross-agent trust boundary attacks — arXiv 2506.23260](https://arxiv.org/html/2506.23260v1) — HIGH confidence (peer-reviewed)
-- [Manage costs effectively — Claude Code official docs](https://code.claude.com/docs/en/costs) — HIGH confidence (official)
-- [Agent Token Usage API issue — Claude Code GitHub #10388](https://github.com/anthropics/claude-code/issues/10388) — HIGH confidence (official repository)
+- [Rich Live Display documentation](https://rich.readthedocs.io/en/stable/live.html) — HIGH confidence (official)
+- [Rich Live Display discussion: input during Live](https://github.com/Textualize/rich/discussions/1791) — HIGH confidence (official repo discussion, confirmed limitation)
+- [Rich thread-safety issue #1530](https://github.com/willmcgugan/rich/issues/1530) — HIGH confidence (official repo bug report)
+- [prompt_toolkit async_prompt cleanup issue #787](https://github.com/prompt-toolkit/python-prompt-toolkit/issues/787) — HIGH confidence (official repo, confirmed terminal state bug)
+- [prompt_toolkit async docs](https://python-prompt-toolkit.readthedocs.io/en/master/pages/asking_for_input.html) — HIGH confidence (official)
+- [CPython issue #107505: run_in_executor thread not stopped after task cancellation](https://github.com/python/cpython/issues/107505) — HIGH confidence (official CPython tracker)
+- [asyncio development guide (blocking calls)](https://docs.python.org/3/library/asyncio-dev.html) — HIGH confidence (official Python docs)
+- [Claude Agent SDK streaming docs](https://platform.claude.com/docs/en/agent-sdk/streaming-output) — HIGH confidence (official Anthropic)
+- [Claude Agent SDK agent loop docs](https://platform.claude.com/docs/en/agent-sdk/agent-loop) — HIGH confidence (official Anthropic)
+- [Claude Agent SDK tool use context costs](https://platform.claude.com/docs/en/agents-and-tools/tool-use/implement-tool-use) — HIGH confidence (official Anthropic)
+- [Context window management strategies](https://www.getmaxim.ai/articles/context-window-management-strategies-for-long-context-ai-agents-and-chatbots/) — MEDIUM confidence (practitioner article, aligns with Anthropic official guidance)
+- Codebase analysis: `/packages/conductor-core/src/conductor/cli/input_loop.py`, `run.py`, `orchestrator.py`, `display.py` — HIGH confidence (direct code review, pitfalls derived from existing patterns)
 
 ---
-*Pitfalls research for: multi-agent coding orchestration (Conductor)*
-*Researched: 2026-03-10*
+*Pitfalls research for: interactive chat TUI added to Conductor multi-agent orchestration CLI (v1.1)*
+*Researched: 2026-03-11*
