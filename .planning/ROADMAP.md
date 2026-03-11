@@ -215,7 +215,9 @@ Plans:
   2. Agent panel status and elapsed time update in real-time as state.json changes — without manual refresh or polling delay visible to the user
   3. Expanding an agent panel reveals streaming tool activity lines (file reads, edits, shell commands) as the agent works
   4. When an agent completes its task, its panel collapses or moves to an archived state — the panel does not remain as an active item
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 35-01-PLAN.md — AgentPanel, AgentMonitorPane StateWatchWorker, and tests
 
 ### Phase 36: Approval Modals
 **Goal**: Agent approval requests and escalation questions surface as modal overlays in the TUI — the user can approve or deny file changes and command execution, and reply to sub-agent questions, all without leaving the terminal
@@ -226,7 +228,9 @@ Plans:
   2. When an agent requests approval to run a command, a modal overlay appears showing the command and approve/deny options
   3. When a sub-agent escalates a question, a modal dialog appears prefixed with the agent ID and an input field — the user can type a reply and submit without any additional steps
   4. Approving or denying in the modal dismisses it and the background TUI immediately reactivates
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 35-01-PLAN.md — AgentPanel, AgentMonitorPane StateWatchWorker, and tests
 
 ### Phase 37: Slash Commands & Dashboard Coexistence
 **Goal**: Users can type `/` to trigger a fuzzy autocomplete popup for slash commands, all existing slash commands work correctly, and the web dashboard runs simultaneously in the same process so both TUI and browser views are live at once
@@ -238,7 +242,9 @@ Plans:
   3. All existing slash commands (`/help`, `/exit`, `/status`, `/summarize`, `/resume`) execute correctly from the Textual input widget
   4. Running `conductor --dashboard-port 8000` starts both the Textual TUI and the WebSocket dashboard server in a single process — opening the dashboard URL in a browser shows live state
   5. `conductor run "..."` batch mode still works without launching the TUI
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 35-01-PLAN.md — AgentPanel, AgentMonitorPane StateWatchWorker, and tests
 
 ### Phase 38: Session Persistence & Polish
 **Goal**: Resumed sessions replay conversation history before input activates, in-progress cells show shimmer animation, and all v2.0 polish is complete — the TUI delivers a terminal experience credibly better than the prompt_toolkit baseline
@@ -248,7 +254,9 @@ Plans:
   1. Running `conductor --resume` (or `--resume-id`) replays the prior conversation history as immutable cells in the transcript before the input widget activates
   2. While an assistant response is streaming, the active cell has a visible shimmer or pulse animation that stops when streaming completes
   3. The TUI passes a full end-to-end smoke test: launch, send a prompt, see streaming response, open agent monitor, approve a modal, use slash command, resume a session — all without error
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 35-01-PLAN.md — AgentPanel, AgentMonitorPane StateWatchWorker, and tests
 
 ## Progress
 
@@ -292,7 +300,7 @@ Phases execute in numeric order: 31 → 32 → 33 → 34 → 35 → 36 → 37 �
 | 32. Static TUI Shell | v2.0 | 0/TBD | Not started | - |
 | 33. SDK Streaming | 1/2 | In Progress|  | - |
 | 34. Rich Output | 1/1 | Complete   | 2026-03-11 | - |
-| 35. Agent Monitoring | v2.0 | 0/TBD | Not started | - |
+| 35. Agent Monitoring | v2.0 | 0/1 | In Progress | - |
 | 36. Approval Modals | v2.0 | 0/TBD | Not started | - |
 | 37. Slash Commands & Dashboard Coexistence | v2.0 | 0/TBD | Not started | - |
 | 38. Session Persistence & Polish | v2.0 | 0/TBD | Not started | - |
