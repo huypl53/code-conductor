@@ -22,7 +22,7 @@ from conductor.orchestrator.decomposer import TaskDecomposer
 from conductor.orchestrator.errors import DecompositionError, EscalationError
 from conductor.orchestrator.escalation import EscalationRouter, HumanQuery
 from conductor.orchestrator.identity import AgentIdentity, build_system_prompt
-from conductor.orchestrator.models import TaskSpec
+from conductor.orchestrator.models import OrchestratorConfig, TaskSpec
 from conductor.orchestrator.monitor import StreamMonitor
 from conductor.orchestrator.ownership import validate_file_ownership
 from conductor.orchestrator.reviewer import ReviewVerdict, review_output
@@ -115,15 +115,25 @@ class Orchestrator:
         max_agents: int = 10,
         max_revisions: int = 2,
         build_command: str | None = None,
+        config: OrchestratorConfig | None = None,
     ) -> None:
         self._state = state_manager
         self._repo_path = repo_path
         self._mode = mode
         self._human_out = human_out
         self._human_in = human_in
-        self._max_agents = max_agents
-        self._max_revisions = max_revisions
         self._build_command = build_command
+        self._config = config or OrchestratorConfig()
+        # Explicit max_agents param (non-default) overrides config (backward compat)
+        if max_agents != 10:
+            self._max_agents = max_agents
+        else:
+            self._max_agents = self._config.max_agents
+        # Explicit max_revisions param (non-default) overrides config (backward compat)
+        if max_revisions != 2:
+            self._max_revisions = max_revisions
+        else:
+            self._max_revisions = self._config.max_review_iterations
         self._decomposer = TaskDecomposer()
         self._escalation_router = EscalationRouter(
             mode=mode,

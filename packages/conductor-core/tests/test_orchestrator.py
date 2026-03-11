@@ -2674,3 +2674,74 @@ class TestPostRunBuild:
             await orch.resume()
 
         mock_proc.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Phase 26: OrchestratorConfig wiring tests
+# ---------------------------------------------------------------------------
+
+
+class TestOrchestratorConfigWiring:
+    """Verify Orchestrator accepts OrchestratorConfig and uses it for defaults."""
+
+    def test_default_construction_uses_config_defaults(self):
+        """Default Orchestrator should have max_revisions=2, max_agents=10 from config."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+        assert orch._max_revisions == 2
+        assert orch._max_agents == 10
+
+    def test_custom_config_flows_through(self):
+        """OrchestratorConfig values flow through to _max_revisions and _max_agents."""
+        from conductor.orchestrator.models import OrchestratorConfig
+        from conductor.orchestrator.orchestrator import Orchestrator
+        state_mgr = _make_state_manager()
+        cfg = OrchestratorConfig(max_review_iterations=5, max_agents=3)
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo", config=cfg)
+        assert orch._max_revisions == 5
+        assert orch._max_agents == 3
+
+    def test_explicit_max_revisions_overrides_config(self):
+        """Explicitly passing max_revisions (non-default) takes precedence over config."""
+        from conductor.orchestrator.models import OrchestratorConfig
+        from conductor.orchestrator.orchestrator import Orchestrator
+        state_mgr = _make_state_manager()
+        cfg = OrchestratorConfig(max_review_iterations=5)
+        orch = Orchestrator(
+            state_manager=state_mgr, repo_path="/repo",
+            config=cfg, max_revisions=7,
+        )
+        assert orch._max_revisions == 7
+
+    def test_explicit_max_agents_overrides_config(self):
+        """Explicitly passing max_agents (non-default) takes precedence over config."""
+        from conductor.orchestrator.models import OrchestratorConfig
+        from conductor.orchestrator.orchestrator import Orchestrator
+        state_mgr = _make_state_manager()
+        cfg = OrchestratorConfig(max_agents=3)
+        orch = Orchestrator(
+            state_manager=state_mgr, repo_path="/repo",
+            config=cfg, max_agents=8,
+        )
+        assert orch._max_agents == 8
+
+    def test_config_attribute_stored(self):
+        """_config attribute is accessible on Orchestrator instance."""
+        from conductor.orchestrator.models import OrchestratorConfig
+        from conductor.orchestrator.orchestrator import Orchestrator
+        state_mgr = _make_state_manager()
+        cfg = OrchestratorConfig(max_review_iterations=3)
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo", config=cfg)
+        assert orch._config is cfg
+        assert orch._config.max_review_iterations == 3
+
+    def test_no_config_creates_default_config(self):
+        """When no config is passed, a default OrchestratorConfig is created."""
+        from conductor.orchestrator.models import OrchestratorConfig
+        from conductor.orchestrator.orchestrator import Orchestrator
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
+        assert isinstance(orch._config, OrchestratorConfig)
+        assert orch._config.max_review_iterations == 2
+        assert orch._config.max_decomposition_retries == 3
