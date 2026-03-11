@@ -48,14 +48,14 @@ Requirements for the UX Polish milestone. Each maps to roadmap phases.
 
 ### Focus & Input
 
-- [ ] **FOCUS-01**: Input widget is auto-focused when TUI starts
+- [x] **FOCUS-01**: Input widget is auto-focused when TUI starts
 - [ ] **FOCUS-02**: User can press Ctrl-G to open current input in external editor (vim/$EDITOR)
 - [ ] **FOCUS-03**: After editor closes, edited content replaces input widget text
 
 ### Terminal Integration
 
-- [ ] **TERM-01**: TUI uses full alt-screen mode with clean entry/exit
-- [ ] **TERM-02**: SIGINT (Ctrl-C) routes through clean shutdown, restoring terminal state
+- [x] **TERM-01**: TUI uses full alt-screen mode with clean entry/exit
+- [x] **TERM-02**: SIGINT (Ctrl-C) routes through clean shutdown, restoring terminal state
 
 ### Visual Design
 
@@ -154,9 +154,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | APRV-04 | Phase 37 | Pending |
 | STAT-02 | Phase 38 | Complete |
 | STAT-03 | Phase 38 | Complete |
-| FOCUS-01 | Phase 39 | Pending |
-| TERM-01 | Phase 39 | Pending |
-| TERM-02 | Phase 39 | Pending |
+| FOCUS-01 | Phase 39 | Complete |
+| TERM-01 | Phase 39 | Complete |
+| TERM-02 | Phase 39 | Complete |
 | VIS-01 | Phase 40 | Pending |
 | VIS-02 | Phase 40 | Pending |
 | VIS-03 | Phase 41 | Pending |
