@@ -99,10 +99,14 @@ The orchestrator decides whether to handle requests directly (simple edits) or d
 Chat sessions are automatically saved to disk. If the process crashes or you exit, resume where you left off:
 
 ```bash
-conductor --resume pick
+conductor --resume
 ```
 
-This shows a numbered list of recent sessions. Select one to restore the full conversation history.
+This shows a numbered list of recent sessions. Select one to restore the full conversation history. You can also resume a specific session by ID:
+
+```bash
+conductor --resume-id abc123
+```
 
 ---
 
@@ -222,7 +226,7 @@ This verification catches the case where an agent was marked complete but never 
 
 ```bash
 # Pick from recent sessions
-conductor --resume pick
+conductor --resume
 
 # Resume a specific session by ID
 conductor --resume abc123
@@ -232,12 +236,19 @@ conductor --resume abc123
 
 ## Using the Web Dashboard (Optional)
 
-The dashboard gives you a real-time visual view of agent activity with expandable detail cards and intervention controls.
+The dashboard gives you a real-time visual view of agent activity with expandable detail cards and intervention controls. The `--dashboard-port` flag works with all modes — batch, interactive chat, and resume.
 
 **Step 1:** Start a session with the dashboard enabled:
 
 ```bash
+# Batch mode
 conductor run "Refactor the authentication module" --auto --dashboard-port 8000
+
+# Interactive chat
+conductor --dashboard-port 8000
+
+# Resume a chat session
+conductor --resume --dashboard-port 8000
 ```
 
 **Step 2:** In a separate terminal, start the dashboard server:

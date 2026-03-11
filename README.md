@@ -140,17 +140,25 @@ Common build commands by language:
 # Resume an interrupted batch orchestration
 conductor run --resume --repo ~/my-project
 
-# Resume a chat session
-conductor --resume pick
+# Resume a chat session (opens picker)
+conductor --resume
 ```
 
 Resume verifies that completed tasks' target files actually exist on disk. If a file is missing (e.g. an agent was marked complete but never wrote the file), the task is automatically re-run.
 
 ### With web dashboard
 
+The `--dashboard-port` flag works with all modes — batch, interactive chat, and resume:
+
 ```bash
-# Terminal 1 — start a session with dashboard backend
+# Terminal 1 — batch mode with dashboard
 conductor run "Add dark mode" --auto --dashboard-port 8000
+
+# Terminal 1 — interactive chat with dashboard
+conductor --dashboard-port 8000
+
+# Terminal 1 — resume a chat session with dashboard
+conductor --resume --dashboard-port 8000
 
 # Terminal 2 — start the dashboard frontend
 conductor-dashboard 4173

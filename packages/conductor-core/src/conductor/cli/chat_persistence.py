@@ -75,6 +75,7 @@ class ChatHistoryStore:
 
     def _flush(self) -> None:
         """Write the full session to disk atomically via temp-file rename."""
+        self._base_dir.mkdir(parents=True, exist_ok=True)
         data = {
             "session_id": self._session_id,
             "created_at": self._created_at,

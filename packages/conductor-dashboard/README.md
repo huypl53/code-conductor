@@ -29,11 +29,17 @@ Then open [http://localhost:4173](http://localhost:4173) in your browser.
 
 ## Requirements
 
-The dashboard requires the Python `conductor-ai` backend running with the `--dashboard-port` flag:
+The dashboard requires the Python `conductor-ai` backend running with the `--dashboard-port` flag. This works with all modes:
 
 ```bash
-# Start the orchestrator with dashboard support
+# Batch mode
 conductor run "Add a settings page" --auto --dashboard-port 8765
+
+# Interactive chat
+conductor --dashboard-port 8765
+
+# Resume a chat session
+conductor --resume --dashboard-port 8765
 ```
 
 Install the backend with:
@@ -56,8 +62,9 @@ In production, the dashboard is a static site served by the `conductor-dashboard
 ### Starting both servers
 
 ```bash
-# Terminal 1 — start the orchestrator/backend
+# Terminal 1 — start the backend (batch or chat mode)
 conductor run "Add a settings page" --auto --dashboard-port 8765
+# or: conductor --dashboard-port 8765
 
 # Terminal 2 — start the dashboard, pointing at the backend
 conductor-dashboard --backend-url http://127.0.0.1:8765
