@@ -1,436 +1,385 @@
 # Pitfalls Research
 
-**Domain:** Adding a Textual TUI to an existing Python asyncio application (Conductor v2.0)
+**Domain:** Adding UX polish (alt-screen, borderless CSS, animations, external editor) to existing Textual TUI — Conductor v2.1
 **Researched:** 2026-03-11
-**Confidence:** HIGH (Textual official docs + GitHub issues + codebase analysis)
+**Confidence:** HIGH (codebase analysis + Textual official docs + confirmed Phase 38 bug log)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Textual Owns the Event Loop — No Cohabitation with asyncio.run()
+### Pitfall 1: Widget.animate("styles.tint", ...) Fails — Dot-Path Attribute Not Resolved
 
 **What goes wrong:**
-`App.run()` calls `asyncio.run()` internally, which creates a new event loop. The current codebase already runs an event loop via the orchestrator coroutines, the FastAPI/uvicorn server, and the Claude Agent SDK's async generator. If any of these subsystems also call `asyncio.run()` — or if the Textual app is started from within a running loop — Python raises `RuntimeError: This event loop is already running`.
+`Widget.animate("styles.tint", Color(...), ...)` raises `AttributeError` at runtime. Textual's animator calls `getattr(self, attribute)` internally, and the dot-path `"styles.tint"` is not resolved — only top-level attribute names work. The animation callback fires but the tint never changes.
 
 **Why it happens:**
-Developers assume Textual "wraps" their existing async code. It does not. Textual creates and owns a fresh event loop. The existing prompt_toolkit approach uses `patch_stdout()` to coexist with Rich in a shared loop, but Textual's architecture is fundamentally different — it is the event loop owner, not a guest.
-
-The existing code in `chat.py` calls `asyncio.shield()`, `asyncio.create_task()`, and prompt_toolkit's `PromptSession.prompt_async()` all within one loop. That loop must become Textual's loop, not a separate one.
+This was the exact bug hit in Phase 38 (documented in `38-01-SUMMARY.md`, commit `cb4d868`). The research doc for Phase 38 recommended `animate("styles.tint", ...)` as the pattern, but live execution showed that Textual's `animate()` does a simple `getattr(widget, "styles.tint")` which fails since Python attribute access does not resolve dot paths. The fix was a `set_interval` + sine wave on `self.styles.tint` directly.
 
 **How to avoid:**
-- Start Textual as the top-level `asyncio.run()` entry point. All other async work (Claude Agent SDK queries, orchestrator delegation, FastAPI server) must run as Textual workers or as tasks on Textual's loop.
-- For FastAPI/uvicorn: use `uvicorn.Server` with `Config` and `await server.serve()` as a Textual async worker — never `uvicorn.run()` which calls `asyncio.run()` internally.
-- The Claude Agent SDK's `ClaudeSDKClient.connect()` / `receive_response()` are async coroutines; they compose naturally into Textual workers once the event loop ownership is settled.
-- Do not reach for `nest_asyncio` as a fix — it masks the symptom and fails in production async contexts.
+Use `set_interval` + a manual sine-wave tick function that writes to `self.styles.tint` directly. Do not attempt `animate("styles.tint", ...)` or `animate("tint", ...)` unless the Textual version explicitly documents dot-path support in `ANIMATABLE`. The current implementation in `transcript.py` already uses the correct pattern:
+```python
+self._shimmer_timer = self.set_interval(_SHIMMER_INTERVAL, self._shimmer_tick)
+
+def _shimmer_tick(self) -> None:
+    self._shimmer_phase += _SHIMMER_INTERVAL
+    t = (math.sin(2 * math.pi * self._shimmer_phase / _SHIMMER_PERIOD) + 1) / 2
+    alpha = _SHIMMER_ON.a * t
+    self.styles.tint = Color(_SHIMMER_ON.r, _SHIMMER_ON.g, _SHIMMER_ON.b, alpha)
+```
 
 **Warning signs:**
-- `RuntimeError: This event loop is already running` at startup
-- Tests that worked with `asyncio.run()` now hang or fail
-- `nest_asyncio` appearing as a "fix" in any PR
+- `AttributeError: 'Styles' object has no attribute 'styles'` in logs
+- Animation `on_complete` callback fires but widget color never visually changes
+- Shimmer appears to work in unit tests (where `styles.tint` assignment is direct) but not in running app
 
 **Phase to address:**
-Phase 1 (Skeleton / event loop architecture) — the entry-point design must be resolved before any UI work begins.
+Any phase adding CSS property animations — verify against Textual source before choosing `animate()` over `set_interval`.
 
 ---
 
-### Pitfall 2: Stdout/Stderr Corruption — Rich Console Writes Fight Textual's Renderer
+### Pitfall 2: Shimmer Timer Not Stopped on Widget Finalization — Timer Leak
 
 **What goes wrong:**
-The current codebase writes directly to stdout/stderr via `Console(stderr=True, highlight=False)` at arbitrary times. Textual takes exclusive control of the terminal when running. Any `print()`, `console.print()`, or Rich `Console` write that bypasses Textual's renderer causes partial overwrite of the TUI layout, garbled output, and invisible text painted behind widget regions.
-
-Specifically, the `_status_updater()` and `_clear_status_lines()` in `delegation.py` use raw ANSI escape codes (`\033[A\033[2K`) to overwrite lines. These escape codes are invisible to Textual's compositor and will corrupt the display.
+`AssistantCell.finalize()` must stop the `set_interval` shimmer timer. If `_shimmer_timer.stop()` is not called before `self._is_streaming = False`, the timer callback keeps firing after the cell is finalized. Each tick checks `_is_streaming` and tries to clear the tint, but the timer itself runs indefinitely, consuming CPU and producing spurious widget refreshes on an immutable cell.
 
 **Why it happens:**
-prompt_toolkit's `patch_stdout()` context manager temporarily re-routes stdout so Rich prints appear above the input prompt — a hack that works because prompt_toolkit renders only a single input line. Textual renders the entire screen; there is no "safe" region for external writes.
-
-Textual intercepts `print()` and routes it to devtools (or `/dev/null` if devtools is off). But `Console` objects that write directly to `sys.stderr` bypass this capture.
+`set_interval` returns a `Timer` object that runs independently of widget state. Unlike `animate()` which has built-in completion callbacks, `set_interval` has no automatic stop condition. If the finalization code path is interrupted by an exception, or if `_is_streaming` is set before `_shimmer_timer.stop()`, the orphaned timer continues ticking.
 
 **How to avoid:**
-- Remove all `Console.print()` calls from business logic during TUI lifetime. Route all output through Textual widget updates: `RichLog.write()`, `Static.update()`, or custom `Message` + handler chains.
-- The `_status_updater` / `_clear_status_lines` pattern must be replaced entirely by a Textual widget that owns a status panel. ANSI cursor manipulation has no equivalent in Textual — use reactive attributes on a `Static` widget instead.
-- The `Console(stderr=True, highlight=False)` instances in `delegation.py`, `input_loop.py`, and `display.py` must be removed from all code paths that run while the TUI is active.
+In `finalize()`, always stop the timer first, then clear `_is_streaming`:
+```python
+async def finalize(self) -> None:
+    if self._stream is not None:
+        await self._stream.stop()
+        self._stream = None
+    # Stop timer BEFORE clearing streaming flag
+    if self._shimmer_timer is not None:
+        self._shimmer_timer.stop()
+        self._shimmer_timer = None
+    self.styles.tint = _SHIMMER_OFF
+    self._is_streaming = False
+```
+The current implementation in `transcript.py` already does this correctly. New phases adding animations must replicate the same cleanup sequence.
 
 **Warning signs:**
-- Terminal shows garbled output or flashing during delegation runs
-- Textual layout "glitches" after each orchestrator status update
-- Text appears and immediately disappears or overlaps widgets
+- CPU usage remains elevated after a response finishes streaming
+- `_shimmer_tick` appears in profiling output on cells that are not actively streaming
+- Timer count grows with each exchange (visible via `app._workers`)
 
 **Phase to address:**
-Phase 1 (entry-point refactor) and Phase 2 (first widget), because the output routing architecture must be defined before any streaming display is built.
+Phase adding shimmer or any `set_interval`-based animation — enforce stop-before-clear in code review.
 
 ---
 
-### Pitfall 3: Claude Agent SDK Subprocess Output Leaks Into the Terminal
+### Pitfall 3: app.suspend() Race Condition — Textual Driver Eats Vim Keystrokes
 
 **What goes wrong:**
-The Claude Agent SDK runs the Claude Code CLI as a subprocess. That subprocess can write to stdout/stderr directly, bypassing both Textual's capture and the Python-level `print()` intercept. During streaming, raw bytes from the subprocess paint over the Textual TUI.
+When launching an external editor (vim) via `app.suspend()`, Textual's input driver thread continues reading stdin for a brief window after `suspend()` is called and before the editor takes terminal ownership. Keystrokes typed in the terminal during this race window are consumed by Textual and discarded. In practice: the user types in vim's normal mode but some characters go to Textual's input handler instead.
 
 **Why it happens:**
-Python's `begin_capture_print()` only intercepts Python-level `sys.stdout` / `sys.stderr` writes. Child processes get their own file descriptors inherited from the parent. If the SDK subprocess inherits the terminal's stdout, it can write to it independently of the Textual app.
+This is a documented race in Textual issue #1093, fixed by PR #4064 (which introduced `app.suspend()`). The `suspend()` context manager is the correct approach, but the race window is not zero on all terminals. On Kitty terminal, escape sequences can still interfere with input handling even with `suspend()`.
 
 **How to avoid:**
-- Verify what the Claude Agent SDK subprocess inherits for stdout/stderr. Redirect subprocess stdout/stderr to `PIPE` if the SDK supports it (inspect `ClaudeAgentOptions` for pipe settings or `capture_output`).
-- If the SDK does not expose pipe configuration, wrap the subprocess launch so that its stdout/stderr are redirected to asyncio queues before the Textual app starts.
-- Route all streamed SDK messages through `async for message in client.receive_response()` — which the existing code already does correctly. The risk is only if the subprocess also writes to the inherited terminal fd independently.
+- Use `app.suspend()` as the context manager (not a manual termios save/restore). This is the only supported path for external editor integration.
+- Do not spawn `subprocess.run(["vim", ...])` directly without `app.suspend()`. The terminal will be in raw mode when Textual runs; vim will receive a broken terminal.
+- After the editor exits, read the temp file content inside the `with app.suspend():` block, before the block exits and Textual recaptures the terminal.
+- Test on Kitty specifically if supporting that terminal — it has known edge cases.
+
+```python
+import tempfile, subprocess, os
+async def _open_in_editor(self) -> str | None:
+    with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f:
+        path = f.name
+    with self.app.suspend():
+        subprocess.run([os.environ.get("EDITOR", "vim"), path])
+        content = open(path).read()
+    os.unlink(path)
+    return content.strip() or None
+```
 
 **Warning signs:**
-- Raw JSON or ANSI escape sequences appear in the TUI outside of widget boundaries
-- `[ERROR]` or subprocess error messages paint over the layout
-- TUI becomes partially unresponsive after SDK subprocess exit
+- Vim opens but character input is garbled or missing on first keypress
+- Terminal left in broken state (no echo, no line wrap) after vim exits
+- Cursor remains hidden after returning to Textual
 
 **Phase to address:**
-Phase 1 (SDK integration architecture) — verify subprocess fd inheritance before the first widget is built.
+Phase implementing Ctrl-G external editor integration — use `app.suspend()` from the start; do not prototype with raw `subprocess.run`.
 
 ---
 
-### Pitfall 4: Thread Safety Violations When Updating Widgets from Workers
+### Pitfall 4: Terminal State Not Restored After Editor Crash or SIGKILL
 
 **What goes wrong:**
-The orchestrator (`delegation.py`) spawns `asyncio.Task` objects for `_status_updater` and `_escalation_listener`. These tasks currently call `self._console.print()` directly. In the Textual world, calling widget methods from a worker task that runs in a different asyncio context (or a thread) causes `NoActiveAppError` or silently drops updates.
-
-More broadly: Textual is not thread-safe. Any update to a widget must happen on the Textual event loop's thread via the widget's own coroutines, `call_from_thread()` (for thread workers), or `post_message()`.
+If vim crashes (SIGSEGV, OOM kill, or user sends SIGKILL to the process), the `with app.suspend():` block exits without vim having restored terminal state. The terminal may be left in raw mode, no-echo, or with mouse tracking enabled. Textual recaptures the terminal and renders correctly — but if Textual itself then crashes or exits uncleanly, the user's shell is left broken (no echo, no line wrapping).
 
 **Why it happens:**
-The existing code in `delegation.py` uses `asyncio.create_task()` for background updates. Under Textual, the context variable that identifies the active app may not propagate to tasks created outside of Textual's startup context, especially in Python < 3.11.
+`app.suspend()` saves terminal settings and restores them on block exit via a `try/finally`. But if the block exit itself raises an exception (e.g., the temp file write fails after vim exits), the `finally` may not complete. Additionally, `app.suspend()` does not catch SIGKILL — no cleanup runs on process kill.
 
 **How to avoid:**
-- Convert `_status_updater` to a Textual `@work` async worker; use `self.app.call_from_thread()` or widget `post_message()` for any UI update from within it.
-- For thread workers (SDK subprocess I/O): always use `App.call_from_thread()` to update reactive attributes or call widget methods.
-- Prefer posting Textual `Message` subclasses and handling them in `on_*` handlers — this is the idiomatic, thread-safe pattern.
-- Check `worker.is_cancelled` before any UI update in long-running workers to avoid race conditions during shutdown.
+- Wrap the entire `app.suspend()` block in its own `try/except` inside the Textual event handler. Log errors; do not let them propagate up to crash the app.
+- After exiting `suspend()`, immediately call `self.app.refresh()` to force Textual to re-assert its terminal state.
+- For Ctrl-G integration, disable the Ctrl-G binding while the editor is open to prevent double-launch.
 
 **Warning signs:**
-- `NoActiveAppError` exceptions in worker tasks
-- Widget state updates that appear to be silently dropped
-- Status lines stop updating mid-delegation without error
+- Terminal shows no echo after `conductor` exits following a vim crash
+- Running `stty sane` is required to recover the terminal after testing
+- Textual's `cursor_visible` flag is out of sync with terminal state
 
 **Phase to address:**
-Phase 2 (delegation status panel) — the `_status_updater` is the first multi-task interaction with the TUI.
+Phase implementing external editor — add `try/except` around suspend block and post-exit `refresh()` call before merging.
 
 ---
 
-### Pitfall 5: asyncio Task Garbage Collection — "Fire and Forget" Workers Die Silently
+### Pitfall 5: Borderless Design — CSS Specificity Fights with Widget DEFAULT_CSS
 
 **What goes wrong:**
-`asyncio.create_task()` returns a `Task` object. If that reference is not stored somewhere (a list, a set, an instance variable), Python's garbage collector can delete the task mid-execution. The task's code stops running silently, with no exception and no log entry. This is the "Heisenbug" documented by Textual.
-
-In `delegation.py`, `_status_task` and `_escalation_task` are stored as instance variables — correctly. But if any future phase adds "fire and forget" tasks (e.g., for streaming token updates, background health checks), they will disappear under GC pressure.
+Removing borders from existing widgets via `conductor.tcss` (app-level CSS file) requires understanding Textual's CSS cascade. A rule like `Input { border: none; }` in `conductor.tcss` will win over `CommandInput Input { border: none; }` in `CommandInput.DEFAULT_CSS`. But a rule like `Input { border: tall $accent; }` in `Input.DEFAULT_CSS` (Textual's built-in widget CSS) will lose to any app-level rule. The failure mode is: a seemingly correct `border: none;` rule in `conductor.tcss` appears to do nothing because a compound selector in a widget's own `DEFAULT_CSS` has higher specificity.
 
 **Why it happens:**
-Unlike threads, asyncio tasks do not keep themselves alive. The event loop only holds a weak reference. Once no strong reference remains in user code, GC is free to collect the task.
+Textual's specificity rules: App-level CSS (CSS_PATH or CSS class var) wins over any widget `DEFAULT_CSS`. Within the same level, more-specific selectors win (IDs > classes > types). The existing `conductor.tcss` uses only ID and type selectors (`#app-body`, `Screen`). The widget `DEFAULT_CSS` uses compound type selectors like `CommandInput Input`. To remove a border declared in `CommandInput.DEFAULT_CSS`, the app-level rule must be at least as specific: `CommandInput Input { border: none; }` — not just `Input { border: none; }`.
+
+There is also a known Textual bug (issue #1335, fixed in PR #1336) where DEFAULT_CSS from a widget's ancestor can override the widget's own DEFAULT_CSS when the widget has no instances mounted in other screens. This is fixed in Textual 8.x.
 
 **How to avoid:**
-- Use a module-level or app-level `_background_tasks: set[asyncio.Task]` and call `task.add_done_callback(_background_tasks.discard)` for any task that must outlive its creator's scope.
-- Prefer Textual's `@work` decorator over raw `create_task()` — Textual's `WorkerManager` holds references automatically.
-- Code review trigger: search for `asyncio.create_task(` without an accompanying variable assignment or `_background_tasks.add()` call.
+- Use compound selectors in `conductor.tcss` that match the widget hierarchy: `CommandInput Input { border: none; }` not just `Input { border: none; }`.
+- When making something borderless, target `border: none;` and also `padding: 0;` — padding is often set alongside border in DEFAULT_CSS and causes visual indentation even when the border is removed.
+- Use `!important` only as a last resort for Textual built-in widgets with deeply nested DEFAULT_CSS rules.
+- Test with `textual console` + CSS inspector to verify which rule is winning.
 
 **Warning signs:**
-- Background updates work in development (where GC rarely fires) but drop intermittently in production
-- Worker count stays at zero despite active tasks being expected
-- Status displays freeze after a few seconds without error
+- `border: none;` in `conductor.tcss` appears to have no effect on a widget
+- Removing a widget's border leaves a gap/padding where the border was
+- CSS rule works in isolation but not when the widget is inside a container
 
 **Phase to address:**
-Phase 1 (architecture) — establish a convention for background tasks before any phase spawns them.
+Phase implementing borderless/minimal chrome design — audit each widget's `DEFAULT_CSS` for compound selectors before writing override rules.
 
 ---
 
-### Pitfall 6: High-Frequency Streaming Causes TUI Flicker and Input Lag
+### Pitfall 6: Input Auto-Focus Timing — focus() Before Widget Enters Focus Chain
 
 **What goes wrong:**
-The current code streams tokens by calling `self._console.print(chunk, end="")` for every `text_delta` event. In Textual, calling `widget.update()` or `rich_log.write()` for every single token triggers a full widget refresh cycle (layout → compositor → render → output). At typical LLM streaming speeds (20-60 tokens/second across multiple concurrent agents), this saturates the compositor and causes visible flicker and input lag.
+Calling `self.query_one(CommandInput).query_one(Input).focus()` in `on_mount()` may not work if the widget has not yet entered Textual's focus chain. In Textual v2.0+, `allow_focus()` is evaluated during the focus chain update, which happens after `on_mount` completes — not during it. A `focus()` call during `on_mount` may be silently ignored if the widget's focusability state has not yet been registered.
 
 **Why it happens:**
-Textual's compositor is optimized for partial updates but still has overhead per update cycle. The `RichLog` widget specifically notes that "a downside of widgets that return Rich renderables is that Textual will redraw the entire widget when its state is updated." When multiple agent streams write simultaneously, the update rate can exceed 100 updates/second.
+Textual issue #5605 (March 2025) documents that `can_focus` set in `on_mount` is no longer respected in v2.0+ because the focus chain is evaluated before mount handlers run. The same timing issue affects explicit `focus()` calls: if the widget has `disabled=True` at the time `focus()` is called, focus is rejected but no error is raised.
+
+In the current code, `CommandInput` is disabled during session replay. After replay, `_replay_session()` calls `cmd.query_one(Input).focus()`. This works because `disabled` is set to `False` just before `focus()` — the sequence is correct. But any new phase that calls `focus()` during `on_mount` (before `disabled` state is resolved) will silently fail.
 
 **How to avoid:**
-- Batch streaming token updates: accumulate chunks in a buffer and flush to the widget on a timer (e.g., `set_interval(0.05, flush_buffer)` — 20fps max update rate).
-- Use `RichLog` for streaming output (it is designed for append-only real-time logs and is more efficient than `Static` for this pattern).
-- Do not use `Static.update()` for token-by-token streaming — it re-renders the entire widget on each call.
-- For concurrent agent panels, use Textual's reactive batching: modifying multiple reactive attributes triggers only a single refresh cycle.
-- Set `max_lines` on `RichLog` to prevent unbounded memory growth during long agent runs.
-
-**Warning signs:**
-- TUI becomes unresponsive during active streaming
-- Visible "tearing" or flicker in the streaming cell
-- Input keystrokes are dropped or delayed during high-output phases
-- CPU usage spikes to 100% during streaming
-
-**Phase to address:**
-Phase 2 (streaming cell / transcript widget) — the buffering strategy must be baked in from the first streaming implementation.
-
----
-
-### Pitfall 7: Modal Approval Overlays Block the Event Loop Without Proper Async Suspension
-
-**What goes wrong:**
-The current escalation bridge in `delegation.py` collects human input via `await self._input_fn("  Reply> ")` which wraps prompt_toolkit's `prompt_async()`. In Textual, modal approval dialogs must be implemented via Textual's screen stack using `await self.app.push_screen_wait()`. If a developer tries to replicate the current pattern using `asyncio.Queue.get()` awaited inside a Textual worker without properly suspending the application UI, the modal "blocks" but the TUI continues rendering — the user can click buttons that should be disabled.
-
-**Why it happens:**
-The mental model from prompt_toolkit (where input blocks the loop) does not transfer to Textual (where the loop runs continuously and input is event-driven). Approval workflows require a suspend/resume pattern using Textual's screen lifecycle.
-
-**How to avoid:**
-- Use `app.push_screen_wait(ApprovalScreen(...))` which correctly suspends the caller and resumes when the modal screen is dismissed with a result.
-- The escalation queue (`human_out` / `human_in`) in `delegation.py` must be bridged via a Textual `Message` + modal screen pair: when `human_out.get()` fires, post a message to the app which pushes the approval screen.
-- Never block a Textual async worker with `await queue.get()` while expecting the TUI to remain fully interactive — the worker will freeze its task but the event loop continues, leaving UI state inconsistent.
-
-**Warning signs:**
-- Approval screen appears but background agent panels continue updating unexpectedly
-- User can interact with elements that should be blocked during approval
-- `push_screen_wait()` deadlock if called from a non-app coroutine
-
-**Phase to address:**
-Phase 3 (modal approval overlays) — the entire escalation bridge must be redesigned around Textual's screen stack, not asyncio queues.
-
----
-
-### Pitfall 8: prompt_toolkit Keybindings and Input Semantics Are Not Portable
-
-**What goes wrong:**
-The current `ChatSession` uses prompt_toolkit for vi mode, `Ctrl+G` to open editor, `Ctrl+C` cancellation, `InMemoryHistory`, and `patch_stdout()`. None of these APIs exist in Textual. Attempting to run prompt_toolkit alongside Textual in the same terminal session fails catastrophically because both frameworks try to own terminal raw mode (termios settings).
-
-Specific migration gaps:
-- `PromptSession.prompt_async()` → must become Textual's `Input` widget with `on_input_submitted` handler
-- `vi_mode=True` → Textual's `Input` has no built-in vi mode; requires custom key binding via `@on(Key)` handlers
-- `InMemoryHistory` → must be reimplemented with a Python `deque` and `Up`/`Down` key handlers
-- `open_in_editor()` via `Ctrl+G` → must use `app.suspend()` to temporarily release the terminal, launch editor, then resume
-- `patch_stdout()` → entirely replaced by Textual's rendering; no equivalent needed
-
-**Why it happens:**
-prompt_toolkit and Textual are both full terminal-ownership frameworks. They cannot coexist in the same terminal session. The migration is a clean replacement, not an extension.
-
-**How to avoid:**
-- Remove `from prompt_toolkit import ...` entirely from all modules that will run while Textual is active.
-- Implement input history with a simple Python `deque` and wire `Key("up")`/`Key("down")` bindings on an `Input` widget.
-- Implement `app.suspend()` for editor integration — Textual provides this built-in to safely release and recapture the terminal.
-- Accept that vi-mode keybindings require custom implementation; do not block TUI work on feature parity with the old system.
-
-**Warning signs:**
-- `import prompt_toolkit` anywhere in code paths that run after `App.run()` starts
-- Two terminal raw-mode owners fighting → terminal left in broken state on exit
-- `KeyboardInterrupt` from prompt_toolkit firing inside Textual's event loop
-
-**Phase to address:**
-Phase 1 (entry-point refactor) — prompt_toolkit must be fully removed from the startup path before any Textual code runs.
-
----
-
-### Pitfall 9: Textual Testing and pytest-asyncio Fixture Incompatibility
-
-**What goes wrong:**
-`App.run_test()` creates asyncio context variables to track the active app. In pytest, fixtures and test functions run in different asyncio tasks. Context variables from a fixture's task do not propagate to the test function's task, causing `NoActiveAppError` when the test tries to query widget state. This is a known incompatibility documented in Textual GitHub issue #4998.
-
-A secondary issue: if any test calls `asyncio.run()` directly (e.g., a non-Textual unit test earlier in the suite), subsequent calls to `pytest-textual-snapshot`'s `snap_compare` fixture fail with `RuntimeError: There is no current event loop in thread 'MainThread'` (GitHub issue #5788).
-
-**Why it happens:**
-pytest-asyncio creates a fresh event loop per test. Fixtures run in their own coroutine context. When `run_test()` stores app context in a `contextvars.ContextVar`, that context is not inherited by tests in a different task on the same loop.
-
-**How to avoid:**
-- Put `async with app.run_test() as pilot:` directly inside the test function, not in a pytest fixture.
-- Use `pytest-asyncio >= 0.25.0` with Python >= 3.11 where context propagation is fixed.
-- Ensure `asyncio_mode = "auto"` in `pyproject.toml` to avoid per-test `@pytest.mark.asyncio` decoration.
-- Keep Textual snapshot tests (`snap_compare`) in a separate test file from non-Textual asyncio tests to prevent loop contamination.
-- Never mix `asyncio.run()` calls in a pytest session that also runs Textual tests.
-
-**Warning signs:**
-- `NoActiveAppError` in test output
-- Tests pass when run individually but fail when run with the full suite
-- `RuntimeError: There is no current event loop` only after certain test ordering
-
-**Phase to address:**
-Phase 1 (test infrastructure setup) — establish testing patterns before any widget tests are written.
-
----
-
-### Pitfall 10: FastAPI/Uvicorn WebSocket Server Cannot Use uvicorn.run() Inside Textual
-
-**What goes wrong:**
-The existing `dashboard/server.py` can be launched via `uvicorn.run(create_app(...), ...)`. Inside a Textual app, `uvicorn.run()` calls `asyncio.run()` internally, which raises `RuntimeError: This event loop is already running` because Textual already owns the loop.
-
-Additionally, the current `create_app()` uses `asyncio.Event()` and `asyncio.create_task()` in a `lifespan` context manager that assumes a running loop at module init time. This is fine when uvicorn runs its own loop but causes `DeprecationWarning: There is no current event loop` under Python 3.12+ if triggered at import time.
-
-**Why it happens:**
-`uvicorn.run()` is designed as a top-level entrypoint. It always creates a new event loop. The `uvicorn.Config` + `uvicorn.Server` approach with `await server.serve()` is the correct way to run uvicorn inside an existing event loop.
-
-**How to avoid:**
-- Replace `uvicorn.run(...)` with the `uvicorn.Config` + `uvicorn.Server` pattern and run it as a Textual async worker:
+- Always set `disabled = False` before calling `.focus()`.
+- For auto-focus on startup, use Textual's built-in `FOCUS_ON_MOUNT` or `auto_focus` Screen attribute (a CSS selector) instead of manual `focus()` calls in `on_mount`:
   ```python
-  config = uvicorn.Config(app, host="localhost", port=8765)
-  server = uvicorn.Server(config)
-  await server.serve()  # awaitable — runs in Textual's event loop
+  class ConductorApp(App):
+      AUTO_FOCUS = "#command-input Input"
   ```
-- The `asyncio.Event()` and `asyncio.create_task()` in `create_app()`'s lifespan must only execute after Textual's event loop has started — ensure `create_app()` is called from within an `on_mount` handler or a worker, not at module import.
+- If overriding `allow_focus()` instead of `can_focus`, ensure the method returns the correct value before `focus()` is called — not after.
+- Prefer `call_after_refresh(self.focus_input)` if `focus()` must be called during mount to defer it until after the focus chain is updated.
 
 **Warning signs:**
-- `RuntimeError: This event loop is already running` when the dashboard worker starts
-- FastAPI WebSocket connections work but state watcher events are not broadcast (loop isolation)
-- `DeprecationWarning: There is no current event loop` during import
+- Input widget is visible but not focused on startup (cursor not blinking in the input)
+- `widget.has_focus` is `False` immediately after calling `widget.focus()` in `on_mount`
+- Focus lands on wrong widget after modal dismissal
 
 **Phase to address:**
-Phase 4 (web dashboard coexistence) — the uvicorn integration change is isolated but must be done before the dashboard worker is tested.
+Phase adding auto-focus input on TUI start — use `AUTO_FOCUS` class attribute, not manual `focus()` in `on_mount`.
 
 ---
 
-### Pitfall 11: Reactive Variable Updates Before Widget Is Mounted
+### Pitfall 7: Focus Stolen After Modal Dismissal
 
 **What goes wrong:**
-Textual reactive attributes can trigger watchers during `__init__` or `compose()` — before the widget is mounted and its children are accessible via the DOM. If a watcher queries the DOM (e.g., `self.query_one(StatusLabel)`), it raises a `NoMatches` or `MountError` because the widget tree does not yet exist.
-
-This is particularly relevant for the Conductor TUI, where reactive state (agent counts, streaming tokens, approval pending) will be set by background workers that may fire before the UI has fully initialized.
+After an `EscalationModal` or approval modal is dismissed via `push_screen_wait()`, focus may return to Textual's default focus target (the first focusable widget) rather than `CommandInput`. This means the user must click or Tab to the input before they can type.
 
 **Why it happens:**
-Textual's reactive system triggers watchers immediately when a reactive attribute is set, regardless of mount state. Developers who set initial state in `__init__` or pass initial values to constructors trigger watchers prematurely.
+Textual restores focus to the widget that had focus before the modal was pushed. If `CommandInput` was disabled during streaming when the modal opened, it was not in the focus chain — so there is no "previous focus" to restore. Textual falls back to its `AUTO_FOCUS` selector or the first widget in the FOCUS chain.
+
+The current code in `app.py` already handles this manually:
+```python
+# Restore focus to CommandInput after modal dismissal
+cmd = self.query_one(CommandInput)
+cmd.query_one(Input).focus()
+```
+But this code is inside a `try/except` that silently swallows failures. If the widget is still disabled when this code runs, focus is silently dropped.
 
 **How to avoid:**
-- Initialize reactive attributes to sentinel/default values in `__init__`; set their real initial values in `on_mount`.
-- Use `set_reactive()` (the class-level method) when you must set a reactive before mount without triggering watchers.
-- Guards in watchers: `if not self.is_attached: return` to short-circuit pre-mount updates.
-- Prefer `compose()` for initial UI structure; reserve `on_mount` for all state initialization and first data loads.
+- After `push_screen_wait()` returns, always check that `CommandInput.disabled == False` before calling `focus()`.
+- Use Textual's `Screen.FOCUS_NEXT` or return focus explicitly by saving the focused widget before push and restoring it after.
+- Do not rely on Textual's automatic focus restoration after modal dismissal — it is unreliable when widget `disabled` state changes during the modal's lifetime.
 
 **Warning signs:**
-- `MountError: Can't mount widget(s) before <Widget> is mounted` in startup
-- `NoMatches` exceptions in reactive watchers during app initialization
-- Widgets that appear but show stale data from before mount completes
+- After dismissing a modal, the cursor is not in the input field
+- User must press Tab to re-focus the input after every escalation
+- Focus appears to be on a panel widget that is not interactive
 
 **Phase to address:**
-Phase 2 (first widget) — establish the mount/reactive initialization convention before building complex compound widgets.
+Same phase as modal approval overlay work — the focus restoration pattern must be verified for each modal type.
+
+---
+
+### Pitfall 8: alt-screen Mode — Mouse Escape Codes Printed to Terminal on Crash
+
+**What goes wrong:**
+If Textual crashes (unhandled exception in a worker or in `on_mount`) while in full alt-screen mode, Textual's cleanup may not run. Mouse tracking escape sequences (`\033[?1003l`, `\033[?1006l`) remain active in the terminal. The user's shell shows mouse movement as raw escape codes (`^[[M...`). Running `reset` or `stty sane` is required.
+
+**Why it happens:**
+Textual enables mouse tracking and alt-screen via terminal escape sequences. The driver registers a signal handler for SIGTERM and SIGINT to restore state, but unhandled exceptions in coroutines bypass this cleanup. This is a known issue (Textual #82 — "Mouse codes are printed to the terminal on exit").
+
+**How to avoid:**
+- Wrap the top-level `ConductorApp(...).run()` call in a `try/finally`:
+  ```python
+  try:
+      ConductorApp(...).run()
+  finally:
+      # Belt-and-suspenders: ensure terminal cleanup
+      import sys
+      sys.stdout.write("\033[?1003l\033[?1006l\033[?1000l")
+      sys.stdout.flush()
+  ```
+- Use `@work(exit_on_error=False)` on all workers that can raise exceptions, so Textual handles exceptions gracefully rather than crashing.
+- Never use bare `asyncio.create_task()` for Textual background work — use `@work` so exceptions propagate through Textual's error handling path.
+
+**Warning signs:**
+- After a crash, mouse movements show as `^[[M` in the terminal
+- Terminal remains in no-echo mode after `conductor` exits unexpectedly
+- `stty -a` shows `raw` mode after a crash
+
+**Phase to address:**
+Phase implementing alt-screen mode — add the `try/finally` cleanup wrapper at the CLI entry point before any alt-screen features are enabled.
+
+---
+
+### Pitfall 9: Ctrl-G Binding Conflicts With Existing Textual Key Handling
+
+**What goes wrong:**
+Textual's `Input` widget has built-in keybindings that may intercept keys before app-level bindings run. Ctrl-G (`\x07`, BEL character) is not a standard Textual binding, but the key routing path is: widget bindings → screen bindings → app bindings. If `CommandInput` or the inner `Input` widget has an `on_key` handler that consumes all unrecognized keys (returning early), Ctrl-G will never reach the app-level `action_open_editor` binding.
+
+**Why it happens:**
+Textual's key routing: keys are first offered to the focused widget, then bubble up. A key is "consumed" if a handler calls `event.stop()` or if Textual matches it to a local binding. Since `CommandInput` uses a plain `Input` widget and does not override key handling, Ctrl-G should bubble up. But if `SlashAutocomplete` (textual-autocomplete) consumes key events to update its dropdown, it may intercept Ctrl-G before the app sees it.
+
+**How to avoid:**
+- Define Ctrl-G as an `App`-level binding: `BINDINGS = [Binding("ctrl+g", "open_editor", "Open editor")]`.
+- Verify the binding reaches the app by testing with `textual console` and watching the key event log. If autocomplete intercepts it, add an explicit `on_key` handler in `CommandInput` that checks for `ctrl+g` before yielding to autocomplete.
+- Do not use `ctrl+g` as the binding name — use `ctrl+g` (lowercase, with plus), not `C-g` or `^G`.
+
+**Warning signs:**
+- Pressing Ctrl-G in the input field does nothing (no log output, no editor opens)
+- The binding appears in the footer help but does not activate
+- Ctrl-G only works when the input is not focused
+
+**Phase to address:**
+Phase implementing Ctrl-G external editor — verify key routing with `textual console` before building editor plumbing.
 
 ---
 
 ## Technical Debt Patterns
 
-Shortcuts that seem reasonable but create long-term problems.
-
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Keep Rich Console writes for "background log" paths | Avoids touching existing code | Console writes corrupt TUI; intermittent display bugs | Never during TUI lifetime |
-| Use `nest_asyncio` to allow nested loops | Unblocks development quickly | Masks architectural flaws; fails in production async contexts; breaks pytest | Never — fix the architecture |
-| Direct `widget.update()` per streaming token | Simple, obvious implementation | 20-60fps widget redraws; CPU saturation; input lag | Never for streaming; always batch |
-| `asyncio.create_task()` without storing reference | Convenient | Silent GC-collected tasks; non-deterministic failures | Never for tasks that must complete |
-| Run prompt_toolkit and Textual simultaneously | Preserves vi-mode keybindings short term | Two terminal raw-mode owners; terminal left broken on exit | Never |
-| `App.run_test()` in pytest fixtures | DRY test setup | `NoActiveAppError` in all tests using that fixture | Never — use inline context manager |
-| Global `Console` objects instantiated at module level | Convenient access | Console writes bypass Textual during TUI lifetime | Only in CLI-mode code paths that do not touch Textual |
-| Set reactive attributes in `__init__` | Convenient initialization | Triggers watchers before mount; DOM queries fail | Never — use `on_mount` for real state initialization |
+| `animate("styles.tint", ...)` instead of `set_interval` | Reads like declarative animation | `AttributeError` at runtime — dot-path not resolved by Textual animator | Never — use `set_interval` + direct `styles.tint` assignment |
+| Manual `focus()` in `on_mount` without `disabled` check | Simple, obvious | Silent focus failure when widget is disabled; requires debugging to find | Never — always check `disabled == False` before calling `focus()` |
+| `subprocess.run(["vim", ...])` without `app.suspend()` | One-liner | Terminal left in raw mode; Vim receives broken terminal input | Never — must use `app.suspend()` context manager |
+| `border: none;` in TCSS without matching specificity | Quick visual change | Rule ignored when widget has higher-specificity DEFAULT_CSS | Never — match compound selector of the DEFAULT_CSS rule being overridden |
+| Bare `try/except: pass` around `focus()` calls | Suppresses noise | Silent focus failures never investigated; UX regression ships undetected | Only in non-critical paths with explicit comment explaining why |
+| Alt-screen without `try/finally` terminal cleanup | Simpler entry point | Mouse codes in terminal after crash; user must run `reset` | Never in production — always add belt-and-suspenders cleanup |
 
 ---
 
 ## Integration Gotchas
 
-Common mistakes when connecting to external services or components.
-
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Claude Agent SDK | Calling `asyncio.run(client.connect())` after Textual starts | `await client.connect()` inside a Textual async worker |
-| Claude Agent SDK subprocess | Inheriting terminal stdout → subprocess writes over TUI | Ensure SDK subprocess uses piped I/O; validate on first integration |
-| FastAPI/uvicorn | Using `uvicorn.run()` | `uvicorn.Config` + `uvicorn.Server` + `await server.serve()` as a worker |
-| FastAPI lifespan tasks | `asyncio.create_task()` at app creation time | Create tasks only inside the lifespan context (after `yield`) |
-| Rich Console output during delegation | `Console.print()` during active TUI | Post a Textual `Message`; update widget in handler |
-| ANSI cursor manipulation | `\033[A\033[2K` escape codes for status clearing | Reactive `Static` widget; Textual manages cursor entirely |
-| WebSocket state watcher | `state_watcher` uses `watchfiles` which runs in a thread | Wrap in `@work(thread=True)` + `call_from_thread()` for UI updates |
-| Escalation queues | `await human_out.get()` blocking in a worker | `asyncio.Queue` + Textual `Message` + `push_screen_wait()` for modal |
-| RichLog for streaming | Per-token `write()` calls | Buffer tokens; flush at fixed interval via `set_interval` |
+| vim via Ctrl-G | `subprocess.run(["vim", ...])` without suspending Textual | `with app.suspend(): subprocess.run(["vim", path])` |
+| vim exit and file read | Reading temp file after `suspend()` block exits | Read file inside the `with app.suspend():` block, before Textual recaptures terminal |
+| `app.suspend()` in async context | `await asyncio.create_subprocess_exec(...)` inside suspend | `suspend()` is synchronous — use blocking `subprocess.run()`; do not mix async subprocess inside it |
+| Border removal in TCSS | `Input { border: none; }` targeting Textual built-in widgets | Use compound selector: `CommandInput Input { border: none; }` to match DEFAULT_CSS specificity |
+| `AUTO_FOCUS` vs manual `focus()` | Calling `Input.focus()` in `on_mount` before widget enters focus chain | Set `AUTO_FOCUS = "#command-input Input"` on `ConductorApp` class; remove manual `focus()` from `on_mount` |
+| Shimmer + finalize order | Set `_is_streaming = False` before stopping timer | Stop timer first (`_shimmer_timer.stop()`), then clear tint, then set `_is_streaming = False` |
+| Modal focus restoration | Rely on Textual's automatic post-modal focus restoration | Explicitly call `cmd.query_one(Input).focus()` after `push_screen_wait()` returns, with `disabled` check |
 
 ---
 
 ## Performance Traps
 
-Patterns that work at small scale but fail as usage grows.
-
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Per-token `RichLog.write()` | TUI flicker, 100% CPU, dropped keystrokes | Buffer tokens; flush at 20fps via `set_interval` | > 10 tokens/second |
-| Unbounded `RichLog` without `max_lines` | Memory growth; terminal scroll becomes slow | Set `max_lines=1000` or equivalent | After ~5 minutes of active streaming |
-| Per-agent `Static` widget refreshing independently | Compositor overwhelmed with partial updates | Group agent panels; update via a single parent reactive | > 4 concurrent agents |
-| `StateManager.read_state()` on every refresh tick | Disk I/O on asyncio loop thread blocks rendering | Run state reads in `asyncio.to_thread()`; cache last state | State files > 100KB |
-| Rich `Table` re-rendered every 2 seconds | Full table re-render on each tick | Use a `DataTable` widget with row-level updates | > 20 agents |
-| `asyncio.Queue` watchers consuming all events before TUI gets them | Escalation messages lost | Use Textual `Message` bus instead of raw queues for UI-bound events | Concurrent delegations |
+| `set_interval` at > 30fps for shimmer | CPU spike; other widget updates lag | Use `_SHIMMER_INTERVAL = 1/15` (15fps max for tint animation) | > 30fps on low-end hardware or tmux with 60Hz refresh |
+| Multiple shimmer timers per session | Timer count grows across exchanges; memory creep | Verify `_shimmer_timer is None` before calling `set_interval`; stop old timer if somehow active | After 10+ exchanges without restart |
+| `app.refresh()` after every `app.suspend()` return | Full TUI repaint on every Ctrl-G press | Already handled by Textual — do not add manual `refresh()` unless cursor state is visually broken | Every editor open/close |
+| Borderless design forcing 1px height reductions | Layout calculation changes cause off-by-one in height math | After removing borders, verify `height: 1fr` calculations still account for removed border space | After removing any border from a widget with explicit height |
 
 ---
 
 ## UX Pitfalls
 
-Common user experience mistakes for this type of application.
-
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Clearing terminal history on TUI exit | User loses context of what happened | Use `app.exit()` cleanly; preserve scroll history above the TUI region |
-| Modal approval blocking all keyboard input | User cannot cancel or see agent progress | Keep agent panels visible during modal; allow Escape to defer approval |
-| Streaming cell auto-scrolling fights manual scroll | User loses their place when reading output | Detect manual scroll; pause auto-scroll; show "jump to bottom" affordance |
-| No visual distinction between current cell and history | User cannot tell where new output starts | Immutable cells with visual separator (border or rule) |
-| Slash command autocomplete covers input history | Navigation ambiguous | Use a popup overlay, not an inline replacement of input text |
-| Terminal resize corrupts layout | Widgets overflow or wrap unexpectedly | Handle `on_resize` event; use containers with `min_width` guards |
+| External editor opens but input field still shows content | Confusing state — content in input and editor | Clear `CommandInput` input field before opening editor; fill it with editor content on return |
+| Ctrl-G binding not shown in status bar | User does not discover the feature | Add `Binding("ctrl+g", "open_editor", "Open editor", show=True)` — `show=True` makes it appear in footer |
+| Borderless design removes visual input affordance | User cannot tell where to type | Keep a bottom border or background color on `CommandInput` to indicate the input region |
+| Alt-screen hides terminal history above TUI | User cannot scroll back to pre-TUI output | This is expected and correct — document it; provide `/history` or similar to re-surface transcript |
+| Focus auto-set to wrong widget on startup | User starts typing and input lands in wrong field | Use `AUTO_FOCUS` selector that targets the inner `Input` widget by ID, not the wrapper widget |
+| Shimmer on too many cells simultaneously | Visual noise; performance hit | Only the currently-streaming cell should shimmer; all finalized cells are static |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-Things that appear complete but are missing critical pieces.
-
-- [ ] **Textual app starts:** Verify that `app.run()` is the top-level entry point and nothing else calls `asyncio.run()` in the same process.
-- [ ] **Streaming display works:** Verify that streaming tokens are buffered and flushed at a fixed rate, not written per-token. Run with 3 concurrent agents; confirm no flicker.
-- [ ] **Delegation status panel:** Verify that `_status_updater` equivalent no longer uses `Console.print()` or ANSI cursor codes; all updates go through Textual widget reactivity.
-- [ ] **Modal approval overlay:** Verify that `push_screen_wait()` is used; confirm that the TUI does not accept non-modal input while approval is pending.
-- [ ] **FastAPI WebSocket server:** Verify that `uvicorn.Server.serve()` is awaited inside a Textual worker; confirm WebSocket events are received by the React dashboard during active TUI session.
-- [ ] **Terminal restored on exit:** Verify that `app.exit()` or `app.run()` cleanup restores termios state. Run in tmux and confirm terminal is usable after exit.
-- [ ] **SDK subprocess output:** Verify that no raw subprocess bytes appear outside widget boundaries during a full delegation run.
-- [ ] **Tests pass in full suite:** Verify that Textual tests and non-Textual asyncio tests do not contaminate each other's event loops.
-- [ ] **tmux/SSH compatibility:** Run inside tmux with `TERM=tmux-256color`; confirm colors render correctly and no TERM-related errors appear.
-- [ ] **No prompt_toolkit imports:** Grep confirms zero `from prompt_toolkit` or `import prompt_toolkit` in any code path active under Textual.
+- [ ] **Shimmer animation:** Verify `_shimmer_timer.stop()` is called in `finalize()` before `_is_streaming = False`. Check timer count after 5 exchanges.
+- [ ] **External editor:** Test with `EDITOR=vim` and `EDITOR=nano`. Verify terminal state is clean after normal exit AND after Ctrl-C inside vim. Run `stty -a` after each test.
+- [ ] **Borderless design:** Verify no compound-selector DEFAULT_CSS rules are being silently ignored. Use `textual console` CSS inspector to confirm winning rule for each changed widget.
+- [ ] **Auto-focus:** Verify cursor is in the input field immediately on startup without any Tab press. Test with `ConductorApp` launched both fresh and in resume mode.
+- [ ] **Focus after modal:** Dismiss an escalation modal, then immediately type — verify characters go to `CommandInput`, not to the transcript or agent panel.
+- [ ] **Alt-screen crash cleanup:** Kill the process with `kill -9 <pid>` while TUI is running. Verify terminal is usable afterward (no raw mode, no escape code output).
+- [ ] **Ctrl-G key routing:** Verify Ctrl-G works when focus is in `CommandInput` AND when focus is elsewhere (agent panel, etc.).
+- [ ] **animate() not used:** Grep confirms no `self.animate("styles.tint"` or `self.animate("tint"` in the codebase — all shimmer is via `set_interval`.
 
 ---
 
 ## Recovery Strategies
 
-When pitfalls occur despite prevention, how to recover.
-
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Event loop ownership conflict | HIGH | Remove all `asyncio.run()` callers except Textual; refactor uvicorn and SDK launch into workers; may require 1-2 sprint phases to untangle |
-| Console writes corrupting TUI | MEDIUM | Grep for all `console.print()` / `Console(` usages; route each through a Textual message or widget update; test after each change |
-| Streaming performance saturation | MEDIUM | Add a `_token_buffer` list and `set_interval(0.05, _flush_buffer)` to the streaming widget; no architectural change required |
-| Task GC killing background workers | LOW | Add `_background_tasks: set` store; add `add_done_callback(discard)` pattern; usually detectable in first integration test |
-| pytest fixture / run_test incompatibility | LOW | Move `async with app.run_test()` into test body; upgrade pytest-asyncio; 30-minute fix |
-| Terminal not restored on exit | MEDIUM | Ensure `app.run()` is in a `try/finally`; call `app.exit()` from signal handlers; test with `Ctrl+C` and process kill |
-| prompt_toolkit coexistence attempt | HIGH | Cannot coexist; full removal required; vi-mode and editor features must be reimplemented from scratch in Textual |
+| Timer leak from unfinalised shimmer | LOW | Add `if self._shimmer_timer is not None: self._shimmer_timer.stop()` guard in `finalize()`; run existing shimmer tests |
+| Terminal broken after editor crash | LOW | Add `try/except` around `app.suspend()` block; call `app.refresh()` on exit; add `try/finally` terminal cleanup at CLI entry point |
+| Borderless CSS rule not applying | LOW | Inspect with `textual console`; add compound selector matching DEFAULT_CSS specificity; add `!important` only if compound selector fails |
+| Focus not landing on input | LOW | Replace manual `focus()` in `on_mount` with `AUTO_FOCUS = "#command-input Input"` on `ConductorApp` |
+| Ctrl-G intercepted by autocomplete | MEDIUM | Add explicit `on_key` in `CommandInput` to intercept and re-post Ctrl-G before autocomplete processes it |
+| Modal dismissal loses focus | LOW | Ensure `disabled = False` before `focus()` call in post-modal handler; add explicit focus restoration in each `on_button_pressed` |
+| Alt-screen mouse codes on crash | LOW | Add `try/finally` at CLI entry point; write escape codes to stdout in `finally` block |
 
 ---
 
 ## Pitfall-to-Phase Mapping
 
-How roadmap phases should address these pitfalls.
-
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Event loop ownership (Textual owns loop) | Phase 1: Architecture skeleton | Smoke test: app starts, SDK worker runs, no `RuntimeError` |
-| Stdout/Console corruption | Phase 1: Entry-point + Phase 2: First widget | Full delegation run produces no console artifacts in TUI |
-| SDK subprocess output leak | Phase 1: SDK integration audit | Run delegation; verify no raw subprocess bytes outside widgets |
-| Thread safety / widget update safety | Phase 2: Delegation status panel | Status updates visible; no `NoActiveAppError` in logs |
-| Task GC / fire-and-forget | Phase 1: Architecture + convention | Code review: no bare `create_task` without reference storage |
-| Streaming performance | Phase 2: Streaming transcript cell | 3 concurrent agent streams at 30 tok/s; no flicker; CPU < 40% |
-| Modal approval event loop | Phase 3: Approval overlays | Approval screen blocks input; agent panels still visible; dismisses cleanly |
-| prompt_toolkit removal | Phase 1: Entry-point refactor | Zero `import prompt_toolkit` in any code path that runs under Textual |
-| pytest / run_test incompatibility | Phase 1: Test infrastructure | Full test suite passes; no `NoActiveAppError`; no event loop contamination |
-| uvicorn inside Textual | Phase 4: Dashboard coexistence | Dashboard WebSocket receives events while TUI is active |
-| Reactive before mount | Phase 2: First widget | No `MountError` on startup; reactive watchers guard against pre-mount calls |
+| `animate("styles.tint")` AttributeError | Any new animation phase | Grep: zero `animate("styles.tint"` or `animate("tint"` in codebase |
+| Shimmer timer leak | Phase adding shimmer/animations | Timer count stays constant across 10 exchanges; CPU stable after streaming ends |
+| Ctrl-G / editor subprocess without suspend | Phase adding external editor | `stty -a` shows cooked mode after vim exits; no garbled input on first vim keystroke |
+| Terminal state after editor crash | Phase adding external editor | `kill -TERM <vim-pid>` while in editor; TUI recovers; terminal clean after TUI exit |
+| Borderless CSS specificity fight | Phase implementing borderless design | `textual console` confirms correct rule wins; no unintended widget gaps |
+| Auto-focus timing | Phase adding auto-focus | Cursor in input on startup; no Tab required; works in both fresh and resume mode |
+| Focus stolen after modal | Phase adding modal approval or Ctrl-G | Immediately type after modal dismissal; keystrokes land in input |
+| Alt-screen cleanup on crash | Phase enabling full alt-screen mode | `kill -9` test; terminal clean; no mouse codes in output |
 
 ---
 
 ## Sources
 
-- [Textual Workers guide](https://textual.textualize.io/guide/workers/) — thread safety, `call_from_thread`, `post_message` patterns (HIGH confidence — official)
-- [Textual RichLog widget](https://textual.textualize.io/widgets/rich_log/) — performance characteristics, `max_lines` (HIGH confidence — official)
-- [Textual: Algorithms for high-performance terminal apps (Dec 2024)](https://textual.textualize.io/blog/2024/12/12/algorithms-for-high-performance-terminal-apps/) — compositor partial updates, spatial indexing (HIGH confidence — official)
-- [The Heisenbug lurking in your async code](https://textual.textualize.io/blog/2023/02/11/the-heisenbug-lurking-in-your-async-code/) — asyncio task GC problem (HIGH confidence — official)
-- [GitHub issue #4998: App.run_test() incompatible with pytest fixtures](https://github.com/Textualize/textual/issues/4998) — context variable isolation root cause (HIGH confidence — official repo)
-- [GitHub issue #5788: pytest-textual-snapshot fails after asyncio.run()](https://github.com/Textualize/textual/issues/5788) — event loop contamination in test suites (HIGH confidence — official repo)
-- [GitHub issue #600: Documentation about adding other event loops](https://github.com/Textualize/textual/issues/600) — Textual event loop ownership (HIGH confidence — official repo)
-- [Uvicorn: Running from inside a running loop](https://github.com/Kludex/uvicorn/discussions/2457) — `uvicorn.Server` + `Config` pattern for async contexts (MEDIUM confidence — maintainer discussion)
-- [Textual Discussion #3254: Textual vs prompt_toolkit](https://github.com/Textualize/textual/discussions/3254) — architectural differences (HIGH confidence — official repo)
-- [Textual issue #2952: Capture prints](https://github.com/Textualize/textual/issues/2952) — print interception behavior (HIGH confidence — official repo)
-- [Reactive mount timing issues #4691, #4570](https://github.com/Textualize/textual/issues/4691) — reactive before mount errors (HIGH confidence — official repo)
-- [Claude Agent SDK overview](https://platform.claude.com/docs/en/agent-sdk/overview) — subprocess architecture, async generator interface (HIGH confidence — official Anthropic)
-- Codebase analysis: `conductor/cli/chat.py`, `conductor/cli/delegation.py`, `conductor/dashboard/server.py`, `conductor/cli/input_loop.py` — HIGH confidence (direct code review)
+- Codebase: `packages/conductor-core/src/conductor/tui/widgets/transcript.py` — confirmed `set_interval` shimmer implementation (Phase 38 bug fix) (HIGH confidence — direct code)
+- Codebase: `.planning/phases/38/38-01-SUMMARY.md` — "Widget.animate('styles.tint') fails with AttributeError" confirmed in production (HIGH confidence — project history)
+- [Textual issue #1093: Launching subprocesses like Vim from Textual apps](https://github.com/Textualize/textual/issues/1093) — `app.suspend()` race condition with stdin; fixed by PR #4064 (HIGH confidence — official repo)
+- [Textual issue #5605: The moment of setting the focus has changed after 2.0.0](https://github.com/Textualize/textual/issues/5605) — `can_focus` set in `on_mount` ignored in v2.0+; `allow_focus()` override required (HIGH confidence — official repo, March 2025)
+- [Textual issue #1335: Default CSS overrides more specific rules](https://github.com/Textualize/textual/issues/1335) — DEFAULT_CSS specificity bug; fixed in PR #1336 (HIGH confidence — official repo)
+- [Textual issue #82: Mouse codes are printed to the terminal on exit](https://github.com/Textualize/textual/issues/82) — alt-screen escape code cleanup on crash (HIGH confidence — official repo)
+- [Textual issue #5140: Gracefully handle termination signals](https://github.com/Textualize/textual/issues/5140) — SIGTERM/SIGKILL cleanup path (MEDIUM confidence — official repo)
+- [Textual CSS Guide — Specificity](https://textual.textualize.io/guide/CSS/) — DEFAULT_CSS has lower specificity than app CSS; compound selectors for override (HIGH confidence — official docs)
+- [Textual Animation Guide](https://textual.textualize.io/guide/animation/) — `Widget.animate()` signature; `set_interval` alternative (HIGH confidence — official docs)
+- [Textual App Basics — app.suspend()](https://textual.textualize.io/guide/app/) — suspend() context manager behavior; Unix-only support (HIGH confidence — official docs)
+- [Textual Discussion #4143: Input widget and auto focus disabling](https://github.com/Textualize/textual/discussions/4143) — `disabled` widget not receiving focus (MEDIUM confidence — official repo discussion)
 
 ---
-*Pitfalls research for: Textual TUI integration — Conductor v2.0*
+*Pitfalls research for: v2.1 UX Polish — alt-screen, borderless CSS, animations, external editor on existing Textual TUI*
 *Researched: 2026-03-11*

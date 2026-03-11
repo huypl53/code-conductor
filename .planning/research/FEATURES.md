@@ -1,26 +1,32 @@
 # Feature Research
 
-**Domain:** Textual TUI redesign — replacing prompt_toolkit + Rich with a full widget-based terminal UI for a multi-agent coding orchestration framework (Conductor v2.0)
+**Domain:** Textual TUI UX Polish — v2.1 features: auto-focus, alt-screen, borderless chrome, smooth animations, external editor integration
 **Researched:** 2026-03-11
-**Confidence:** HIGH (Textual official docs, Codex CLI official docs, direct code review of existing CLI, practitioner blog posts)
+**Confidence:** HIGH (Textual official docs, direct codebase review, Textual GitHub discussions, Codex CLI source analysis)
 
 ---
 
 ## Context: This Is a Subsequent Milestone
 
-This research focuses exclusively on **what's needed for v2.0's Textual TUI redesign**. All v1.0–v1.2 features are already built and remain functional. The v2.0 goal is to replace `prompt_toolkit` + `Rich` with a full `Textual`-based TUI that matches the UX quality of Codex CLI.
+This research focuses exclusively on **what's needed for v2.1's UX polish pass**. All v2.0 Textual TUI features are already built and passing 641 tests:
 
-**Existing infrastructure this new TUI sits on top of (all built, no changes needed):**
-- Interactive chat REPL with prompt_toolkit (to be replaced)
-- Rich-based streaming output (to be replaced/enhanced)
-- Slash commands: `/help`, `/exit`, `/status`, `/resume`, `/summarize`
-- Session persistence and resume (`ChatHistoryStore`, `.conductor/sessions/`)
-- Smart delegation — orchestrator decides direct handling vs sub-agent teams
-- Sub-agent status display (Rich tables via `/status` command)
-- Web dashboard with real-time WebSocket updates (coexists with TUI)
-- Context tracking (token utilization warnings)
+**Already built in v2.0 (no changes needed unless noted):**
+- `ConductorApp` (Textual `App` subclass, CSS-driven two-column layout)
+- `TranscriptPane` with `UserCell` / `AssistantCell`, shimmer animation, session replay
+- `CommandInput` with `SlashAutocomplete` (textual-autocomplete)
+- `AgentMonitorPane` with state file watcher
+- `StatusFooter` reactive bar (model, tokens, session ID)
+- Modal overlays for escalation (`EscalationModal`)
+- `@work` SDK streaming integration
 
-**Reference UX:** OpenAI Codex CLI (Ratatui/Rust) — the target is to achieve equivalent UX in Python using Textual.
+**v2.1 adds five focused UX improvements on top of this foundation:**
+1. Auto-focus input on TUI start
+2. Full alt-screen mode with clean entry/exit
+3. Borderless/minimal chrome design — content flows naturally
+4. Smooth animations and transitions
+5. Ctrl-G to open input in external editor (vim) for multiline composition
+
+**Reference UX:** OpenAI Codex CLI — the target is to achieve equivalent terminal-native feel.
 
 ---
 
@@ -28,140 +34,112 @@ This research focuses exclusively on **what's needed for v2.0's Textual TUI rede
 
 ### Table Stakes (Users Expect These)
 
-Features users assume exist when upgrading to a "proper TUI." Missing these = the redesign feels worse than the current prompt_toolkit implementation.
+Features a polished terminal app must have. Missing these makes the TUI feel amateur or broken compared to reference-class tools like Codex CLI or lazygit.
 
 | Feature | Why Expected | Complexity | Textual Mechanism | Existing Dependency |
 |---------|--------------|------------|-------------------|---------------------|
-| Cell-based conversation transcript | Modern chat TUIs (Codex, OpenCode) all use discrete message cells, not a raw scrolling log. Each turn is visually distinct. | MEDIUM | Custom widget extending `Markdown`; `VerticalScroll` container with auto-scroll; `append()` per cell | `ChatHistoryStore` for session history; streaming events from SDK |
-| Streaming text into active cell | Token-by-token text arrival is expected; a static "thinking then full display" feels broken | MEDIUM | `MarkdownStream` (coalesces rapid updates) or `RichLog.write()` appending chunks; `@work(thread=True)` for async streaming | Existing streaming in `_process_message()` — wire into Textual widget |
-| Syntax-highlighted code blocks in transcript | Code output without highlighting is unreadable; users expect what Codex CLI delivers | LOW | `Markdown` widget natively syntax-highlights code fences; `RichLog.write(Syntax(...))` for standalone code blocks | None — purely additive |
-| Visual "thinking" indicator before first token | Users need feedback that the agent is running, not frozen | LOW | `LoadingIndicator` widget (pulsating dots); or `widget.loading = True` property swaps any widget to loading state temporarily | Replaces current `[dim]Thinking...[/dim]` hack |
-| Status footer bar | Codex CLI shows model/path in header; users expect current model, mode, token context info permanently visible | MEDIUM | Custom `Static` widget docked to bottom via CSS `dock: bottom`; reactive attributes auto-update display | `ContextTracker` already tracks token utilization — wire into footer |
-| Slash command autocomplete popup | Users expect `/` to trigger visible suggestions; typing without a popup means guessing what commands exist | MEDIUM | `textual-autocomplete` library (fuzzy dropdown, Textual 2.0+ compatible) OR `Input` widget with built-in `suggester` parameter + `SuggestFromList` | Existing `SLASH_COMMANDS` dict becomes the candidate list |
-| Modal approval overlays | Agent file changes and command execution require approval; a proper modal that grays out the background is the expected pattern | MEDIUM | `ModalScreen` class — push/pop screen stack; `dismiss(result)` returns approval decision; semi-transparent background built in | Existing escalation logic in `DelegationManager` — needs new UI surface |
-| Keyboard-navigable approval dialogs | Arrow keys or Y/N hotkeys in approval modals; mouse-only dialogs feel wrong in a TUI | LOW | `Button` widgets in `ModalScreen`; `BINDINGS` class variable for Y/N keys | Part of modal approval implementation |
+| Auto-focus input on startup | Every terminal chat tool (Codex CLI, aider, OpenCode) activates the input immediately — users start typing before looking at the screen. Without auto-focus, first keystroke is lost or user must click/tab to activate input. | LOW | `App.AUTO_FOCUS = "Input"` class variable (CSS selector); targets the `Input` widget inside `CommandInput`. Textual focuses the first widget matching the selector when the app starts. Falls back to explicit `widget.focus()` call in `on_mount()` if the selector approach is insufficient. | `CommandInput` already exists; its inner `Input` widget is the target. `on_stream_done` already calls `cmd.query_one(Input).focus()` — auto-focus is the same pattern applied at startup. |
+| Full alt-screen with clean entry/exit | Alt-screen mode means the TUI takes over the entire terminal, and on exit the previous terminal state is restored cleanly (no residual cursor artifacts, no cleared scrollback pollution). Without this, exiting leaves garbage in the shell. | LOW | Textual enters alt-screen (application mode) automatically on `App.run()`. The exit behavior is controlled by `action_quit()` — already implemented in `ConductorApp`. The primary work is verifying clean entry (no startup flash) and clean exit (cursor restored, no artifacts on `Ctrl+Q`). Signal handling for `SIGINT` needs verification. | `action_quit()` already cancels background tasks, disconnects SDK, and calls `self.exit()`. The Textual framework handles terminal state restoration. May need to verify SIGINT behavior. |
+| Ctrl-G to open external editor (vim) | Power users composing multi-line prompts (architecture specs, complex task descriptions) need a real editor. This is the standard Unix pattern (used by git commit, readline `edit-and-execute-command`). Without it, multi-line input is painful single-line composition. | MEDIUM | `App.suspend()` context manager (Textual v0.48.0+). Pattern: (1) write `CommandInput` content to tempfile, (2) `with self.suspend(): subprocess.call([editor, tempfile])`, (3) read tempfile back, populate `Input.value`. Respects `$VISUAL` / `$EDITOR` env var with vim fallback. Works on Unix/macOS only — document Windows limitation. | `CommandInput` and its inner `Input` widget provide the current value. `on_mount` and key binding infrastructure already in place via `BINDINGS`. New `action_open_editor()` method on `ConductorApp`. |
 
 ### Differentiators (Competitive Advantage)
 
-Features that make the Textual TUI meaningfully better than both the current prompt_toolkit implementation and peer tools.
+Features that elevate the Conductor TUI above Codex CLI's UX bar.
 
 | Feature | Value Proposition | Complexity | Textual Mechanism | Existing Dependency |
 |---------|-------------------|------------|-------------------|---------------------|
-| Inline agent monitoring panels | While sub-agents work, dedicated collapsible panels show each agent's status, current tool, and live output — "dashboard-in-terminal." Codex CLI doesn't have this; the web dashboard does, but requires a browser. | HIGH | `Collapsible` widget per agent; `RichLog` inside each panel streaming tool activity; `DataTable` for compact multi-agent status view; updated via message-passing from state file watcher | `StatefulWatcher` (v1.0) already watches state file — wire events into Textual `post_message()` |
-| Syntax-highlighted diffs in transcript | File change diffs inline in the conversation, not just "Edited auth.py: +12/-3". Codex CLI does this. | MEDIUM | `RichLog.write(Syntax(diff_text, "diff", theme=...))` — Rich's `Syntax` accepts language="diff"; `RichLog` accepts Rich renderables directly | Diff text available from ACP tool results — needs extraction and display |
-| Shimmer/pulse animation on in-progress agent cells | Visual differentiation between completed cells (static) and cells that are still receiving streamed content (animated) | MEDIUM | `LoadingIndicator` CSS animation; or custom CSS `animation` keyframes on a border element; Textual supports CSS transitions on reactive properties | Part of cell-based transcript implementation — cells transition from "loading" to "complete" state |
-| Collapsible tool activity within cells | Tool calls (file reads, edits, shell commands) shown as collapsible detail inside a response cell — not polluting the main transcript | MEDIUM | `Collapsible` widget nested inside response cells; expanded by default while streaming, collapsed after completion | Existing `format_tool_activity()` in `stream_display.py` — wrap in Collapsible |
-| `/theme` command with live preview | Switch color themes without restarting; Codex CLI has this. Makes the TUI feel polished. | MEDIUM | Textual CSS variables can be swapped at runtime via `app.theme` or reactive CSS rewrites; `ModalScreen` for theme picker | New feature — no existing dependency |
-| Adaptive color scheme (light/dark detection) | TUI respects the terminal's color scheme rather than hardcoding dark-mode colors | LOW | Textual has built-in `dark` property on `App`; CSS media queries for `@media (prefers-color-scheme: light/dark)` work in Textual | None — purely additive |
-| Web dashboard coexistence with TUI open | Both surfaces active simultaneously — TUI for terminal interaction, web dashboard for remote/detailed/mobile monitoring | MEDIUM | Dashboard HTTP/WebSocket server runs in a background asyncio task; Textual app runs in foreground — both share the same event loop via `asyncio.create_task()` | Dashboard server already asyncio-based — needs clean startup from Textual `App.on_mount()` |
+| Borderless/minimal chrome design | Remove visual clutter (panel borders, excess padding) so content flows naturally. Codex CLI has minimal chrome. Heavy borders make the TUI feel like a form rather than a conversation. | LOW | Textual CSS: `border: none;` or `border: blank;` on widgets that currently use `border-top: solid $primary 30%` (CommandInput) and `border-left: thick $primary/accent` (cells). CSS variable overrides in `conductor.tcss`. No Python logic changes — purely CSS. | `conductor.tcss` is the single CSS file to modify. All widget `DEFAULT_CSS` in Python files can be overridden by the external `.tcss` file. |
+| Smooth animations and transitions | Subtle motion when cells appear, when the transcript scrolls to a new message, and when the shimmer starts/stops. Makes the TUI feel alive rather than static. Codex CLI has smooth cell entry. | MEDIUM | Textual `widget.animate()` method: animate `opacity` from 0.0 to 1.0 on new cells (`AssistantCell`, `UserCell`) as they mount. Easing: `in_out_cubic` (Textual default — "pleasing organic motion"). Duration: 150-200ms. Shimmer already implemented with `Timer` and `Color` interpolation — preserve and tune. Auto-scroll uses Textual's built-in smooth scroll on `VerticalScroll`. | `TranscriptPane.add_user_message()` and `add_assistant_streaming()` are the mount points. Add `animate()` call immediately after `mount()`. Shimmer Timer already exists in `AssistantCell` — may only need timing tuning. |
+| Responsive layout adjustments | Narrow terminal (< 100 cols) hides the agent monitor panel. Wide terminal shows both columns. Makes the TUI usable on any terminal width without horizontal scrollbar. | LOW | Textual CSS `@media` width queries. `AgentMonitorPane` gets `display: none` below a threshold. Alternatively use `App.on_resize()` handler to toggle visibility programmatically. | `#app-body` horizontal layout already in `conductor.tcss`. `AgentMonitorPane` is a discrete widget that can be shown/hidden. |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Full raw log view inside Textual app | "I want to see everything the agents are doing" | Information overload is the #1 identified UX problem in v1.x. Raw ACP logs destroy the conversational feel and overwhelm the layout. | Layered model: TUI shows summarized activity per agent cell; web dashboard has full log access with filters and search. |
-| Mouse-based text selection in transcript | "I want to copy text from agent responses" | Textual's mouse handling intercepts events; implementing cross-widget selection is complex and fragile. Terminal native selection works fine if TUI doesn't capture mouse on static content. | Disable mouse capture on completed (non-interactive) cells so the terminal's native selection works. |
-| Inline file editor inside TUI | "Open the changed file in-place for review" | `TextArea` in Textual is a full editor widget — adding it inline creates accidental edits, focus traps, and layout complexity. | Show diff inline (already a differentiator). For editing, open `$EDITOR` via existing Ctrl+G binding or a `/edit` slash command. |
-| Persistent split-screen layout (chat left, agents right) | "Always show agent panels alongside the conversation" | Fixed split wastes screen space when no agents are running; forces minimum terminal width (>100 cols) for readability. | Collapsible agent panels that appear only when agents are active and fold away when idle. |
-| Real-time token cost counter in footer | "Show me what this session is costing" | Provider APIs report tokens inconsistently at streaming time; accurate billing-grade tracking requires post-turn reconciliation. Creates vendor coupling. | Display context utilization % (already tracked in `ContextTracker`) and turn count. Link to provider console for billing. |
-| Custom syntax themes configurable per language | "I want different themes for Python vs shell output" | Per-language theme management creates a config system just for aesthetics. High implementation cost, low user value for a CLI tool. | Single theme per session. `/theme` command to switch globally. Rich/Pygments themes work uniformly across languages. |
-| Drag-and-drop widget rearrangement | "Let me customize my layout" | Textual CSS-based layout doesn't support runtime rearrangement without full re-compose. Complex to implement, rarely used in practice. | Fixed but responsive layout. Terminal width determines panel arrangement via CSS `@media` queries. |
+| Inline mode (runs beneath prompt) | "I want the TUI to appear under my shell prompt without taking over the screen" | Textual inline mode (`App.run(inline=True)`) explicitly does not enter alt-screen. It conflicts with the command palette (known Textual bug #4385). It has limited widget support and no Windows support. It undermines the whole-screen polish we're building. | Full alt-screen is the right choice for Conductor. Clean entry/exit handles the "I want my terminal back" concern. |
+| Animated loading screen / splash | "Show a Conductor logo on startup" | Startup latency is already noticeable (SDK connection). Adding a splash screen delays the user from typing. Feels like bloat in a professional CLI tool. | Auto-focus so the user can start typing immediately. Fast `on_mount` with lazy SDK connection on first message (already implemented). |
+| Per-widget animation configuration | "Let users toggle animations on/off per component" | Creates a settings system just for animations. Adds complexity that doesn't serve the core use case. | Single animation toggle: `CONDUCTOR_NO_ANIMATIONS=1` env var check. If set, skip all `animate()` calls. Simple, respects user preferences. |
+| Full vim emulation inside Input | "I want vim keybindings in the input bar" | Textual's `Input` widget doesn't support vim modal editing. Implementing it requires replacing the widget or building a state machine for normal/insert/visual modes. High complexity, niche audience. | Ctrl-G opens actual vim for heavy composition. For quick edits, standard readline-style keys (Ctrl-A/E, Ctrl-K/U) already work in Textual `Input`. |
+| Mouse-based resize of panels | "Let me drag the split between transcript and agent monitor" | Textual's CSS layout doesn't support runtime drag-resize without major custom widget work. The resize event fires but there's no built-in splitter widget. | Responsive breakpoints via CSS `@media` (show/hide agent monitor at width thresholds). Keyboard shortcut to toggle agent monitor panel. |
+| Persistent command history (up-arrow) | "I want up-arrow to recall previous commands like a shell" | Textual's `Input` widget doesn't persist history across sessions by default. Implementing readline-style history requires a custom input widget or external library. Significant scope expansion for v2.1. | Defer to v2.2 or later. The `/resume` command already handles session continuity at the conversation level. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[Textual App shell]
-    └──requires──> [Textual installed (textual >= 2.0)]
-    └──enables──> [All Textual widgets below]
+[ConductorApp — existing v2.0 foundation]
+    └──enables──> [Auto-focus input] (LOW effort, class var + on_mount)
+    └──enables──> [Clean alt-screen exit] (LOW effort, verify SIGINT path)
+    └──enables──> [Borderless CSS] (LOW effort, CSS-only changes in conductor.tcss)
+    └──enables──> [Ctrl-G external editor] (MEDIUM effort, new action + App.suspend())
+    └──enables──> [Smooth cell animations] (MEDIUM effort, animate() calls in add_*_message)
 
-[Cell-based conversation transcript]
-    └──requires──> [Textual App shell]
-    └──requires──> [ChatHistoryStore] (already built — session replay on resume)
-    └──enables──> [Streaming text into active cell]
-    └──enables──> [Syntax-highlighted diffs in transcript]
-    └──enables──> [Shimmer animation on in-progress cells]
-    └──enables──> [Collapsible tool activity within cells]
+[Auto-focus input]
+    └──requires──> [CommandInput widget] (already built — inner Input is the focus target)
+    └──enhances──> [Clean alt-screen] (user can type immediately on entry)
+    └──conflicts──> [Session replay on resume] — replay locks input; auto-focus must not fire until replay completes
+                    (already handled: on_stream_done re-focuses after replay unlocks input)
 
-[Streaming text into active cell]
-    └──requires──> [Cell-based conversation transcript]
-    └──requires──> [MarkdownStream or RichLog] (Textual built-in)
-    └──requires──> [SDK streaming events] (already wired in _process_message())
+[Ctrl-G external editor]
+    └──requires──> [App.suspend() — Textual v0.48.0+] (verify installed version supports it)
+    └──requires──> [CommandInput.Input] (source of pre-populated text, target for edited result)
+    └──requires──> [tempfile stdlib] (Python stdlib — no new deps)
+    └──requires──> [$VISUAL / $EDITOR env var or vim fallback] (runtime config)
+    └──conflicts──> [Windows] — App.suspend() is Unix-only; document limitation
+    └──enhances──> [Borderless design] — editor opens outside TUI cleanly, returns to TUI cleanly
 
-[Modal approval overlays]
-    └──requires──> [Textual App shell]
-    └──requires──> [ModalScreen] (Textual built-in)
-    └──requires──> [DelegationManager.escalation_input()] (already built — replace implementation)
+[Borderless CSS changes]
+    └──requires──> [conductor.tcss modifications]
+    └──requires──> [DEFAULT_CSS review in all widget files] (CommandInput, UserCell, AssistantCell)
+    └──enhances──> [Smooth animations] — borderless + fade-in creates cohesive "content appears" feel
+    └──no conflicts]
 
-[Status footer bar]
-    └──requires──> [Textual App shell]
-    └──requires──> [ContextTracker] (already built — provides token utilization data)
-    └──enhances──> [Streaming text into active cell] (live token count during streaming)
+[Smooth cell animations]
+    └──requires──> [TranscriptPane.add_user_message() / add_assistant_streaming()] (mount points — already exist)
+    └──requires──> [Textual animate() API] (built-in — already available)
+    └──enhances──> [Borderless design] — animation reinforces minimal aesthetic (content flows in vs snapping in)
+    └──no new deps]
 
-[Slash command autocomplete popup]
-    └──requires──> [Textual App shell]
-    └──requires──> [textual-autocomplete library] OR [Input.suggester built-in]
-    └──requires──> [SLASH_COMMANDS dict] (already built — becomes candidate list)
-
-[Inline agent monitoring panels]
-    └──requires──> [Textual App shell]
-    └──requires──> [StatefulWatcher] (already built — state file events)
-    └──requires──> [Collapsible widget] (Textual built-in)
-    └──requires──> [RichLog widget] (Textual built-in)
-    └──enhances──> [Cell-based conversation transcript] (agents visible alongside conversation)
-
-[Web dashboard coexistence]
-    └──requires──> [Textual App shell]
-    └──requires──> [Dashboard asyncio server] (already built)
-    └──conflicts──> [prompt_toolkit patch_stdout()] — removing prompt_toolkit resolves this conflict
-
-[Syntax-highlighted diffs in transcript]
-    └──requires──> [Cell-based conversation transcript]
-    └──requires──> [RichLog.write(Syntax(...))] (Textual/Rich built-in)
-    └──requires──> [Diff text extraction from ACP tool results] (new — parse tool output)
+[Clean alt-screen entry/exit]
+    └──requires──> [action_quit() verification] (already implemented — verify SIGINT path)
+    └──no new deps]
 ```
 
 ### Dependency Notes
 
-- **Cell-based transcript is the foundational widget:** Everything visual in the TUI flows from this. Build it first, then add streaming, then tool activity, then diffs.
-- **MarkdownStream vs RichLog:** `MarkdownStream` is ideal for rich markdown rendering (handles update coalescing). `RichLog` is better when you need to mix Rich renderables (Syntax objects, Tables) with text in the same widget. The transcript cell will likely need `RichLog` for its flexibility, with a `Markdown` sub-widget for the response text.
-- **Modal approval replaces `_escalation_input()`:** The existing `prompt_toolkit`-based escalation input method needs to be replaced with a Textual `ModalScreen`. The `DelegationManager` interface stays the same — only the UI surface changes.
-- **`textual-autocomplete` vs built-in `suggester`:** The built-in `Input.suggester` shows inline ghost text (single suggestion at cursor), not a popup list. For slash commands where users want to browse options, `textual-autocomplete` dropdown is the right choice. Both can coexist: ghost text for command completion, dropdown popup when `/` is typed.
-- **Removing prompt_toolkit resolves stdout conflict:** Current TUI uses `patch_stdout()` to let Rich print during prompt_toolkit input — a known fragile hack. Textual manages all I/O itself, eliminating this problem entirely.
+- **Auto-focus and session replay interact:** `CommandInput.disabled = True` is set during replay. Auto-focus must use `AUTO_FOCUS` class var (fires on app start, before replay lock) AND `widget.focus()` in the replay completion path (already present in `_replay_session()`). The two paths work together without conflict.
+- **App.suspend() version requirement:** Textual added `suspend()` in v0.48.0. Verify the pinned Textual version in `pyproject.toml` is >= 0.48.0 before implementing Ctrl-G. If not, update Textual first.
+- **Borderless CSS is purely additive:** No Python logic changes. All widget `DEFAULT_CSS` defined in Python can be overridden by `conductor.tcss` without touching widget files. Lower risk.
+- **Ctrl-G is Unix-only by design:** `App.suspend()` sends `SIGTSTP` on Unix. Windows support is a non-operation in Textual. Document this clearly; don't try to implement a Windows alternative in v2.1.
+- **Smooth animations need env var escape hatch:** Some users run Conductor in CI or over slow SSH where animations are distracting or cause rendering artifacts. Respect `NO_ANIMATIONS=1` or `CONDUCTOR_NO_ANIMATIONS=1` by wrapping all `animate()` calls in a check.
 
 ---
 
 ## MVP Definition
 
-### Launch With (v2.0 core)
+### Launch With (v2.1 core — all five features)
 
-Minimum set to prove the Textual redesign is better than the current implementation.
+All five features are small enough that they collectively form the v2.1 milestone. No feature is optional; all five together constitute the "native and polished" standard.
 
-- [ ] **Textual app shell** — replaces `prompt_toolkit.PromptSession`; all existing slash commands continue to work
-- [ ] **Cell-based transcript** — scrollable, distinct user/assistant cells, markdown rendering in assistant cells
-- [ ] **Streaming into active cell** — token-by-token text arrives; cell expands; auto-scroll to bottom
-- [ ] **Visual "thinking" indicator** — spinner/pulse before first token; transitions to content when streaming starts
-- [ ] **Status footer** — model name, current mode (`--auto` vs interactive), context utilization %
-- [ ] **Slash command autocomplete popup** — `/` triggers dropdown; tab or enter selects; existing 5 commands populated
-- [ ] **Modal approval overlays** — replace `_escalation_input()` escalation for agent file/command approvals
-- [ ] **Web dashboard coexistence** — dashboard server starts in background alongside Textual app
+- [ ] **Auto-focus input on startup** — `AUTO_FOCUS = "Input"` on `ConductorApp` plus verify `on_mount` focus path; ensures typing works immediately without Tab or click
+- [ ] **Clean alt-screen entry/exit** — verify `SIGINT` handler calls `action_quit()` cleanly; test that exiting leaves no terminal artifacts; test startup does not flash
+- [ ] **Borderless/minimal chrome design** — update `conductor.tcss` and widget `DEFAULT_CSS` to remove heavy borders from `CommandInput`, `UserCell`, `AssistantCell`; use `blank` or `none` border styles; reduce padding where appropriate
+- [ ] **Smooth cell animations** — `widget.animate("opacity", 1.0, duration=0.15, easing="in_out_cubic")` on `UserCell` and `AssistantCell` mount; tune existing shimmer timing; respect `CONDUCTOR_NO_ANIMATIONS` env var
+- [ ] **Ctrl-G external editor** — `BINDINGS` entry for `ctrl+g`; `action_open_editor()` that writes `Input.value` to tempfile, `with self.suspend(): subprocess.call([editor, tempfile])`, reads result back into `Input.value`; respects `$VISUAL`/`$EDITOR`; Unix-only with clear error on Windows
 
-### Add After Core Is Working (v2.0 polish)
+### Add After Core Is Working (v2.1 polish)
 
-Features to add once the core transcript and input are stable.
+Polish items to add if all five features are stable and time permits in v2.1.
 
-- [ ] **Syntax-highlighted code blocks** — native to `Markdown` widget; verify fenced code block rendering looks correct
-- [ ] **Syntax-highlighted diffs** — extract diff text from ACP tool results; display via `RichLog.write(Syntax(...))`
-- [ ] **Inline agent monitoring panels** — collapsible per-agent panels wired to `StatefulWatcher` events
-- [ ] **Collapsible tool activity within cells** — tool calls in `Collapsible`; expanded during streaming, collapsed after
-- [ ] **Shimmer animation on in-progress cells** — CSS animation on active cell border or loading indicator overlay
+- [ ] **Responsive layout breakpoints** — hide `AgentMonitorPane` below ~100-column terminal width via CSS `@media` or `on_resize()` handler
+- [ ] **Animation env var toggle** — `CONDUCTOR_NO_ANIMATIONS=1` disables all `animate()` calls for CI/SSH use
 
-### Future Consideration (v2.x+)
+### Future Consideration (v2.2+)
 
-- [ ] **`/theme` command with live preview** — swap Textual CSS variables at runtime; modal theme picker
-- [ ] **Adaptive color scheme detection** — Textual `dark` property; CSS light/dark media queries
-- [ ] **Session picker as Textual overlay** — current session list is a plain terminal UI; upgrade to `ModalScreen` with `ListView`
+- [ ] **Command history (up-arrow)** — readline-style history across sessions; requires custom `Input` subclass or external history lib
+- [ ] **`/theme` live switching** — swap Textual CSS variables at runtime; modal theme picker (deferred from v2.0)
+- [ ] **Session picker as Textual overlay** — upgrade the plain-text session list to a `ModalScreen` with `ListView`
 
 ---
 
@@ -169,97 +147,161 @@ Features to add once the core transcript and input are stable.
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Textual app shell | HIGH | MEDIUM | P1 |
-| Cell-based transcript | HIGH | MEDIUM | P1 |
-| Streaming into active cell | HIGH | MEDIUM | P1 |
-| Visual "thinking" indicator | HIGH | LOW | P1 |
-| Status footer | MEDIUM | MEDIUM | P1 |
-| Slash command autocomplete popup | HIGH | MEDIUM | P1 |
-| Modal approval overlays | HIGH | MEDIUM | P1 |
-| Web dashboard coexistence | MEDIUM | MEDIUM | P1 |
-| Syntax-highlighted code blocks | MEDIUM | LOW | P2 |
-| Syntax-highlighted diffs | MEDIUM | MEDIUM | P2 |
-| Inline agent monitoring panels | HIGH | HIGH | P2 |
-| Collapsible tool activity within cells | MEDIUM | MEDIUM | P2 |
-| Shimmer animation on in-progress cells | LOW | MEDIUM | P2 |
-| `/theme` command with live preview | LOW | MEDIUM | P3 |
-| Adaptive color scheme detection | LOW | LOW | P3 |
-| Session picker as Textual overlay | LOW | LOW | P3 |
+| Auto-focus input on startup | HIGH | LOW | P1 |
+| Clean alt-screen entry/exit | HIGH | LOW | P1 |
+| Borderless/minimal chrome design | HIGH | LOW | P1 |
+| Smooth cell animations | MEDIUM | MEDIUM | P1 |
+| Ctrl-G external editor | HIGH | MEDIUM | P1 |
+| Responsive layout breakpoints | MEDIUM | LOW | P2 |
+| Animation env var toggle | LOW | LOW | P2 |
+| Command history (up-arrow) | MEDIUM | HIGH | P3 |
+| `/theme` live switching | LOW | MEDIUM | P3 |
 
 **Priority key:**
-- P1: Required for v2.0 to be a credible replacement for the current TUI
-- P2: Polish pass — makes v2.0 distinctly better than the current TUI
-- P3: Defer to v2.x; worth doing but not blocking the redesign
+- P1: Required for v2.1 to deliver its stated "native and polished" goal
+- P2: Polish pass — low effort, high return; add if time permits in v2.1
+- P3: Defer to v2.2; worth doing but not blocking UX polish milestone
 
 ---
 
 ## Codex CLI Reference Patterns Mapped to Textual
 
-| Codex CLI UX Pattern | Textual Equivalent | Confidence | Notes |
-|----------------------|--------------------|------------|-------|
-| Cell-based transcript (discrete message blocks) | `VerticalScroll` + custom `Markdown`-subclass cells added via `mount()` | HIGH | Textual anatomy blog confirms this exact pattern; `on_input` appends cells |
-| Shimmer animation on streaming cells | `LoadingIndicator` widget or CSS `animation` property on cell border | MEDIUM | Textual has `LoadingIndicator` (pulsating dots); true shimmer gradient requires custom CSS animation — achievable but undocumented in Textual |
-| Modal approval overlay (grayed background) | `ModalScreen` with semi-transparent CSS background | HIGH | Built-in; `ModalScreen` automatically applies semi-transparent overlay on background |
-| Slash command autocomplete popup | `textual-autocomplete` dropdown (fuzzy, arrow-key navigation) | HIGH | Library exists, Textual 2.0+ compatible, actively maintained |
-| Syntax-highlighted diffs inline | `RichLog.write(Syntax(diff_text, "diff"))` | HIGH | `RichLog` accepts Rich `Syntax` objects directly; Rich supports "diff" as a Pygments lexer |
-| Status footer (model, path, context) | Custom `Static` widget with `dock: bottom` CSS; reactive attributes for live updates | HIGH | Textual standard pattern; built-in `Footer` is keybindings-only so custom is needed |
-| Agent monitoring sub-panels | `Collapsible` widget + `RichLog` inside; wired to state file events via `post_message()` | MEDIUM | Collapsible built-in; state file event wiring is new integration work |
-| `/theme` live color swap | Textual `app.theme` property (if using named themes) or CSS variable reassignment | MEDIUM | Textual has basic theme support; runtime CSS variable swap is possible but less documented |
+| Codex CLI UX Pattern | v2.1 Approach | Confidence | Notes |
+|----------------------|----------------|------------|-------|
+| Input active immediately on launch | `AUTO_FOCUS = "Input"` on `ConductorApp` | HIGH | Textual AUTO_FOCUS class var is officially documented; CSS selector `"Input"` targets first `Input` widget |
+| Alt-screen with clean exit (no artifacts) | Textual `App.run()` enters alt-screen automatically; verify `SIGINT` → `action_quit()` path | HIGH | Textual handles terminal state restoration; primary risk is SIGINT not routing through `action_quit()` |
+| Minimal chrome (no heavy panel borders) | `border: none` / `border: blank` in `conductor.tcss` | HIGH | Textual CSS border styles include `none` and `blank`; `DEFAULT_CSS` in Python files is overridden by external `.tcss` |
+| Smooth cell fade-in on message appear | `widget.animate("opacity", 1.0, duration=0.15)` after `mount()` | HIGH | Textual `animate()` supports `opacity`; `in_out_cubic` easing is the documented default for "pleasing organic motion" |
+| External editor for multi-line composition | `with self.suspend(): subprocess.call([editor, tempfile])` | HIGH | `App.suspend()` officially documented since v0.48.0; GitHub discussion #165 confirms the tempfile pattern; vim launched in subprocess with SIGTSTP |
 
 ---
 
-## Complexity Assessment Per Feature
+## Implementation Notes Per Feature
 
-| Feature | Complexity | Why |
-|---------|------------|-----|
-| Textual app shell (replace PromptSession) | MEDIUM | New framework setup; porting all slash commands; async integration with existing SDK client |
-| Cell-based transcript widget | MEDIUM | Custom widget composition; scroll anchoring; session replay on resume needs cell reconstruction |
-| Streaming text (MarkdownStream/RichLog) | MEDIUM | Coalescing rapid updates; transitions between loading/complete cell state; async producer-consumer |
-| Status footer (custom Static widget) | MEDIUM | Custom widget; reactive state wiring to `ContextTracker`; CSS docking |
-| Slash command autocomplete | MEDIUM | `textual-autocomplete` integration; trigger on `/` specifically vs any input |
-| Modal approval overlays | MEDIUM | `ModalScreen` is straightforward; wiring `dismiss()` back to `DelegationManager.input_fn` callback |
-| Web dashboard coexistence | MEDIUM | Starting the asyncio HTTP/WebSocket server from inside Textual's event loop (`on_mount`); port conflict handling |
-| Syntax-highlighted code blocks | LOW | Native to `Markdown` widget; verify rendering is correct |
-| Syntax-highlighted diffs | MEDIUM | Requires extracting diff text from ACP tool results; `RichLog.write(Syntax(...))` call is simple |
-| Inline agent monitoring panels | HIGH | State file watcher events → Textual message bus → per-agent panel widget updates; panel lifecycle (create/destroy as agents start/finish) |
-| Collapsible tool activity | MEDIUM | Wrapping `format_tool_activity()` output in `Collapsible`; state transition from expanded to collapsed on turn completion |
-| Shimmer animation | MEDIUM | `LoadingIndicator` is low complexity; true shimmer gradient requires custom CSS animation knowledge |
+### Auto-Focus Input
 
----
+The `ConductorApp` class currently does NOT have an `AUTO_FOCUS` class variable. Textual's default behavior focuses the first focusable widget — in the current layout, that is inside `TranscriptPane` (a `VerticalScroll`), not `CommandInput`. The fix is one line:
 
-## Competitor Feature Analysis
+```python
+class ConductorApp(App):
+    AUTO_FOCUS = "Input"  # CSS selector: targets first Input widget (inside CommandInput)
+```
 
-| Feature | Codex CLI | Claude Code CLI | OpenCode | Conductor v2.0 (planned) |
-|---------|-----------|----------------|----------|---------------------------|
-| Cell-based transcript | Yes (Ratatui cells) | No (inline streaming to terminal) | Yes | Yes (Textual cells) |
-| Streaming into cells | Yes | Yes (inline) | Yes | Yes |
-| Modal approval overlay | Yes (inline in cell flow) | Yes (interactive permission prompts) | Yes | Yes (`ModalScreen`) |
-| Slash command autocomplete | Yes (/theme, /review, /clear, /model, /permissions) | Yes (extensive) | Yes | Yes (existing 5 + /theme) |
-| Syntax-highlighted code | Yes (markdown code fences) | Yes | Yes | Yes (Markdown widget) |
-| Syntax-highlighted diffs | Yes (/theme-able) | Partial | Partial | Yes (RichLog + Rich Syntax) |
-| Status bar/footer | Yes (header: working path) | No visible status bar | Yes | Yes (custom footer widget) |
-| Agent monitoring panels | No | No | No | Yes (differentiator) |
-| Web dashboard coexistence | No | No | No | Yes (differentiator) |
-| Shimmer animation | Yes | No | Partial | Yes (LoadingIndicator / CSS) |
-| Live theme switching | Yes (/theme) | No | No | Deferred (v2.x) |
+This must be tested against the session replay path, where `CommandInput.disabled = True` is set in `on_mount`. A disabled widget cannot receive focus. Textual should skip disabled widgets when resolving `AUTO_FOCUS`, but verify empirically. The `_replay_session()` worker already calls `cmd.query_one(Input).focus()` on completion — this covers the resume path.
+
+### Clean Alt-Screen Entry/Exit
+
+Textual enters alt-screen on `App.run()` and exits on `self.exit()`. The risk is `SIGINT` (Ctrl+C). If `SIGINT` bypasses `action_quit()`, the terminal may be left in a bad state. Verify with:
+
+```python
+import signal
+
+async def on_mount(self) -> None:
+    # Ensure Ctrl+C routes through clean quit
+    import signal
+    loop = asyncio.get_event_loop()
+    loop.add_signal_handler(signal.SIGINT, lambda: self.call_later(self.action_quit))
+```
+
+Alternatively, Textual may already handle this. Test empirically: run the app, press Ctrl+C, verify prompt is clean.
+
+### Borderless Design
+
+Current heavy borders to remove or reduce:
+- `CommandInput DEFAULT_CSS`: `border-top: solid $primary 30%` — replace with `border-top: blank` or a subtle `border-top: solid $surface-lighten-1`
+- `UserCell DEFAULT_CSS`: `border-left: thick $primary` — reduce to `border-left: wide $primary 50%` or a thin accent line
+- `AssistantCell DEFAULT_CSS`: `border-left: thick $accent` — same treatment
+- Input widget inside `CommandInput`: already `border: none` — keep
+
+The goal is to distinguish cells by background color and left accent line (thin), not by thick box borders. This is exactly the Codex CLI aesthetic: color blocks with minimal framing, no box borders.
+
+### Smooth Animations
+
+Cell fade-in implementation:
+
+```python
+async def add_user_message(self, text: str) -> UserCell:
+    cell = UserCell(text)
+    cell.styles.opacity = 0.0  # start invisible
+    await self.mount(cell)
+    cell.animate("opacity", 1.0, duration=0.15, easing="in_out_cubic")
+    # ... existing scroll_end logic
+```
+
+Env var check pattern:
+
+```python
+import os
+_ANIMATIONS = os.environ.get("CONDUCTOR_NO_ANIMATIONS", "") not in ("1", "true", "yes")
+
+if _ANIMATIONS:
+    cell.animate("opacity", 1.0, duration=0.15)
+```
+
+The existing shimmer in `AssistantCell` uses a `Timer` + manual `Color` interpolation. This is correct and should be preserved — it's a different kind of animation (pulse while streaming) from the cell-entry fade (one-shot on mount).
+
+### Ctrl-G External Editor
+
+Full implementation pattern:
+
+```python
+BINDINGS = [
+    Binding("ctrl+g", "open_editor", "Open in editor", show=False),
+    # ... existing bindings
+]
+
+def action_open_editor(self) -> None:
+    """Open current input content in $VISUAL/$EDITOR (vim fallback) for multiline editing."""
+    import os
+    import subprocess
+    import tempfile
+    from conductor.tui.widgets.command_input import CommandInput
+    from textual.widgets import Input
+
+    if sys.platform == "win32":
+        self.notify("External editor not supported on Windows", severity="warning")
+        return
+
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or "vim"
+
+    cmd_input = self.query_one(CommandInput)
+    current_text = cmd_input.query_one(Input).value
+
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".txt", delete=False, prefix="conductor_"
+    ) as f:
+        f.write(current_text)
+        tmppath = f.name
+
+    try:
+        with self.suspend():
+            subprocess.call([editor, tmppath])
+        edited = Path(tmppath).read_text().rstrip("\n")
+        cmd_input.query_one(Input).value = edited
+        cmd_input.query_one(Input).cursor_position = len(edited)
+    finally:
+        Path(tmppath).unlink(missing_ok=True)
+```
+
+Note: `action_open_editor` must be a synchronous method (not async) because `App.suspend()` is a context manager, not a coroutine. If it needs to be async, use `asyncio.get_event_loop().run_in_executor()` inside the suspend block instead of `subprocess.call()`.
 
 ---
 
 ## Sources
 
-- [Textual widget gallery — Official Docs](https://textual.textualize.io/widget_gallery/) — HIGH confidence, official Textualize documentation
-- [Textual Markdown widget — Official Docs](https://textual.textualize.io/widgets/markdown/) — HIGH confidence; confirms MarkdownStream for coalesced streaming updates
-- [Textual RichLog widget — Official Docs](https://textual.textualize.io/widgets/rich_log/) — HIGH confidence; confirms Rich Syntax objects accepted as renderables
-- [Textual Screens guide (ModalScreen) — Official Docs](https://textual.textualize.io/guide/screens/) — HIGH confidence; confirms push/pop/dismiss pattern with callback
-- [Textual Footer widget — Official Docs](https://textual.textualize.io/widgets/footer/) — HIGH confidence; confirms Footer is keybinding-only → custom static widget needed
-- [Textual LoadingIndicator — Official Docs](https://textual.textualize.io/widgets/loading_indicator/) — HIGH confidence; pulsating dots; `widget.loading` property for inline replacement
-- [Textual content/markup guide — Official Docs](https://textual.textualize.io/guide/content/) — HIGH confidence; Rich renderables supported alongside Textual markup
-- [textual-autocomplete — GitHub (darrenburns)](https://github.com/darrenburns/textual-autocomplete) — HIGH confidence; fuzzy dropdown, Textual 2.0+ compatible, actively maintained
-- [Anatomy of a Textual User Interface — Textual Blog](https://textual.textualize.io/blog/2024/09/15/anatomy-of-a-textual-user-interface/) — HIGH confidence; official blog showing exact cell-based chat pattern with VerticalScroll + Markdown cells
-- [Codex CLI features — OpenAI Official Docs](https://developers.openai.com/codex/cli/features/) — HIGH confidence; confirms syntax-highlighted diffs, /theme, approval workflows
-- [Codex CLI changelog — OpenAI](https://developers.openai.com/codex/changelog/) — HIGH confidence; multi-agent sub-agent monitoring features added 2025
-- Existing Conductor source: `packages/conductor-core/src/conductor/cli/chat.py` — HIGH confidence; direct code review of features being replaced
+- [Textual App guide — App.suspend() and inline mode](https://textual.textualize.io/guide/app/) — HIGH confidence; official documentation; confirms `suspend()` context manager for external processes
+- [Textual App API — AUTO_FOCUS, set_focus, suspend](https://textual.textualize.io/api/app/) — HIGH confidence; `AUTO_FOCUS = '*'` classvar documented; `set_focus()` signature confirmed
+- [Textual Input guide — focus management](https://textual.textualize.io/guide/input/) — HIGH confidence; confirms default focus goes to first focusable widget; `can_focus` attribute
+- [Textual Animation guide — animate(), easing functions](https://textual.textualize.io/guide/animation/) — HIGH confidence; `opacity` and `offset` are animatable; `in_out_cubic` default easing; duration in seconds
+- [Textual Border styles — none, blank, hidden](https://textual.textualize.io/styles/border/) — HIGH confidence; full border style list; `none` removes border space; `blank` maintains space invisibly
+- [Textual GitHub Discussion #165 — Running shell apps / vim from Textual](https://github.com/Textualize/textual/discussions/165) — HIGH confidence; confirms `App.suspend()` pattern; tempfile approach; pre-suspend manual driver approach for older versions
+- [Textual GitHub Issue #4385 — inline mode + command palette conflict](https://github.com/Textualize/textual/issues/4385) — HIGH confidence; confirms inline mode is NOT right for Conductor
+- [Textual Input auto-focus discussion #4143](https://github.com/Textualize/textual/discussions/4143) — MEDIUM confidence; community confirms AUTO_FOCUS class variable behavior; `""` to disable
+- Existing Conductor source: `packages/conductor-core/src/conductor/tui/app.py` — HIGH confidence; direct code review; confirms existing `action_quit()`, `on_mount()`, BINDINGS absence, focus calls in stream_done and replay paths
+- Existing Conductor source: `packages/conductor-core/src/conductor/tui/widgets/command_input.py` — HIGH confidence; confirms `CommandInput` structure, inner `Input` widget, current border CSS
+- Existing Conductor source: `packages/conductor-core/src/conductor/tui/widgets/transcript.py` — HIGH confidence; confirms shimmer animation implementation, `add_user_message` / `add_assistant_streaming` as mount points
+- Existing Conductor source: `packages/conductor-core/src/conductor/tui/conductor.tcss` — HIGH confidence; confirms current CSS is minimal and extensible
 
 ---
-*Feature research for: Textual TUI redesign (Conductor v2.0)*
+*Feature research for: Conductor v2.1 UX Polish (alt-screen, borderless, animations, external editor)*
 *Researched: 2026-03-11*

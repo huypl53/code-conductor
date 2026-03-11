@@ -1,239 +1,182 @@
 # Project Research Summary
 
-**Project:** Conductor v2.0 — Textual TUI Redesign
-**Domain:** Python multi-agent orchestration CLI — replacing prompt_toolkit + Rich with a full Textual widget-based terminal UI
+**Project:** Conductor v2.1 — TUI UX Polish
+**Domain:** Textual TUI polish — incremental UX milestone on existing v2.0 foundation
 **Researched:** 2026-03-11
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Conductor v2.0 is a terminal UI redesign for an existing Python multi-agent coding orchestration framework. The v1.x foundation (Claude Agent SDK integration, session persistence, slash commands, smart delegation, web dashboard) is fully built and preserved; v2.0 replaces only the UI layer — `prompt_toolkit` + Rich inline output — with a full `Textual`-based TUI that delivers the same UX quality as OpenAI's Codex CLI. Research confirms this is a well-documented migration path with a clear build order: Textual v4+ takes ownership of the asyncio event loop, all existing business logic (orchestrator, state management, delegation, dashboard server) plugs in as workers or tasks on that loop, and the new widget tree maps directly onto already-built infrastructure.
+Conductor v2.1 is a focused UX polish pass on an existing, working Textual TUI. The v2.0 foundation is solid: 641 passing tests, a fully functional `ConductorApp` with streaming, session replay, agent monitoring, and slash command autocomplete. V2.1 adds five targeted improvements — auto-focus input, full alt-screen with clean exit, borderless/minimal chrome design, smooth cell animations, and Ctrl-G external editor integration — to bring the TUI to the standard set by OpenAI Codex CLI. Critically, all five features are implemented using APIs already present in `textual==8.1.1`. Zero new dependencies are required.
 
-The recommended approach is an 8-phase incremental migration that builds from the inside out: static TUI shell first, then SDK streaming, then agent monitoring, then modals, slash commands, dashboard coexistence, and session persistence polish. Each phase is independently testable and the existing `conductor run` batch mode is untouched throughout. The most critical architectural decision — that Textual owns the event loop and everything else runs inside it — must be settled in Phase 1 before any UI work begins. Failure to do this produces cascading runtime errors that are expensive to unwind later.
+The recommended approach is to implement all five features in a single, low-risk milestone delivered in four sequential phases that respect dependency order. The three lowest-effort features (auto-focus, alt-screen verification, borderless CSS) establish a clean baseline before the two medium-complexity features (external editor, smooth animations) are added. Every feature is a targeted addition of roughly 5–30 lines to existing files — no new modules, no structural refactoring, no component tree changes.
 
-The primary risks are architectural, not feature-level. Three patterns from the current codebase conflict directly with Textual: `asyncio.run()` alongside `App.run()`, Rich `Console.print()` calls during TUI lifetime, and `prompt_toolkit` terminal ownership. All three must be eliminated in Phase 1. Once event loop ownership is clean, the remaining phases follow well-documented Textual patterns and are medium-complexity at worst. The reference UX target (Codex CLI) maps precisely to available Textual widgets — no novel widget engineering is required.
+The key risks are well-understood and avoidable. The Phase 38 codebase confirmed a production bug where `Widget.animate("styles.tint", ...)` fails at runtime with `AttributeError` because Textual's animator does not resolve dot-path attribute names; the shimmer was correctly fixed to use `set_interval`, and that precedent must hold for all new animation work. The external editor's `App.suspend()` call must run from a synchronous action or `@work(thread=True)` — using `async def` with `asyncio.create_subprocess_exec` instead leaves the terminal in a broken state. Both risks are fully documented and the mitigations are straightforward.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The stack adds exactly one new runtime dependency: `textual>=4.0`. The existing `claude-agent-sdk>=0.1.48`, `rich>=13`, `watchfiles>=1.1`, `fastapi`, `uvicorn`, and `pydantic v2` are all preserved and reused. The `prompt_toolkit` dependency (added in v1.1) is fully removed in v2.0 — it cannot coexist with Textual. The optional third-party library `textual-autocomplete` (authored by a Textual team member) is added for slash command dropdown popups. No database, no new server, no new CLI framework.
+All v2.1 features are served by `textual==8.1.1` already installed. No new packages are needed. The five implementation surfaces are: `App.AUTO_FOCUS` class variable (auto-focus), `App.run()` default behavior (alt-screen), Textual CSS `border: none` (borderless design), `Widget.animate("opacity", ...)` (cell fade-in), and `App.suspend()` + `subprocess.run` inside a synchronous action (external editor).
 
 **Core technologies:**
-- `textual>=4.0`: Full TUI framework — owns the event loop, widget tree, CSS layout, and screen stack; `MarkdownStream` (v4 feature) enables efficient token-by-token streaming into cells
-- `claude-agent-sdk>=0.1.48` via `ClaudeSDKClient`: Persistent multi-turn session with streaming — already present, wired into `SDKStreamWorker` via `@work` decorator
-- `watchfiles>=1.1`: File event-driven state updates — already present, reused in `StateWatchWorker` watching parent directory (not `state.json` directly) due to atomic inode swap behavior
-- `uvicorn.Config` + `uvicorn.Server` pattern: Dashboard server runs as `asyncio.create_task(server.serve())` inside Textual's loop — replaces `uvicorn.run()` which conflicts with existing loop
-- `textual-autocomplete` (third-party, Textual team): Fuzzy dropdown popup for slash command suggestions
-
-**Critical version note:** `MarkdownStream` requires Textual v4+. This is the primary new feature of Textual v4 and is specifically designed for LLM streaming patterns. `prompt_toolkit` is fully removed — both frameworks claim terminal raw mode and cannot coexist.
+- `textual==8.1.1` — all five v2.1 APIs verified against the installed package source via `inspect`; zero new dependencies
+- `asyncio` stdlib — existing `@work` worker threading model; no changes needed
+- `tempfile` + `subprocess` stdlib — editor integration; no third-party deps
+- `conductor.tcss` — single CSS file controls all layout borderless changes via Textual's specificity cascade
 
 ### Expected Features
 
-The v2.0 MVP must prove the Textual redesign is credibly better than the current prompt_toolkit implementation. Full details in `.planning/research/FEATURES.md`.
+**Must have (table stakes — v2.1 core):**
+- **Auto-focus input on startup** — without this, users must Tab or click before typing; every reference tool (Codex CLI, aider, OpenCode) activates input immediately
+- **Full alt-screen with clean exit** — TUI must own the terminal completely and restore it cleanly on any exit path; leaving escape code artifacts is a usability failure
+- **Ctrl-G external editor** — power users composing multi-line prompts need a real editor; this is the standard Unix pattern (used by git commit, readline `edit-and-execute-command`)
 
-**Must have (table stakes — v2.0 core):**
-- Cell-based conversation transcript — discrete user/assistant cells in `VerticalScroll`; missing this makes the redesign feel worse than what it replaces
-- Streaming text into active cell — token-by-token via `MarkdownStream`; static "thinking then full display" is a regression
-- Visual "thinking" indicator — `LoadingIndicator` or `widget.loading = True`; users need feedback before first token
-- Status footer bar — model name, mode, context utilization %; docked `Static` widget wired to existing `ContextTracker`
-- Slash command autocomplete popup — `/` triggers `textual-autocomplete` dropdown; existing `SLASH_COMMANDS` dict becomes candidate list
-- Modal approval overlays — `ModalScreen[bool]` replacing `_escalation_input()` for agent file/command approvals
-- Web dashboard coexistence — uvicorn as `asyncio.create_task` in `on_mount`; both surfaces active simultaneously
+**Should have (differentiators — v2.1 core):**
+- **Borderless/minimal chrome design** — removes box-border visual clutter so content flows naturally; matches Codex CLI's content-first aesthetic
+- **Smooth cell fade-in animations** — `Widget.animate("opacity", ...)` on `AssistantCell` and `UserCell` mount; makes the TUI feel alive rather than static
 
-**Should have (competitive advantage — v2.0 polish, after core is stable):**
-- Inline agent monitoring panels — collapsible per-agent panels wired to `StateWatchWorker`; differentiator vs Codex CLI which has no equivalent
-- Syntax-highlighted diffs in transcript — `RichLog.write(Syntax(diff_text, "diff"))` inline in cells
-- Collapsible tool activity within cells — tool calls in `Collapsible`; expands during streaming, collapses after
-- Shimmer/pulse animation on in-progress cells — CSS animation or `LoadingIndicator` on active cell border
+**Defer to v2.1 polish (P2 — add if time permits):**
+- Responsive layout breakpoints — hide `AgentMonitorPane` below ~100 columns via CSS `@media` or `on_resize()`
+- `CONDUCTOR_NO_ANIMATIONS=1` env var toggle — disables all `animate()` calls for CI/SSH use
 
-**Defer (v2.x+):**
-- `/theme` command with live preview — Textual CSS variable swap at runtime; not blocking the redesign
-- Adaptive light/dark color scheme detection — purely additive
-- Session picker as Textual `ModalScreen` overlay — current terminal UI is functional
+**Defer to v2.2+ (P3):**
+- Command history (up-arrow) across sessions — requires custom `Input` subclass, significant scope
+- `/theme` live switching — CSS variable swap at runtime with modal picker
+- Session picker as Textual `ModalScreen` — upgrade from plain-text session list
 
-**Anti-features to reject:**
-- Full raw log view inside Textual — information overload is the documented v1.x UX problem; web dashboard handles full logs
-- Inline file editor (`TextArea`) — creates accidental edits and focus traps; open `$EDITOR` via `app.suspend()` instead
-- Persistent split-screen layout — wastes space when no agents are running; collapsible panels on demand is correct
+**Anti-features to explicitly reject:**
+- Inline mode (`inline=True`) — conflicts with alt-screen goal; known Textual bug with command palette
+- Animated splash/loading screen — adds startup latency when auto-focus already solves the "start typing immediately" need
+- Full vim keybindings in `Input` — Ctrl-G to real vim covers the actual use case
 
 ### Architecture Approach
 
-The architecture preserves all existing business logic and adds a new `conductor/tui/` module isolated from `cli/`. `ConductorApp` (Textual App root) replaces `ChatSession.run()` as the process entry point. Background workers (`@work` coroutines) drive SDK streaming, state file watching, and the dashboard server — all on Textual's event loop. Custom `Message` subclasses in `tui/messages.py` form the internal event bus; workers never call widget methods directly. The `DelegationManager` is modified minimally: its `input_fn` callback changes from a `prompt_toolkit` prompt to `push_screen_wait(EscalationModal(...))`, and the polling `_status_updater` / ANSI cursor `_clear_status_lines` methods are deleted entirely.
+V2.1 makes surgical additions to four existing files and one new message type. The component tree is unchanged. `ConductorApp` receives `AUTO_FOCUS`, a new `Binding`, and `action_open_editor()`. `conductor.tcss` gets borderless Screen and container rules. `CommandInput` receives `on_editor_content_ready()`. `messages.py` gets `EditorContentReady`. The external editor flow uses the existing message bus pattern (consistent with `StreamDone`, `TokensUpdated`) rather than direct cross-widget method calls.
 
-**Major components:**
-1. `ConductorApp` (`tui/app.py`) — Textual App root; owns event loop lifecycle; launches workers in `on_mount`; replaces `asyncio.run(_run_chat_with_dashboard(...))`
-2. `TranscriptPane` + `MessageCell` (`tui/widgets/transcript.py`) — scrollable conversation history; each assistant cell wraps `MarkdownStream` while streaming; immutable after `StreamDone`
-3. `SDKStreamWorker` (`tui/workers/sdk_stream.py`) — `@work` coroutine driving `ClaudeSDKClient`; posts `TokenChunk`, `ToolActivity`, `StreamDone`, `TokensUpdated` messages
-4. `AgentMonitorPane` + `AgentStatusRow` (`tui/widgets/agent_monitor.py`) — right-side panel with reactive status per agent; fed by `StateWatchWorker` via `StateChanged` messages
-5. `StateWatchWorker` (`tui/workers/state_watcher.py`) — `watchfiles.awatch` on state file parent directory; replaces `_status_updater` polling
-6. `ApprovalModal` + `EscalationModal` (`tui/screens/`) — `ModalScreen[bool]` and `ModalScreen[str]` pushed via `push_screen_wait()` from `@work` workers
-7. `CommandInput` (`tui/widgets/command_input.py`) — `Input` widget with `textual-autocomplete` slash command popup
-8. `StatusFooter` (`tui/widgets/status_footer.py`) — bottom bar docked via CSS; reactive labels wired to `ContextTracker`
-9. `DashboardWorker` (`tui/workers/dashboard.py`) — `asyncio.create_task(uvicorn_server.serve())` in `on_mount`
+**Modified components and scope:**
+1. `ConductorApp` (`app.py`) — `AUTO_FOCUS = "Input"`, `BINDINGS` entry, `action_open_editor()` method (~30 lines added)
+2. `conductor.tcss` — remove `background: $surface` from Screen; remove layout container borders (~5 lines changed)
+3. `CommandInput` (`command_input.py`) — soften `border-top`; add `on_editor_content_ready()` handler (~10 lines changed)
+4. `messages.py` — add `EditorContentReady(Message)` (~6 lines added)
+5. `transcript.py` — optionally add `on_mount` fade-in to `AssistantCell` and `UserCell` (~8 lines, fully additive)
+
+**No new files needed.** No changes to `TranscriptPane`, `AgentMonitorPane`, `StatusFooter`, `modals.py`, or any streaming/replay workers.
 
 ### Critical Pitfalls
 
-All 11 pitfalls researched are HIGH confidence based on official Textual docs and GitHub issues. The top 5 require Phase 1 attention. Full details in `.planning/research/PITFALLS.md`.
+1. **`animate("styles.tint")` AttributeError (confirmed production bug, Phase 38)** — Textual's animator uses `getattr(widget, attribute)` and does not resolve dot-paths. Never use `animate("styles.tint", ...)` or `animate("tint", ...)`; all tint/shimmer animation must use `set_interval` + direct `self.styles.tint` assignment. Only use `animate()` for top-level style properties: `opacity`, `offset`.
 
-1. **Textual owns the event loop — no `asyncio.run()` cohabitation** — Make `ConductorApp(...).run()` the sole process entry point; run uvicorn and SDK as tasks inside `on_mount`; never use `nest_asyncio` as a workaround
-2. **Rich `Console.print()` calls corrupt the Textual renderer** — Remove all `Console.print()` from code paths active during TUI lifetime; `_status_updater` / `_clear_status_lines` ANSI cursor codes are fatal and must be deleted; route all output through Textual widget messages
-3. **`prompt_toolkit` cannot coexist with Textual** — Both frameworks claim terminal raw mode; full removal of `prompt_toolkit` imports from all TUI code paths is required; reimplement input history with Python `deque` and `Up`/`Down` key bindings
-4. **Per-token `widget.update()` causes TUI flicker and CPU saturation** — Buffer streaming tokens; flush to `RichLog` or `MarkdownStream` at 20fps via `set_interval(0.05, flush_buffer)`; never call `Static.update()` per-token
-5. **`asyncio.create_task()` without stored reference causes silent GC-collected workers** — Establish `_background_tasks: set[asyncio.Task]` with `add_done_callback(discard)` convention in Phase 1; prefer Textual `@work` which holds references automatically
-6. **`push_screen_wait()` deadlocks if called from an event handler** — Call only from `@work` coroutines; event handlers delegate to workers
-7. **Reactive attributes set in `__init__` trigger watchers before mount** — Initialize reactives to sentinel values in `__init__`; set real values in `on_mount`; guard watchers with `if not self.is_attached: return`
-8. **Textual test / pytest-asyncio fixture incompatibility** — Put `async with app.run_test() as pilot:` inline in test functions, not fixtures; keep Textual tests in separate files from non-Textual asyncio tests
+2. **`App.suspend()` must be called synchronously** — Making `action_open_editor` an `async def` and using `asyncio.create_subprocess_exec` breaks terminal control; the editor and Textual fight over the terminal simultaneously. The action must be `def` (sync) calling `with self.suspend(): subprocess.run(...)` directly, OR wrapped in `@work(thread=True)`.
+
+3. **CSS specificity — compound selectors required for borderless overrides** — `Input { border: none; }` in `conductor.tcss` does NOT override `CommandInput Input { border: none; }` in `CommandInput.DEFAULT_CSS` because the compound selector has higher specificity. Override rules must match or exceed the specificity of the `DEFAULT_CSS` rule being replaced. Verify with `textual console` CSS inspector.
+
+4. **Auto-focus timing — use `AUTO_FOCUS` class var, not `on_mount` `focus()`** — Textual v2.0+ evaluates the focus chain before `on_mount` handlers run; a `focus()` call during `on_mount` is silently ignored if the widget is disabled or not yet registered. `AUTO_FOCUS = "Input"` fires on Screen activation (the correct timing). This is also the mechanism that correctly restores focus after modal dismissal.
+
+5. **Shimmer timer leak on finalization** — `set_interval` timers run independently of widget state. `finalize()` must call `_shimmer_timer.stop()` before clearing `_is_streaming`; incorrect order causes the timer to fire indefinitely on completed cells. Current implementation is correct; new animation phases must replicate the stop-before-clear sequence.
 
 ## Implications for Roadmap
 
-Based on combined research, the architecture already provides an explicit 8-phase build order. The roadmap should follow this order; test infrastructure setup is a prerequisite for Phase 1, not deferred.
+All five v2.1 features fit cleanly into four sequential phases that respect the dependency order confirmed in ARCHITECTURE.md. Each phase is independently testable and does not require the next phase to function.
 
-### Phase 1: Architecture Foundation and Event Loop Ownership
+### Phase 1: Foundation Fixes (Auto-focus + Alt-screen)
 
-**Rationale:** Three existing patterns (`asyncio.run()`, `Console.print()`, `prompt_toolkit`) conflict fatally with Textual. These must be resolved before any widget work begins — they cannot be fixed incrementally after the fact. Event loop architecture is the load-bearing decision the entire build depends on.
+**Rationale:** These two features are zero-risk additions that establish the correct startup and exit baseline. Auto-focus must land before the external editor is implemented, as both touch focus management. Alt-screen verification — confirming no `inline=True` and adding a `try/finally` terminal cleanup at the CLI entry point — is a precondition for safely testing the editor's `suspend()` integration.
 
-**Delivers:** `ConductorApp` entry point replacing `asyncio.run(_run_chat_with_dashboard(...))`; clean test infrastructure separating Textual from non-Textual asyncio tests; zero `prompt_toolkit` imports in TUI code paths; verified SDK subprocess fd inheritance; `_background_tasks` reference-holding convention established
+**Delivers:** TUI that starts with input immediately active; terminal fully taken over on launch; terminal restored cleanly on any exit path including SIGKILL.
 
-**Addresses:** Entry-point architecture, test infrastructure, SDK subprocess output audit
+**Addresses:** Auto-focus input on startup; full alt-screen with clean exit.
 
-**Avoids:** Pitfalls 1 (event loop conflict), 2 (console corruption), 3 (prompt_toolkit coexistence), 5 (task GC), 9 (pytest incompatibility)
+**Avoids:** Auto-focus timing pitfall (use `AUTO_FOCUS` class var, not `on_mount` focus); alt-screen mouse escape code leak on crash (add `try/finally` at CLI entry point writing `\033[?1003l\033[?1006l\033[?1000l` to stdout).
 
-### Phase 2: Static TUI Shell
+### Phase 2: Borderless Design
 
-**Rationale:** Layout and routing must be verified with hard-coded content before live data is connected. Discovering layout bugs with static widgets is cheap; discovering them after SDK streaming is wired in is expensive.
+**Rationale:** Pure CSS changes with no Python logic; the lowest-risk phase. Should land before animations so the visual baseline is settled before motion is layered on top.
 
-**Delivers:** `MainScreen` two-column layout with `TranscriptPane`, `CommandInput`, `StatusFooter`, `AgentMonitorPane` placeholder; `CommandInput.Submitted` creates user `MessageCell`; app exits cleanly on `/exit`; Textual confirmed wired to CLI entry point
+**Delivers:** Layout with no box-border chrome on Screen, `#app-body`, or `CommandInput`; `AgentMonitorPane` keeps its `border-left` as column separator; all modal borders intact; content-first aesthetic matching Codex CLI.
 
-**Uses:** `textual>=4.0`, Textual CSS (`conductor.tcss`), `tui/messages.py` message bus
+**Addresses:** Borderless/minimal chrome design.
 
-**Implements:** `ConductorApp`, `MainScreen`, `TranscriptPane`, `CommandInput`, `StatusFooter` (structural only)
+**Avoids:** CSS specificity pitfall — use compound selectors matching DEFAULT_CSS specificity; audit each widget's `DEFAULT_CSS` for compound selectors before writing override rules; verify with `textual console`. Keep cell `border-left` as semantic role indicator — only remove chrome borders on layout containers.
 
-### Phase 3: SDK Streaming
+### Phase 3: Ctrl-G External Editor
 
-**Rationale:** Streaming is the core value of the TUI — it must be built as the third phase to maximize time for performance tuning before polish is layered on. The token buffering strategy must be baked in from the start, not retrofitted.
+**Rationale:** Medium-complexity feature that depends on Phase 1 (stable alt-screen and terminal lifecycle) but is independent of Phase 2. Should land before animations because it has more surface area for terminal-state bugs that need thorough testing.
 
-**Delivers:** Real Claude responses streaming token-by-token into `MarkdownStream`-backed assistant cells; tool activity lines inline; `StatusFooter` token counter live; visual "thinking" indicator before first token
+**Delivers:** Ctrl-G binding on `ConductorApp` that suspends the TUI, opens `$VISUAL`/`$EDITOR` (vim fallback) with current input content pre-populated, reads the result back, and fills `CommandInput` via the `EditorContentReady` message. Includes: guard for Ctrl-G during session replay (input locked); `SuspendNotSupported` catch for CI/non-Unix; `try/except` around the suspend block for editor crash recovery; `$VISUAL` honored before `$EDITOR` (POSIX convention).
 
-**Uses:** `ClaudeSDKClient` with `include_partial_messages=True`, `MarkdownStream` (Textual v4), `@work` decorator, `TokenChunk`/`ToolActivity`/`StreamDone`/`TokensUpdated` messages
+**Addresses:** Ctrl-G external editor integration.
 
-**Implements:** `SDKStreamWorker`, streaming `MessageCell`, token buffering at 20fps, `StatusFooter` reactive wiring
+**Avoids:** Async `action_open_editor` pitfall (synchronous `def` action with blocking `subprocess.run`); Ctrl-G key routing conflict with `SlashAutocomplete` (verify with `textual console` key event log before wiring editor plumbing); terminal state not restored after editor crash (wrap suspend block in `try/except`).
 
-**Avoids:** Pitfall 6 (streaming performance saturation)
+### Phase 4: Smooth Animations
 
-### Phase 4: Agent Monitor Panel
+**Rationale:** Fully additive — no existing behavior changes. Lands last so the visual baseline (Phase 2) is settled. The simplest phase to revert: removing `on_mount` fade-in is a one-line revert. Include the `CONDUCTOR_NO_ANIMATIONS` env var toggle since it requires ~3 lines and prevents CI/SSH regressions.
 
-**Rationale:** Agent monitoring is architecturally independent from transcript streaming. Building it as a separate phase isolates the `StateWatchWorker` integration complexity and verifies `watchfiles.awatch` on parent directory behavior before modal work begins.
+**Delivers:** `AssistantCell` and `UserCell` fade in via `animate("opacity", 1.0, duration=0.25, easing="out_cubic")` on mount; existing shimmer unchanged; `CONDUCTOR_NO_ANIMATIONS=1` env var skips all `animate()` calls.
 
-**Delivers:** Right panel showing live agent status rows when delegation is active; panel empty when no agents running; reactive status/elapsed updates without ANSI codes
+**Addresses:** Smooth animations and transitions; animation env var toggle (P2).
 
-**Uses:** `watchfiles.awatch` on parent directory, `StateChanged` custom messages, `Reactive` attributes on `AgentStatusRow`
-
-**Implements:** `AgentMonitorPane`, `AgentStatusRow`, `StateWatchWorker`
-
-**Avoids:** Pitfall 2 (ANSI cursor code deletion confirmed), known watchfiles inode-swap gotcha
-
-### Phase 5: Escalation and Approval Modals
-
-**Rationale:** Modal approval overlays require the escalation queue bridge (`human_out` → `Message` → `push_screen_wait()`) to be redesigned around Textual's screen lifecycle. Isolated phase makes testing clean and ensures delegation infrastructure from Phase 4 is proven before modals depend on it.
-
-**Delivers:** `EscalationModal` (`ModalScreen[str]`) wired as new `input_fn` for `DelegationManager`; `ApprovalModal` (`ModalScreen[bool]`) for file/command approvals; background TUI remains live during modal display
-
-**Uses:** `ModalScreen[T]`, `push_screen_wait()` from `@work` workers, `asyncio.Queue` + `Message` bridge pattern
-
-**Implements:** `EscalationModal`, `ApprovalModal`, `DelegationManager.input_fn` swap, `_status_updater` deletion
-
-**Avoids:** Pitfall 7 (modal approval event loop blocking)
-
-### Phase 6: Slash Commands and Autocomplete
-
-**Rationale:** Slash command routing and autocomplete are self-contained input-layer features. Building after modals ensures command dispatch doesn't interfere with modal screen push/pop.
-
-**Delivers:** All 5 existing slash commands (`/help`, `/exit`, `/status`, `/summarize`, `/resume`) working; `textual-autocomplete` dropdown popup on `/` keypress; tab or enter selects
-
-**Uses:** `textual-autocomplete`, `Input` with custom `Suggester`, existing `SLASH_COMMANDS` dict as candidate list
-
-**Implements:** `CommandInput` slash dispatch, autocomplete popup wiring
-
-### Phase 7: Dashboard Coexistence and CLI Wiring
-
-**Rationale:** Dashboard coexistence is the final integration milestone. `uvicorn.Server.serve()` as `asyncio.create_task` in `on_mount` is the known-correct pattern; verifying it with a real WebSocket connection closes the event loop ownership story.
-
-**Delivers:** `conductor --dashboard-port 8000` starts both Textual TUI and WebSocket server in one process; web dashboard connects and shows live state; `conductor run "..."` batch mode confirmed unaffected; `--resume`/`--resume-id` flags wired to `ConductorApp` constructor
-
-**Uses:** `uvicorn.Config` + `uvicorn.Server` + `await server.serve()`, `asyncio.create_task`, existing `create_app(state_path)` unchanged
-
-**Implements:** `DashboardWorker`, `conductor/cli/__init__.py` final replacement
-
-**Avoids:** Pitfall 10 (uvicorn.run() inside Textual)
-
-### Phase 8: Session Persistence and Polish
-
-**Rationale:** Session persistence hooks into already-built `ChatHistoryStore`. Polish features (diffs, collapsible tool activity, shimmer animation) add value once the core UX is validated. Zero architectural risk.
-
-**Delivers:** `ChatHistoryStore.save_turn()` called on `StreamDone`; session picker `ModalScreen` for `--resume`; syntax-highlighted code blocks verified in `Markdown` widget; syntax-highlighted diffs via `RichLog.write(Syntax(diff_text, "diff"))`; collapsible tool activity in cells; shimmer animation on active cells
-
-**Uses:** Existing `ChatHistoryStore`, `RichLog.write(Syntax(...))`, `Collapsible` widget, CSS animation
-
-**Implements:** Session persistence wire-up, session picker modal, v2.0 polish pass
+**Avoids:** `animate("styles.tint")` AttributeError — only use `animate("opacity")`; shimmer stays on `set_interval`. No new `set_interval` timers introduced; existing cleanup (stop-before-clear) is correct and need not change.
 
 ### Phase Ordering Rationale
 
-- Phases 1-2 are prerequisites for everything: event loop architecture determines whether Phases 3-8 work at all; the static shell verifies the framework is wired before live data is connected
-- Phases 3-4 (streaming + agent monitor) are architecturally independent and could be parallelized; sequential ordering is recommended to keep integration complexity manageable
-- Phase 5 (modals) must follow Phase 4 because `DelegationManager._status_updater` deletion spans the Phase 4/5 boundary
-- Phases 6-7 are independent of each other and of Phase 5; they can be reordered without risk
-- Phase 8 is additive polish — only begin after Phase 7 is fully validated
+- Phases 1 and 2 are both low-risk and establish the stable baseline that phases 3 and 4 build on.
+- Phase 3 (external editor) before Phase 4 (animations) because Phase 3 has more terminal-state surface area; it should be thoroughly validated before animation complexity is added.
+- Alt-screen verification (Phase 1) precedes external editor (Phase 3) because `App.suspend()` behavior in a broken alt-screen setup can mask subtle terminal state issues.
+- Borderless design (Phase 2) before animations (Phase 4) because removing borders changes widget dimensions, which can affect animation offset calculations; settled layout first, then motion.
 
 ### Research Flags
 
-Phases needing deeper research during planning:
+Phases with well-documented patterns — standard implementations, skip additional research-phase:
+- **Phase 1:** `AUTO_FOCUS` class variable and `App.run()` default behavior are official Textual APIs with confirmed signatures in `textual==8.1.1`.
+- **Phase 2:** CSS borderless rules are straightforward; the only risk (specificity) is fully documented with a tested mitigation (compound selectors + `textual console` inspection).
+- **Phase 4:** `Widget.animate("opacity", ...)` is a documented, well-tested Textual API; the constraint (no dot-paths) is internalized from Phase 38's confirmed bug.
 
-- **Phase 3 (SDK Streaming):** `MarkdownStream` API is new in Textual v4 — verify `Markdown.get_stream()` and `await stream.append(chunk)` API surface against actual v4 release notes before coding; token buffering strategy needs validation against actual SDK streaming throughput numbers
-- **Phase 5 (Escalation and Approval Modals):** The `asyncio.Queue` bridge from `DelegationManager._escalation_listener` to `push_screen_wait()` has no direct precedent in Textual docs — prototype this pattern before building the full modal stack; confirm `push_screen_wait()` from a `@work` coroutine vs direct event handler deadlock behavior is correctly understood
-
-Phases with standard patterns (skip research-phase):
-
-- **Phase 2 (Static Shell):** Standard Textual app composition; well-documented in official anatomy blog and widget gallery
-- **Phase 4 (Agent Monitor):** `watchfiles.awatch` + `Reactive` attribute pattern is proven and replicates existing `dashboard/watcher.py`
-- **Phase 6 (Slash Commands):** `textual-autocomplete` is well-documented; existing slash command dict is the candidate list
-- **Phase 7 (Dashboard):** `uvicorn.Config` + `uvicorn.Server` is the documented correct approach; existing `create_app()` is unchanged
+Phase that warrants a focused pre-implementation prototype before full build:
+- **Phase 3 (Ctrl-G editor):** The `App.suspend()` interaction with the specific terminal environment (tmux, Kitty edge cases documented in PITFALLS.md) should be verified with a 20-line spike — write to a tempfile, open the editor, read it back — before wiring the full message bus. Catching terminal-state bugs at the prototype stage is cheaper than mid-implementation.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Single new dependency (Textual v4); all others existing; versions confirmed from PyPI and official docs 2026-03-11 |
-| Features | HIGH | Textual widget gallery + Codex CLI feature set directly mapped to Textual equivalents; anti-features explicitly documented from UX analysis of v1.x |
-| Architecture | HIGH | 8-phase build order derived from official Textual patterns; integration points mapped from direct codebase review; component boundaries match Textual's documented architectural model |
-| Pitfalls | HIGH | All 11 pitfalls sourced from official Textual docs, GitHub issues with root cause analysis, and direct codebase review; prevention patterns are official recommendations |
+| Stack | HIGH | All five APIs verified by direct `inspect` against installed `textual==8.1.1`; zero new dependencies confirmed |
+| Features | HIGH | Direct codebase review of v2.0 source plus Textual official docs; feature scope is narrow and well-bounded |
+| Architecture | HIGH | Changes are surgical additions to existing files; component boundaries and message bus patterns proven in v2.0 |
+| Pitfalls | HIGH | Multiple pitfalls backed by confirmed project history (Phase 38 bug log) and official Textual issue tracker entries with root cause analysis |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **`MarkdownStream` exact API surface:** ARCHITECTURE.md uses `Markdown.get_stream()` and `await stream.append(chunk)` — verify against actual Textual v4 release notes before Phase 3 begins; if API differs, `MessageCell` implementation needs adjustment
-- **Claude Agent SDK subprocess fd inheritance:** PITFALLS.md flags that the SDK subprocess may write to inherited terminal stdout, bypassing Textual; must be verified in Phase 1 with a test delegation run; fix requires investigation of `ClaudeAgentOptions` pipe settings if output leaks
-- **`textual-autocomplete` Textual v4 compatibility:** Documented as Textual 2.0+ compatible — verify no breaking changes at v4 before Phase 6
+- **`$VISUAL` vs `$EDITOR` precedence inconsistency:** STACK.md specifies honoring `$VISUAL` before `$EDITOR` (POSIX convention); ARCHITECTURE.md's code sample only checks `$EDITOR`. Implementation in Phase 3 must honor `$VISUAL` first — reconcile before coding.
+
+- **`action_open_editor` threading model:** STACK.md recommends `@work(thread=True)` wrapping the suspend call; ARCHITECTURE.md uses a synchronous `def` action calling `suspend()` directly. Both are valid but have different focus-restoration behaviors post-suspend. Decide on one pattern in Phase 3 and document the choice explicitly.
+
+- **Kitty terminal compatibility with `App.suspend()`:** PITFALLS.md flags known edge cases with Kitty and stdin after suspend/resume. Test on Kitty if it is in the expected user base; otherwise accept that a follow-up fix may be needed.
+
+- **Responsive layout breakpoints via CSS `@media`:** FEATURES.md references this as a P2 item but the `@media` syntax for width queries was not verified against `textual==8.1.1`. Verify the syntax before implementing in Phase 2 polish, or use the `on_resize()` handler approach instead.
 
 ## Sources
 
 ### Primary (HIGH confidence)
 
-- [Textual official docs](https://textual.textualize.io/) — widget gallery, workers guide, screens guide, `MarkdownStream`, `RichLog`, `LoadingIndicator`, CSS layout, `ModalScreen` pattern
-- [Textual blog](https://textual.textualize.io/blog/) — anatomy of a Textual UI (cell-based chat pattern), high-performance compositor algorithms, Heisenbug (task GC), `MarkdownStream` v4 release
-- [Textual GitHub issues](https://github.com/Textualize/textual/issues/) — #4998 (pytest fixture incompatibility), #5788 (event loop contamination), #600 (event loop ownership), #4691/#4570 (reactive before mount), #2952 (print capture), #3254 (Textual vs prompt_toolkit)
-- [Claude Agent SDK official docs](https://platform.claude.com/docs/en/agent-sdk/) — `ClaudeSDKClient`, `include_partial_messages`, streaming output, subprocess architecture
-- [PyPI: textual](https://pypi.org/project/textual/) — version confirmation
-- [PyPI: claude-agent-sdk](https://pypi.org/project/claude-agent-sdk/) — version 0.1.48 confirmed 2026-03-07
-- Existing Conductor codebase — `cli/chat.py`, `cli/delegation.py`, `cli/__init__.py`, `dashboard/server.py`, `dashboard/watcher.py` — direct code review for integration points
+- `textual==8.1.1` installed at `.venv` — all APIs verified by `inspect` on the live package; `App.run()`, `App.AUTO_FOCUS`, `App.suspend()`, `Widget.animate()`, `@work(thread=True)`, `Binding("ctrl+g", ...)` all confirmed
+- Conductor codebase: `app.py`, `conductor.tcss`, `command_input.py`, `transcript.py`, `messages.py`, `modals.py` — direct code inspection confirming v2.0 seams
+- `.planning/phases/38/38-01-SUMMARY.md` — Phase 38 bug log confirming `animate("styles.tint")` AttributeError in production; `set_interval` fix
+- [Textual App guide](https://textual.textualize.io/guide/app/) — `suspend()`, `inline` mode, `AUTO_FOCUS`
+- [Textual App API](https://textual.textualize.io/api/app/) — `AUTO_FOCUS`, `suspend()`, `run()` signatures and defaults
+- [Textual Animation Guide](https://textual.textualize.io/guide/animation/) — `animate()`, easing functions, animatable properties (`opacity`, `offset`)
+- [Textual CSS Guide](https://textual.textualize.io/guide/CSS/) — specificity rules, DEFAULT_CSS cascade order
+- [Textual Border styles](https://textual.textualize.io/styles/border/) — `none` vs `hidden` vs `blank` semantics; `none` collapses to zero width
+- [Textual issue #1093](https://github.com/Textualize/textual/issues/1093) — `App.suspend()` pattern for external editors; race condition fixed in PR #4064
+- [Textual issue #82](https://github.com/Textualize/textual/issues/82) — alt-screen escape code cleanup on crash
 
 ### Secondary (MEDIUM confidence)
 
-- [darrenburns/textual-autocomplete](https://github.com/darrenburns/textual-autocomplete) — Textual 2.0+ compatible; authored by Textual team member; actively maintained
-- [Uvicorn maintainer discussion: running inside existing loop](https://github.com/Kludex/uvicorn/discussions/2457) — `uvicorn.Server` + `Config` pattern for async contexts
-- [Codex CLI official docs/changelog](https://developers.openai.com/codex/) — reference UX target; feature set comparison
-- [prompt_toolkit official docs](https://python-prompt-toolkit.readthedocs.io/) — removal/migration reference
+- [Textual discussion #4143](https://github.com/Textualize/textual/discussions/4143) — `AUTO_FOCUS` class variable behavior; community-verified
+- [Textual issue #5605](https://github.com/Textualize/textual/issues/5605) — `can_focus` set in `on_mount` ignored in Textual v2.0+; `allow_focus()` override required
+- [Textual issue #4385](https://github.com/Textualize/textual/issues/4385) — inline mode conflicts with command palette; confirms full alt-screen is the correct choice for Conductor
 
 ---
 *Research completed: 2026-03-11*

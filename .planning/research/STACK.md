@@ -1,170 +1,276 @@
 # Stack Research
 
-**Domain:** Interactive chat TUI additions — v1.1 milestone (Conductor)
+**Domain:** Textual TUI UX polish — v2.1 milestone (Conductor)
 **Researched:** 2026-03-11
 **Confidence:** HIGH
 
 ---
 
-## Existing Stack (Validated in v1.0 — Do Not Re-research)
+## Existing Stack (Validated in v2.0 — Do Not Re-research)
 
 | Technology | Version | Role |
 |------------|---------|------|
-| `claude-agent-sdk` | `>=0.1.48` | ACP comms, agent spawning |
-| `rich` | `>=13` | Terminal display, Live tables |
-| `typer` | `>=0.12` | CLI command routing |
-| `asyncio` | stdlib | Async event loop |
+| `textual` | `8.1.1` | TUI framework — App, Widget, CSS, workers |
+| `textual-autocomplete` | (installed) | Slash command popup in CommandInput |
+| `claude-agent-sdk` | `>=0.1.48` | SDK streaming, ClaudeSDKClient |
 | `pydantic v2` | `>=2.10` | Data models |
-| `fastapi` + `uvicorn` | `>=0.135` / `>=0.41` | Dashboard API server |
-| `watchfiles` | `>=1.1` | File watching |
+| `asyncio` | stdlib | Event loop, workers |
 
-Current input handling (`input_loop.py`) uses `asyncio.to_thread(input, "> ")`. This works for the current command-dispatch loop but cannot support readline history, multiline input, or a stable prompt line that survives concurrent Rich output printing above it.
+Current TUI: `ConductorApp(App)` with `CSS_PATH`, two-column layout, `@work` workers, `TranscriptPane`, `CommandInput`, `StatusFooter`, `AgentMonitorPane`, shimmer animations via `set_interval`.
 
 ---
 
-## New Stack Additions for v1.1
+## New Stack for v2.1 — Zero New Dependencies
 
-### Core Technologies
+All five v2.1 features are addressed by APIs already present in Textual 8.1.1. No new packages are needed.
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| `prompt_toolkit` | `3.0.52` | Interactive terminal input with history, multiline, and concurrent-output safety | The standard for Python TUI input — used by IPython, pgcli, Poetry shell, and Claude Code's own CLI. Provides `PromptSession.prompt_async()` which awaits without blocking the event loop (unlike `asyncio.to_thread(input)`). `patch_stdout()` context manager intercepts all writes to stdout and redraws the prompt correctly when Rich or async code prints mid-turn — this is the critical capability that prevents garbled output when streaming tokens appear alongside an active input line. `FileHistory` persists command history to disk across restarts. |
-| `ClaudeSDKClient` (already in `claude-agent-sdk 0.1.48`) | — (no new dep) | Multi-turn conversation with persistent session state | `query()` (used today) creates a fresh Claude Code session each call — no memory of previous turns. `ClaudeSDKClient` reuses the same session across turns, maintains full conversation context, supports `interrupt()` to stop mid-stream, and is the correct API for an interactive chat loop. Already in the existing SDK at the pinned version — no new package needed. |
-| `include_partial_messages=True` (SDK option on `ClaudeAgentOptions`) | — (no new dep) | Token-by-token streaming output | Causes the SDK to emit `StreamEvent` messages containing raw `content_block_delta` / `text_delta` events as tokens arrive, before the complete `AssistantMessage` is assembled. Required for the "response streams in real-time" experience that Claude Code and Codex CLI deliver. Without this, the user sees nothing until Claude finishes the entire response. Already in the existing SDK — a one-field change to `ClaudeAgentOptions`. |
+### Feature 1: Alt-Screen Mode (Full Terminal Takeover)
 
-### Supporting Libraries
+**Status:** Already the default. No code change needed.
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| `prompt_toolkit.history.FileHistory` | bundled in `prompt_toolkit` | Persist chat prompts across sessions | Always — store at `~/.conductor_history` so `Up` arrow recalls previous prompts across restarts |
-| `prompt_toolkit.patch_stdout` | bundled | Route concurrent Rich output through prompt redraw | Always in chat mode — without it, streaming token output and Rich status messages overwrite the input line |
-| `rich.markdown.Markdown` | bundled in `rich>=13` | Render Claude's markdown responses in the terminal | Use when printing assistant text responses — headings, code fences, bullet lists render correctly; already a zero-cost dep |
-| `rich.syntax.Syntax` | bundled in `rich>=13` | Syntax-highlight code blocks in streamed output | For detected code blocks in chat responses; already present |
+Textual's `LinuxDriver` emits `\x1b[?1049h` (alt-screen on) at startup and `\x1b[?1049l` (alt-screen off) at exit. Running `App.run()` without `inline=True` uses the `LinuxDriver` and therefore already operates in full alt-screen mode.
 
-### Development Tools
+The v2.0 ConductorApp is launched via:
+```python
+app = ConductorApp(...)
+app.run()
+```
 
-No new dev tools needed — `pytest-asyncio` with `asyncio_mode = "auto"` already configured handles async test coverage for the new chat loop.
+This is already correct. If the app is currently appearing inline (under the prompt), the launch call site has `inline=True` set — remove it.
+
+**What NOT to do:** Do not write custom escape sequences. Do not wrap in a subprocess. Textual owns the terminal lifecycle.
+
+---
+
+### Feature 2: Auto-Focus Input on TUI Start
+
+**API:** `App.AUTO_FOCUS` class variable (CSS selector string)
+
+```python
+class ConductorApp(App):
+    AUTO_FOCUS = "CommandInput Input"   # focuses the Input inside CommandInput on mount
+```
+
+`App.AUTO_FOCUS` defaults to `"*"` (focuses the first focusable widget). Setting it to a specific CSS selector targets the exact widget. Screen activation calls `_update_auto_focus()` automatically — no `on_mount` focus call needed.
+
+Alternatively, in `on_mount` (already present in ConductorApp):
+```python
+async def on_mount(self) -> None:
+    ...
+    self.query_one("CommandInput Input", Input).focus()
+```
+
+The `AUTO_FOCUS` class variable is cleaner and handles focus restoration after modal screens. The existing `on_stream_done` already calls `.focus()` to restore after streaming — the `AUTO_FOCUS` approach covers initial mount.
+
+**What NOT to do:** Do not call `focus()` in `compose()` — widgets are not yet mounted. Do not `set_timer` a delayed focus call.
+
+---
+
+### Feature 3: Borderless / Minimal Chrome Design
+
+**API:** Textual CSS — `border: none;` and `padding: 0;`
+
+Valid Textual border values include `none`, `hidden`, `blank`. Setting `border: none` removes the border box entirely, collapsing the widget to its content edge.
+
+Current `CommandInput` CSS already does `border: none` on the inner `Input`. Extend this pattern to container widgets:
+
+```css
+/* conductor.tcss additions for borderless design */
+Screen {
+    background: $surface;
+}
+
+#app-body {
+    /* Remove default container borders */
+    border: none;
+}
+
+TranscriptPane {
+    border: none;
+    padding: 0;
+}
+
+AgentMonitorPane {
+    border: none;
+    padding: 0 1;
+}
+
+CommandInput {
+    height: 3;
+    padding: 0 1;
+    background: $panel;
+    border-top: solid $primary 30%;  /* keep the single separator line */
+    border-right: none;
+    border-bottom: none;
+    border-left: none;
+}
+
+StatusFooter {
+    border: none;
+    padding: 0 1;
+}
+```
+
+Textual CSS color variables (`$surface`, `$panel`, `$primary`, `$accent`) auto-adapt to the active theme. Use them rather than hard-coded hex values.
+
+For cell-level separators, prefer `margin-bottom: 1` on `UserCell` / `AssistantCell` (already in DEFAULT_CSS) over border lines — this matches the Codex CLI aesthetic of content-first with whitespace separation.
+
+**What NOT to do:** Do not use `border: hidden` when you mean `border: none` — `hidden` renders a transparent border that still consumes space. Use `none` to collapse to zero width.
+
+---
+
+### Feature 4: Smooth Animations and Transitions
+
+**API:** `Widget.animate()` and `App.animate()` (both same signature)
+
+```python
+Widget.animate(
+    attribute: str,           # CSS property name, e.g. "opacity", "offset"
+    value: float,             # target value
+    duration: float,          # seconds
+    easing: str,              # easing function name (see below)
+    on_complete: Callable,    # optional callback when done
+)
+```
+
+**Animatable CSS properties:**
+- `opacity` — fade in/out (0.0 to 1.0)
+- `offset` — positional slide (x/y offset)
+- Any numeric reactive attribute
+
+**Available easing functions** (verified from `textual._easing.EASING`):
+- `linear`, `in_out_cubic` (default), `out_cubic`, `in_cubic`
+- `in_out_sine`, `out_sine`, `in_sine`
+- `in_out_quad`, `out_quad`, `in_quad`
+- `in_out_expo`, `out_expo`, `in_expo`
+- `in_out_back`, `out_back` (slight overshoot — good for "pop in")
+- `in_out_bounce`, `out_bounce`
+- `in_out_elastic`, `out_elastic`
+
+**Pattern: Fade in new transcript cells**
+
+```python
+class AssistantCell(Widget):
+    async def on_mount(self) -> None:
+        self.styles.opacity = 0.0
+        self.animate("opacity", 1.0, duration=0.25, easing="out_cubic")
+```
+
+**Pattern: Slide in from below**
+
+```python
+async def on_mount(self) -> None:
+    self.styles.offset = (0, 2)   # start 2 lines below
+    self.animate("offset", (0, 0), duration=0.2, easing="out_cubic")
+```
+
+**Existing shimmer pattern** (keep as-is — already working):
+- `set_interval(1/15, _tick)` + sine wave phase → `styles.background = Color(...)`
+- No changes needed; this pattern correctly handles the streaming shimmer
+
+**What NOT to do:** Do not use `asyncio.sleep()` loops for animation timing — Textual's `animate()` runs on the compositor thread and integrates with the screen refresh cycle. Do not create `set_interval` timers for one-shot transitions — use `animate()` for those.
+
+---
+
+### Feature 5: Ctrl-G External Editor Integration
+
+**API:** `App.suspend()` (sync context manager) + `@work(thread=True)`
+
+The pattern: suspend Textual → launch editor as a subprocess → read the temp file → resume Textual → populate input.
+
+`App.suspend()` is a synchronous context manager (`@contextmanager`, not `@asynccontextmanager`). It must be called from a thread worker, not from an async coroutine. Use `@work(thread=True)` on the handler.
+
+```python
+# In CommandInput or ConductorApp:
+from textual.binding import Binding
+
+BINDINGS = [
+    Binding("ctrl+g", "open_editor", "Open in editor", show=False),
+]
+
+@work(thread=True, exit_on_error=False)
+def action_open_editor(self) -> None:
+    """Launch external editor for multiline input composition."""
+    import os
+    import subprocess
+    import tempfile
+    from textual.app import SuspendNotSupported
+
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or "vim"
+    initial_text = ""
+
+    # Read current input value (safe to read from thread — it's a string)
+    try:
+        from textual.widgets import Input
+        current = self.app.query_one("CommandInput Input", Input).value
+        initial_text = current
+    except Exception:
+        pass
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".md",
+        prefix="conductor_",
+        delete=False,
+    ) as f:
+        f.write(initial_text)
+        tmp_path = f.name
+
+    try:
+        try:
+            with self.app.suspend():
+                subprocess.run([editor, tmp_path], check=False)
+        except SuspendNotSupported:
+            # Fallback: run without suspension (editor will fight the TUI)
+            subprocess.run([editor, tmp_path], check=False)
+
+        with open(tmp_path) as f:
+            content = f.read().strip()
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+    if content:
+        # Post message back to the app — safe cross-thread communication
+        from conductor.tui.messages import UserSubmitted
+        self.app.call_from_thread(
+            self.app.post_message, UserSubmitted(content)
+        )
+```
+
+**Key constraints:**
+- `App.suspend()` is **synchronous** — must be called from `@work(thread=True)`, not from `async def action_open_editor`.
+- `SuspendNotSupported` is raised in non-Unix environments (e.g., headless CI, Textual Web). Catch it.
+- Use `self.app.call_from_thread()` to post messages back from the thread — do not call widget methods directly from a thread worker.
+- Honor `$VISUAL` before `$EDITOR` before hardcoded fallback (POSIX convention).
+
+**Where to bind:** `CommandInput` widget is the right owner (it handles input submission). Add `BINDINGS` and `action_open_editor` to `CommandInput`.
+
+---
+
+## Summary: What Changes Per Feature
+
+| Feature | Change Type | Where | API Used |
+|---------|------------|-------|----------|
+| Alt-screen mode | Verify launch call has no `inline=True` | CLI entrypoint | `App.run()` default |
+| Auto-focus input | Add `AUTO_FOCUS = "CommandInput Input"` | `ConductorApp` | `App.AUTO_FOCUS` |
+| Borderless design | CSS-only changes | `conductor.tcss` + widget `DEFAULT_CSS` | `border: none`, `padding: 0` |
+| Smooth animations | Add `animate()` to cell `on_mount` | `TranscriptPane` widgets | `Widget.animate()` |
+| Ctrl-G editor | Add binding + thread worker | `CommandInput` | `Binding`, `@work(thread=True)`, `App.suspend()` |
 
 ---
 
 ## Installation
 
+No new dependencies. All APIs are in `textual==8.1.1` (installed).
+
 ```bash
-# Single new runtime dependency
-uv add "prompt-toolkit>=3.0.52"
-
-# No other new deps:
-# - ClaudeSDKClient is already in claude-agent-sdk>=0.1.48
-# - include_partial_messages is a ClaudeAgentOptions field, not a new package
-# - rich.markdown / rich.syntax are already in rich>=13
+# Verify — no uv add needed
+uv run python -c "import textual; print(textual.__version__)"
+# Expected: 8.1.1
 ```
-
----
-
-## Integration Pattern: How New Stack Fits the Existing Code
-
-### 1. Replace `_ainput()` in `input_loop.py`
-
-Current code:
-```python
-async def _ainput(prompt: str = "") -> str:
-    return await asyncio.to_thread(input, prompt)
-```
-
-The problem: `asyncio.to_thread(input)` blocks the OS thread until Enter is pressed and cannot be cancelled cleanly. It has no readline history and its prompt line is overwritten when Rich or streaming tokens write to stdout.
-
-Replace with `PromptSession.prompt_async()` for the new chat command. The existing `_ainput` and `_input_loop` in `input_loop.py` serve the `conductor run` batch-mode command-dispatch loop and should remain unchanged. The new chat loop lives in a separate module.
-
-```python
-# cli/chat.py (new module)
-from prompt_toolkit import PromptSession
-from prompt_toolkit.history import FileHistory
-from prompt_toolkit.patch_stdout import patch_stdout
-from pathlib import Path
-
-_session = PromptSession(
-    history=FileHistory(str(Path.home() / ".conductor_history"))
-)
-
-async def chat_loop(repo_path: Path) -> None:
-    with patch_stdout():  # all print()/Rich output redraws the prompt safely
-        async with ClaudeSDKClient(options=_build_options(repo_path)) as client:
-            while True:
-                try:
-                    text = await _session.prompt_async("conductor> ")
-                except (KeyboardInterrupt, EOFError):
-                    break
-                if not text.strip():
-                    continue
-                await _send_and_stream(client, text)
-```
-
-`patch_stdout()` wraps stdout so that when streaming token output or Rich `console.print()` calls fire during the `await`, they print above the prompt line and the prompt redraws below — the same mechanism used by IPython, Poetry, and similar async CLI tools.
-
-### 2. Switch from `query()` to `ClaudeSDKClient` for chat mode
-
-`conductor run "..."` (batch mode) keeps `query()` — correct for one-shot tasks.
-
-New `conductor` (no args, chat mode) uses `ClaudeSDKClient`:
-
-```python
-from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions, AssistantMessage, ResultMessage
-from claude_agent_sdk.types import StreamEvent
-
-def _build_options(repo_path: Path) -> ClaudeAgentOptions:
-    return ClaudeAgentOptions(
-        include_partial_messages=True,   # streaming tokens
-        permission_mode="acceptEdits",   # direct tool use
-        cwd=str(repo_path),
-    )
-
-async def _send_and_stream(client: ClaudeSDKClient, prompt: str) -> None:
-    await client.query(prompt)
-    in_tool = False
-    async for message in client.receive_response():
-        if isinstance(message, StreamEvent):
-            event = message.event
-            etype = event.get("type")
-            if etype == "content_block_start":
-                block = event.get("content_block", {})
-                if block.get("type") == "tool_use":
-                    print(f"\n[{block.get('name')}...]", end="", flush=True)
-                    in_tool = True
-            elif etype == "content_block_delta":
-                delta = event.get("delta", {})
-                if delta.get("type") == "text_delta" and not in_tool:
-                    print(delta.get("text", ""), end="", flush=True)
-            elif etype == "content_block_stop" and in_tool:
-                print(" done", flush=True)
-                in_tool = False
-        elif isinstance(message, ResultMessage):
-            print()  # final newline after streamed response
-```
-
-The `ClaudeSDKClient` session retains full conversation context across turns for the lifetime of the `async with` block — the orchestrator remembers what was said earlier in the same `conductor` invocation.
-
-### 3. Typer entrypoint: route no-args to chat
-
-Current `__init__.py` sets `no_args_is_help=True`. Change to route no-args invocation to the new chat command:
-
-```python
-# cli/__init__.py
-app = typer.Typer(
-    name="conductor",
-    help="Conductor: AI agent orchestration",
-    invoke_without_command=True,   # changed from no_args_is_help=True
-)
-
-@app.callback(invoke_without_command=True)
-def default(ctx: typer.Context) -> None:
-    if ctx.invoked_subcommand is None:
-        asyncio.run(_chat_async())
-
-app.command("run")(run)
-app.command("status")(status)
-```
-
-`conductor run "..."` continues to work unchanged. `conductor` (no args) opens the interactive chat TUI.
 
 ---
 
@@ -172,11 +278,10 @@ app.command("status")(status)
 
 | Recommended | Alternative | When to Use Alternative |
 |-------------|-------------|-------------------------|
-| `prompt_toolkit` | Keep `asyncio.to_thread(input)` | Only acceptable if no streaming output, no readline history, and no concurrent Rich printing needed. All three are needed for the chat TUI. |
-| `prompt_toolkit` | `readline` (stdlib) | `readline` has no async support and cannot coexist with Rich Live or concurrent async prints. Avoid. |
-| `prompt_toolkit` | `Textual` | Textual is better when building a full TUI application with panels, widgets, and mouse events. Overkill here — it would require rewriting the entire display layer. Rich + prompt_toolkit achieves the target UX with ~1 new dependency. |
-| `ClaudeSDKClient` | `query()` with manual history | Would require serializing and replaying conversation turns as context every call — brittle, loses tool-use history context, and doesn't support `interrupt()`. `ClaudeSDKClient` handles session continuity natively. |
-| `include_partial_messages=True` | Wait for complete `AssistantMessage` | Complete messages only arrive after Claude finishes all thinking and tool execution — no streaming feel, defeats the primary UX goal. |
+| `App.AUTO_FOCUS = "CommandInput Input"` | Call `widget.focus()` in `on_mount` | Use `on_mount` focus only for conditional focus logic (e.g., skip focus during session replay) — the `AUTO_FOCUS` class var handles the default case cleanly |
+| `App.suspend()` + `@work(thread=True)` | `asyncio.create_subprocess_exec` + `asyncio.wait` | Use async subprocess only if the editor can run without terminal takeover (e.g., a non-interactive formatter). Interactive editors (vim, nano) require full terminal access via `suspend()`. |
+| `Widget.animate("opacity", ...)` | `set_interval` + manual opacity steps | `set_interval` is correct for looping animations (shimmer). `animate()` is correct for one-shot transitions with easing. Do not mix them. |
+| `border: none` in CSS | `border: hidden` | `hidden` renders a zero-width border that still consumes layout space. `none` removes it entirely. Use `none`. |
 
 ---
 
@@ -184,51 +289,54 @@ app.command("status")(status)
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `aioconsole` | Provides async `ainput()` but no history, completion, or `patch_stdout` equivalent — same fundamental limitation as the current code | `prompt_toolkit` |
-| `Textual` | Full TUI framework — compelling but requires rewriting the display layer. Rich + prompt_toolkit achieves the chat TUI with far less disruption to existing code. | Rich (existing) + prompt_toolkit (new) |
-| `anthropic` Python SDK (direct) | Bypasses the Claude Agent SDK, loses ACP compatibility, tool execution, and the orchestrator's existing permission model | `claude-agent-sdk` (existing) |
-| Any conversation-history store (SQLite, JSON file, etc.) | `ClaudeSDKClient` manages session state internally per-invocation. Cross-session "memory" is already handled by the `.memory/` folder convention from v1.0 | Existing `.memory/` pattern |
-| `click` directly | Already have Typer (which wraps Click). Double-dependency confusion. | Typer (already present) |
+| Any animation library (e.g., `textual-animations`, custom CSS transitions) | Textual 8.x has a built-in `animate()` with 30 easing functions; adding another animation layer creates conflicts and increases maintenance surface | `Widget.animate()` + `set_interval` (already in use) |
+| Custom terminal escape sequences for alt-screen (`\x1b[?1049h`) | Textual already manages the alt-screen lifecycle via `LinuxDriver`. Manual escape codes would fight Textual's driver and corrupt state on exit | `App.run()` (no `inline=True`) |
+| `click.edit()` or `subprocess.run` without `App.suspend()` | Launching an editor without suspending Textual leaves the Textual event loop reading keyboard input concurrently with vim — corrupts both processes | `App.suspend()` as context manager around `subprocess.run` |
+| `asyncio.create_subprocess_exec` for interactive editor | Async subprocess does not hand terminal control to the child process — interactive editors (vim) need a real TTY | `subprocess.run` inside `@work(thread=True)` + `App.suspend()` |
+| New TUI library (blessed, urwid, etc.) | Already committed to Textual; mixing TUI frameworks is not viable | Textual (existing) |
+| `tempfile.mkstemp` without `delete=False` on `NamedTemporaryFile` | On Linux, the file must remain on disk while vim opens it — `delete=False` keeps it until explicit `os.unlink()` | `NamedTemporaryFile(delete=False)` + manual cleanup |
 
 ---
 
-## Stack Patterns by Mode
+## Stack Patterns by Feature Variant
 
-**Chat mode (`conductor` with no args — NEW):**
-- `ClaudeSDKClient` (persistent session across turns) + `include_partial_messages=True`
-- `PromptSession.prompt_async()` inside `patch_stdout()` context
-- Stream `text_delta` chunks to stdout; show `[tool_name...]` indicator during tool calls
-- `FileHistory("~/.conductor_history")` for cross-session prompt history
+**If the terminal does not support suspend (CI, tmux edge cases):**
+- Catch `SuspendNotSupported` and fall back to running the editor without suspension
+- Log a warning — the TUI may display artifacts but the edit will still complete
+- Do not disable Ctrl-G binding based on environment detection at startup
 
-**Batch mode (`conductor run "..."` — UNCHANGED):**
-- Keep existing `query()` + `_display_loop` + `_input_loop` as-is
-- No `prompt_toolkit` needed — batch mode is command-dispatch, not a chat prompt
+**If user has no `$VISUAL`/`$EDITOR` set:**
+- Fall back to `vim` — universally available on Linux/macOS
+- Do not present a picker UI — that adds significant scope for marginal benefit
 
-**Smart delegation (orchestrator logic — NOT a stack decision):**
-- No new library — the system prompt on `ClaudeSDKClient` instructs the orchestrator when to handle directly vs. spawn sub-agents
-- Sub-agent spawning when delegating reuses the existing `Orchestrator` class unchanged
+**If animation causes visual noise (fast terminal, low frame rate):**
+- `animate()` has a `level` parameter: `"full"`, `"basic"`, `"none"`
+- Default `"full"` runs on all terminals. Set `level="basic"` to skip on slow terminals
+- The shimmer timer (`set_interval`) is independent of `animate()` — they do not conflict
 
 ---
 
 ## Version Compatibility
 
-| Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| `prompt-toolkit==3.0.52` | Python 3.12/3.13, `rich>=13` | No known conflicts. `patch_stdout()` uses stdout wrapping that is compatible with Rich's `Console`. Latest release: 2025-08-27. |
-| `claude-agent-sdk>=0.1.48` (current: 0.1.48, released 2026-03-07) | Python 3.12/3.13 | `ClaudeSDKClient` and `include_partial_messages` both confirmed in official docs for this version. |
-| `typer>=0.12` with `invoke_without_command=True` | Typer 0.12+ | `@app.callback(invoke_without_command=True)` pattern is stable in Typer 0.12. |
+| Package | Version | Compatible With | Notes |
+|---------|---------|-----------------|-------|
+| `textual` | `8.1.1` | Python 3.13, all features above | `App.suspend()`, `Widget.animate()`, `App.AUTO_FOCUS`, `@work(thread=True)` all verified in installed version |
+| `textual` | `8.1.1` | `call_from_thread` | Confirmed available in `App` for cross-thread message posting |
 
 ---
 
 ## Sources
 
-- [Agent SDK reference - Python](https://platform.claude.com/docs/en/agent-sdk/python) — `ClaudeSDKClient` API, `query()` vs `ClaudeSDKClient` comparison, session continuity — HIGH confidence (official Anthropic docs, verified 2026-03-11)
-- [Stream responses in real-time](https://platform.claude.com/docs/en/agent-sdk/streaming-output) — `include_partial_messages`, `StreamEvent`, `text_delta` pattern, streaming UI example — HIGH confidence (official Anthropic docs, verified 2026-03-11)
-- [PyPI: claude-agent-sdk](https://pypi.org/project/claude-agent-sdk/) — confirmed current version 0.1.48, released 2026-03-07 — HIGH confidence
-- [PyPI: prompt-toolkit](https://pypi.org/project/prompt-toolkit/) — confirmed current version 3.0.52, released 2025-08-27 — HIGH confidence
-- [prompt_toolkit docs: Asking for input](https://python-prompt-toolkit.readthedocs.io/en/stable/pages/asking_for_input.html) — `prompt_async()`, `patch_stdout()`, `FileHistory`, `PromptSession` API — HIGH confidence (official docs, verified 2026-03-11)
-- [prompt_toolkit asyncio docs](https://python-prompt-toolkit.readthedocs.io/en/master/pages/advanced_topics/asyncio.html) — event loop integration — HIGH confidence (official docs)
+- `textual==8.1.1` installed at `.venv` — all APIs verified by `inspect` on the live package
+- `App.run()` signature — `inline: bool = False` default confirmed; `LinuxDriver` emits `\x1b[?1049h` at `start_application_mode()`
+- `App.AUTO_FOCUS` — class variable docstring confirms CSS selector semantics and auto-invocation on screen activation
+- `App.suspend()` — full source read: synchronous `@contextmanager`, raises `SuspendNotSupported`, Textual docs example uses `os.system("emacs -nw")`
+- `Widget.animate()` — signature confirmed: `attribute`, `value`, `duration`, `easing`, `on_complete`; `opacity` and `offset` confirmed as animatable CSS properties
+- `textual._easing.EASING` — complete easing key list verified: 33 named easing functions
+- `VALID_BORDER` from `textual.css.constants` — `none`, `hidden`, `blank` all valid; `none` collapses to zero width
+- `@work(thread=True)` — `Worker._thread_worker` flag confirmed in `Worker` source; runs via `_run_threaded()`
+- `Binding("ctrl+g", ...)` — instantiated successfully; key string `"ctrl+g"` accepted
 
 ---
-*Stack research for: Conductor v1.1 — interactive chat TUI additions*
+*Stack research for: Conductor v2.1 — UX Polish (alt-screen, borderless, animations, external editor)*
 *Researched: 2026-03-11*
