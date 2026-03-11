@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from contextlib import suppress
 from pathlib import Path
 
@@ -94,19 +95,26 @@ async def _run_async(
         _console.print(f"Dashboard: http://127.0.0.1:{dashboard_port}")
 
     try:
+        is_tty = sys.stdin.isatty()
+
         with Live(console=Console(stderr=False), refresh_per_second=4) as live:
-            await asyncio.gather(
+            coros: list[object] = [
                 _display_loop(live, state_manager, until=orch_task),
-                _input_loop(
+                orch_task,
+                *gather_extras,
+            ]
+
+            # Only start interactive input loop when we have a real terminal
+            if is_tty:
+                coros.insert(1, _input_loop(
                     human_out,
                     human_in,
                     orchestrator,
                     state_manager=state_manager,
                     console=input_console,
-                ),
-                orch_task,
-                *gather_extras,
-            )
+                ))
+
+            await asyncio.gather(*coros)
     except KeyboardInterrupt:
         orch_task.cancel()
         with suppress(asyncio.CancelledError):

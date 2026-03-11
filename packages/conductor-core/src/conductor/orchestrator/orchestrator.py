@@ -215,11 +215,15 @@ class Orchestrator:
                 )
                 del pending[completed_id]
                 self._active_tasks.pop(completed_id, None)
+                if fut.exception() is not None:
+                    logger.error(
+                        "Task %s failed: %s", completed_id, fut.exception(),
+                    )
                 scheduler.done(completed_id)
 
         # Wait for any stragglers (shouldn't normally happen)
         if pending:
-            await asyncio.gather(*pending.values())
+            await asyncio.gather(*pending.values(), return_exceptions=True)
 
     async def pre_run_review(self, feature_description: str) -> str:
         """Analyse *feature_description* before execution and return confirmed spec.
@@ -412,10 +416,19 @@ class Orchestrator:
                 )
                 del pending[completed_id]
                 self._active_tasks.pop(completed_id, None)
+                # Retrieve exception to suppress "Task exception was never
+                # retrieved" warning — the error was already logged inside
+                # _run_agent_loop or handled by best-effort approval.
+                if fut.exception() is not None:
+                    logger.error(
+                        "Task %s failed during resume: %s",
+                        completed_id,
+                        fut.exception(),
+                    )
                 scheduler.done(completed_id)
 
         if pending:
-            await asyncio.gather(*pending.values())
+            await asyncio.gather(*pending.values(), return_exceptions=True)
 
     # ------------------------------------------------------------------
     # Intervention methods (COMM-05/06/07)
