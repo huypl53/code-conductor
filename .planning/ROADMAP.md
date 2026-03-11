@@ -293,10 +293,10 @@ Plans:
   2. UserCell and AssistantCell widgets have a subtle left accent line indicating role rather than a thick box border surrounding the content
   3. AgentMonitorPane retains its column separator (border-left) as a functional divider — only pure chrome borders are removed
   4. All modal overlays retain their borders unchanged — borderless design applies only to main layout containers and transcript cells
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 40-01-PLAN.md — conductor.tcss borderless rules, cell accent line styling, specificity audit
+- [ ] 40-01-PLAN.md — transcript.py cell accent lines (VIS-02), command_input.py border-top removal (VIS-01), borderless regression tests
 
 ### Phase 41: Smooth Cell Animations
 **Goal**: New conversation cells fade in on mount rather than appearing abruptly, making the TUI feel alive, with a complete disable path for CI and SSH environments
