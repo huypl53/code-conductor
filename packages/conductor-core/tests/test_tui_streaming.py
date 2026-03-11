@@ -118,3 +118,57 @@ async def test_status_footer_session_id():
         left_label = footer.query_one("#status-left", Static)
         label_text = str(left_label._Static__content)
         assert "session: abc-123" in label_text, f"Expected 'session: abc-123' in label, got: {label_text!r}"
+
+
+async def test_submit_creates_streaming_cell():
+    """UserSubmitted creates UserCell + streaming AssistantCell and disables CommandInput."""
+    from textual.widgets import Input
+
+    from conductor.tui.app import ConductorApp
+    from conductor.tui.messages import UserSubmitted
+    from conductor.tui.widgets.command_input import CommandInput
+    from conductor.tui.widgets.transcript import AssistantCell, TranscriptPane, UserCell
+
+    app = ConductorApp()
+    async with app.run_test() as pilot:
+        # Post a UserSubmitted message (simulates user typing + Enter)
+        app.post_message(UserSubmitted("hello"))
+        await pilot.pause()
+        await pilot.pause()  # extra pause for mount
+
+        pane = app.query_one(TranscriptPane)
+        user_cells = pane.query(UserCell)
+        assistant_cells = pane.query(AssistantCell)
+
+        # Should have the welcome AssistantCell + new UserCell + new streaming AssistantCell
+        assert len(user_cells) >= 1, f"Expected at least 1 UserCell, got {len(user_cells)}"
+        assert len(assistant_cells) >= 2, (
+            f"Expected at least 2 AssistantCells (welcome + streaming), got {len(assistant_cells)}"
+        )
+
+        # CommandInput should be disabled during streaming
+        cmd = app.query_one(CommandInput)
+        assert cmd.disabled is True, "CommandInput should be disabled during streaming"
+
+
+async def test_input_disabled_during_streaming():
+    """StreamDone re-enables CommandInput after streaming completes."""
+    from textual.widgets import Input
+
+    from conductor.tui.app import ConductorApp
+    from conductor.tui.messages import StreamDone
+    from conductor.tui.widgets.command_input import CommandInput
+
+    app = ConductorApp()
+    async with app.run_test() as pilot:
+        cmd = app.query_one(CommandInput)
+        # Manually disable (simulating streaming in progress)
+        cmd.disabled = True
+        await pilot.pause()
+        assert cmd.disabled is True, "CommandInput should start disabled for this test"
+
+        # Post StreamDone to re-enable
+        app.post_message(StreamDone())
+        await pilot.pause()
+
+        assert cmd.disabled is False, "CommandInput should be re-enabled after StreamDone"
