@@ -191,6 +191,7 @@ async def test_completed_agent_panel_removed():
         pane.post_message(AgentStateUpdated(state2))
         await pilot.pause()
         assert len(pane.query(AgentPanel)) == 0
+        assert pane.display is False  # pane hides when all agents done
 
 
 async def test_empty_state_shows_no_agents():
@@ -216,19 +217,20 @@ async def test_empty_state_shows_no_agents():
     async with app.run_test() as pilot:
         pane = app.query_one(AgentMonitorPane)
 
-        # Initially "No agents active" should be visible
-        empty_label = pane.query_one("#monitor-empty", Static)
-        assert empty_label.display is True
+        # Initially pane should be hidden (no agents)
+        assert pane.display is False
 
-        # Add agent -- empty label should hide
+        # Add agent -- pane should appear, empty label should hide
         pane.post_message(AgentStateUpdated(state1))
         await pilot.pause()
+        assert pane.display is True
+        empty_label = pane.query_one("#monitor-empty", Static)
         assert empty_label.display is False
 
-        # Remove all agents -- empty label should show again
+        # Remove all agents -- pane should hide again
         pane.post_message(AgentStateUpdated(state2))
         await pilot.pause()
-        assert empty_label.display is True
+        assert pane.display is False
 
 
 async def test_multiple_agents_multiple_panels():

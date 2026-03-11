@@ -72,6 +72,7 @@ class AgentMonitorPane(VerticalScroll):
         background: $panel;
         border-left: solid $primary 20%;
         padding: 1 1;
+        display: none;
     }
     AgentMonitorPane #monitor-heading {
         color: $text-muted;
@@ -168,7 +169,8 @@ class AgentMonitorPane(VerticalScroll):
                 panel = self.query_one(f"#agent-{agent_id}", AgentPanel)
                 panel.update_status(agent.name, str(agent.status), task_title)
 
-        # Show/hide "No agents active"
-        empty_label = self.query_one("#monitor-empty", Static)
+        # Show/hide pane based on active agents
         has_panels = len(self.query(AgentPanel)) > 0
+        self.display = has_panels
+        empty_label = self.query_one("#monitor-empty", Static)
         empty_label.display = not has_panels
