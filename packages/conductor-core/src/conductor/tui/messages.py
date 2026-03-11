@@ -79,3 +79,11 @@ class EscalationRequest(Message):
         self.question = question
         self.agent_id = agent_id
         super().__init__()
+
+
+class EditorContentReady(Message):
+    """Text returned from an external editor session; fills CommandInput."""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+        super().__init__()

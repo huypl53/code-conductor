@@ -6,7 +6,7 @@ from __future__ import annotations
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Input
-from conductor.tui.messages import UserSubmitted
+from conductor.tui.messages import UserSubmitted, EditorContentReady
 
 
 class SlashAutocomplete:
@@ -82,4 +82,12 @@ class CommandInput(Widget):
         self.post_message(UserSubmitted(text))
         event.input.clear()
         # Stop event from bubbling further — CommandInput owns this submission
+        event.stop()
+
+    def on_editor_content_ready(self, event: EditorContentReady) -> None:
+        """Fill the Input with text returned from the external editor."""
+        inp = self.query_one(Input)
+        inp.value = event.text
+        inp.cursor_position = len(event.text)
+        inp.focus()
         event.stop()

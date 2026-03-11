@@ -18,6 +18,7 @@ from typing import Any
 
 from textual import work
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 
 logger = logging.getLogger("conductor.tui")
 
@@ -34,6 +35,9 @@ class ConductorApp(App):
 
     CSS_PATH = Path(__file__).parent / "conductor.tcss"
     AUTO_FOCUS = "CommandInput Input"  # focus the Input inside CommandInput on screen activation
+    BINDINGS = [
+        Binding("ctrl+g", "open_editor", "Open in editor", show=False),
+    ]
 
     # Background task reference store (Pitfall 5: GC-collected tasks die silently)
     _background_tasks: set[asyncio.Task[Any]]
@@ -423,6 +427,79 @@ class ConductorApp(App):
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
         return task
+
+    @work(thread=True, exit_on_error=False)
+    def action_open_editor(self) -> None:
+        """Open current input content in $VISUAL/$EDITOR (vim fallback).
+
+        Uses App.suspend() to hand the terminal to the editor. Must be a
+        synchronous def with @work(thread=True) -- async + asyncio subprocess
+        cannot give vim terminal control (leaves terminal in raw mode).
+        """
+        import subprocess
+        import tempfile
+        from textual.app import SuspendNotSupported
+        from textual.widgets import Input
+        from conductor.tui.widgets.command_input import CommandInput
+        from conductor.tui.messages import EditorContentReady
+
+        # Guard: replay mode or streaming -- input is locked, do nothing
+        try:
+            cmd_input = self.query_one(CommandInput)
+            if cmd_input.disabled:
+                return
+            current_text = cmd_input.query_one(Input).value
+        except Exception:
+            current_text = ""
+
+        # POSIX editor selection: $VISUAL > $EDITOR > vim
+        editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or "vim"
+
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".md",
+            prefix="conductor_",
+            delete=False,
+        ) as f:
+            f.write(current_text)
+            tmp_path = f.name
+
+        edited_text = current_text  # default: unchanged if editor cancelled
+
+        try:
+            try:
+                with self.app.suspend():
+                    subprocess.run([editor, tmp_path], check=False)
+                    # Read INSIDE suspend block -- documented safe pattern
+                    with open(tmp_path) as fh:
+                        edited_text = fh.read()
+            except SuspendNotSupported:
+                self.app.call_from_thread(
+                    self.app.notify,
+                    "External editor not supported in this environment",
+                    severity="warning",
+                )
+                return
+            except (FileNotFoundError, OSError):
+                self.app.call_from_thread(
+                    self.app.notify,
+                    f"Editor not found: {editor}",
+                    severity="warning",
+                )
+                return
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+        stripped = edited_text.rstrip("\n")
+        # Post message if content changed or is non-empty
+        if stripped != current_text or stripped:
+            cmd_widget = self.query_one(CommandInput)
+            self.app.call_from_thread(
+                cmd_widget.post_message, EditorContentReady(stripped)
+            )
 
     async def action_quit(self) -> None:
         """Clean exit -- cancels background tasks, disconnects SDK, then exits."""

@@ -134,11 +134,11 @@ async def test_on_editor_content_ready_fills_input():
     async with app.run_test() as pilot:
         await pilot.pause()
 
-        app.post_message(EditorContentReady("test text"))
+        cmd = app.query_one(CommandInput)
+        cmd.post_message(EditorContentReady("test text"))
         await pilot.pause()
         await pilot.pause()
 
-        cmd = app.query_one(CommandInput)
         inp = cmd.query_one(Input)
         assert inp.value == "test text", f"Expected 'test text', got '{inp.value}'"
         assert inp.cursor_position == len("test text")
