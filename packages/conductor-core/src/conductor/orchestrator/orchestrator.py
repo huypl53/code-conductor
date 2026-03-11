@@ -26,6 +26,7 @@ from conductor.orchestrator.models import AgentReport, AgentReportStatus, AgentR
 from conductor.orchestrator.monitor import StreamMonitor, parse_agent_report
 from conductor.orchestrator.ownership import validate_file_ownership
 from conductor.orchestrator.reviewer import ReviewVerdict, review_output
+from conductor.orchestrator.verifier import TaskVerifier, VerificationResult
 from conductor.orchestrator.scheduler import DependencyScheduler
 from conductor.orchestrator.session_registry import SessionRegistry
 from conductor.state import StateManager
@@ -137,6 +138,7 @@ class Orchestrator:
         else:
             self._max_revisions = self._config.max_review_iterations
         self._decomposer = TaskDecomposer()
+        self._verifier = TaskVerifier(repo_path=repo_path)
         self._escalation_router = EscalationRouter(
             mode=mode,
             human_out=human_out,
@@ -805,6 +807,39 @@ class Orchestrator:
                                         ),
                                     )
                                     final_verdict = verdict
+
+                            # Substance + wiring verification (VERI-01/02): runs
+                            # after review passes and after file existence gate,
+                            # before marking COMPLETED.
+                            if verdict.approved and task_spec.target_file:
+                                vr = await self._verifier.verify(task_spec.target_file)
+                                if not vr.substantive:
+                                    logger.warning(
+                                        "Task %s target file is a stub (matches: %s) — requesting revision",
+                                        task_spec.id,
+                                        vr.stub_matches,
+                                    )
+                                    verdict = ReviewVerdict(
+                                        approved=False,
+                                        quality_issues=[
+                                            f"File appears to be a stub: {', '.join(vr.stub_matches)}"
+                                        ],
+                                        revision_instructions=(
+                                            f"The file {task_spec.target_file} appears to be a stub or placeholder. "
+                                            "Stub patterns detected: "
+                                            + ", ".join(vr.stub_matches)
+                                            + ". "
+                                            "Please provide a complete, substantive implementation."
+                                        ),
+                                    )
+                                    final_verdict = verdict
+                                elif not vr.wired:
+                                    # Wiring is a warning, not a blocker — log but allow completion
+                                    logger.warning(
+                                        "Task %s target file %s is not imported by any other project file",
+                                        task_spec.id,
+                                        task_spec.target_file,
+                                    )
 
                             if verdict.approved:
                                 break

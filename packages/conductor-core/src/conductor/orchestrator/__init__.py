@@ -14,7 +14,8 @@ from conductor.orchestrator.models import AgentRole, ModelProfile, OrchestratorC
 from conductor.orchestrator.monitor import StreamMonitor
 from conductor.orchestrator.orchestrator import Orchestrator
 from conductor.orchestrator.ownership import validate_file_ownership
-from conductor.orchestrator.reviewer import ReviewVerdict, review_output
+from conductor.orchestrator.reviewer import QualityVerdict, ReviewVerdict, SpecVerdict, review_code_quality, review_output, review_spec_compliance
+from conductor.orchestrator.verifier import DEFAULT_STUB_PATTERNS, TaskVerifier, VerificationResult
 from conductor.orchestrator.scheduler import DependencyScheduler
 
 __all__ = [
@@ -47,6 +48,14 @@ __all__ = [
     # reviewer
     "ReviewVerdict",
     "review_output",
+    "SpecVerdict",
+    "QualityVerdict",
+    "review_spec_compliance",
+    "review_code_quality",
+    # verifier
+    "TaskVerifier",
+    "VerificationResult",
+    "DEFAULT_STUB_PATTERNS",
     # escalation
     "EscalationRouter",
     "HumanQuery",
