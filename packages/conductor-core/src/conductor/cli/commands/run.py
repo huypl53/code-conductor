@@ -25,6 +25,7 @@ def run(
     auto: bool = typer.Option(True, "--auto/--interactive", help="Run mode"),
     repo: str = typer.Option(".", "--repo", help="Path to repo root"),
     resume: bool = typer.Option(False, "--resume", help="Resume interrupted orchestration from state.json"),
+    build_command: str = typer.Option(None, "--build-command", help="Shell command to verify build after orchestration (e.g. 'npx tsc --noEmit')"),
     dashboard_port: int = typer.Option(None, "--dashboard-port", help="Start dashboard server on this port"),
 ) -> None:
     """Start the orchestrator for a feature description with live agent display."""
@@ -36,6 +37,7 @@ def run(
         auto=auto,
         repo=Path(repo).resolve(),
         resume=resume,
+        build_command=build_command,
         dashboard_port=dashboard_port,
     ))
 
@@ -46,6 +48,7 @@ async def _run_async(
     auto: bool,
     repo: Path,
     resume: bool = False,
+    build_command: str | None = None,
     dashboard_port: int | None = None,
 ) -> None:
     """Async implementation of the run command."""
@@ -62,6 +65,7 @@ async def _run_async(
         mode="auto" if auto else "interactive",
         human_out=human_out,
         human_in=human_in,
+        build_command=build_command,
     )
 
     if resume:
