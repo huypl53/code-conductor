@@ -117,7 +117,7 @@ Full details: `.planning/milestones/v2.1-ROADMAP.md`
   5. Multiple AgentCells with different agent_id values render independently with no CSS ID collisions (sanitized IDs with distinct prefixes)
 **Plans**: 1 plan
 Plans:
-- [ ] 43-01-PLAN.md — TDD: AgentCell + OrchestratorStatusCell widgets
+- [x] 43-01-PLAN.md — TDD: AgentCell + OrchestratorStatusCell widgets
 
 ### Phase 44: TranscriptPane Extensions and State Bridge
 **Goal**: TranscriptPane receives AgentStateUpdated messages from the state.json watcher and mounts AgentCells for new WORKING agents, updating and finalizing them as state transitions occur
@@ -129,7 +129,9 @@ Plans:
   3. When an agent reaches DONE, the AgentCell shows a completion summary with final status
   4. The transcript maintains a _agent_cells dict so each agent_id maps to exactly one cell — no duplicate cells created for the same agent across state updates
   5. Scroll position is preserved when new AgentCells are mounted while the user has scrolled up (no jump to bottom)
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 44-01-PLAN.md — TDD: TranscriptPane state bridge and AgentCell lifecycle
 
 ### Phase 45: SDK Stream Interception and Orchestrator Status
 **Goal**: The SDK stream loop detects conductor_delegate tool-use events, creates OrchestratorStatusCells, and changes the active cell label from "Assistant" to "Orchestrator" during delegation phases
@@ -199,7 +201,7 @@ Plans:
 | 40. Borderless Design | v2.1 | 1/1 | Complete | 2026-03-11 |
 | 41. Smooth Cell Animations | v2.1 | 1/1 | Complete | 2026-03-11 |
 | 42. Ctrl-G External Editor | v2.1 | 1/1 | Complete | 2026-03-12 |
-| 43. Agent Cell Widgets | 1/1 | Complete    | 2026-03-11 | - |
-| 44. TranscriptPane Extensions and State Bridge | v2.2 | 0/? | Not started | - |
+| 43. Agent Cell Widgets | v2.2 | 1/1 | Complete | 2026-03-11 |
+| 44. TranscriptPane Extensions and State Bridge | v2.2 | 0/1 | Not started | - |
 | 45. SDK Stream Interception and Orchestrator Status | v2.2 | 0/? | Not started | - |
 | 46. Visual Polish and Verification | v2.2 | 0/? | Not started | - |
