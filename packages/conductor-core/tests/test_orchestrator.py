@@ -1559,3 +1559,114 @@ class TestActiveClientCleanup:
         assert len(orch._active_clients) == 0, (
             f"_active_clients not cleaned up after normal completion: {orch._active_clients}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Integration tests: cancel_agent new-signature (CLI-01, CLI-03, COMM-05)
+# ---------------------------------------------------------------------------
+
+
+class TestCancelAgentIntegration:
+    """Integration tests for cancel_agent(agent_id, new_instructions=None).
+
+    These tests call cancel_agent with the CLI's call shape:
+      - cancel_agent(agent_id)               — cancel and re-spawn with original spec
+      - cancel_agent(agent_id, new_instructions=...)  — re-spawn with updated description
+      - cancel_agent("nonexistent")           — safe no-op
+
+    They use a real Orchestrator instance with a mocked StateManager whose
+    read_state() returns a ConductorState with known agents and tasks.
+    """
+
+    def _make_state_with_agent(self):
+        """Build a ConductorState with agent-1 assigned to task-1."""
+        from conductor.state.models import (
+            AgentRecord,
+            AgentStatus,
+            ConductorState,
+            Task,
+            TaskStatus,
+        )
+
+        task = Task(
+            id="task-1",
+            title="T",
+            description="Do X",
+            status=TaskStatus.IN_PROGRESS,
+            target_file="src/foo.py",
+            assigned_agent="agent-1",
+        )
+        agent = AgentRecord(
+            id="agent-1",
+            name="agent-1",
+            role="developer",
+            status=AgentStatus.WORKING,
+            current_task_id="task-1",
+        )
+        return ConductorState(tasks=[task], agents=[agent])
+
+    def _make_sm_with_state(self, state):
+        """Return a MagicMock StateManager whose read_state returns *state*."""
+        sm = MagicMock()
+        sm.mutate = MagicMock(return_value=None)
+        sm.read_state = MagicMock(return_value=state)
+        return sm
+
+    @pytest.mark.asyncio
+    async def test_cancel_agent_no_new_instructions(self, tmp_path):
+        """cancel_agent(agent_id) does not raise TypeError and re-spawns with original description."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state = self._make_state_with_agent()
+        sm = self._make_sm_with_state(state)
+        orch = Orchestrator(state_manager=sm, repo_path=str(tmp_path))
+
+        spawned_specs = []
+
+        async def _capture_loop(task_spec, sem, **kwargs):
+            spawned_specs.append(task_spec)
+
+        with patch.object(orch, "_run_agent_loop", side_effect=_capture_loop):
+            # Must NOT raise TypeError — CLI calls cancel_agent with only agent_id
+            await orch.cancel_agent("agent-1")
+
+        # Yield to event loop to allow the spawned asyncio.Task to execute
+        await asyncio.sleep(0)
+
+        assert len(spawned_specs) == 1
+        assert spawned_specs[0].description == "Do X"  # original description preserved
+
+    @pytest.mark.asyncio
+    async def test_cancel_agent_with_new_instructions(self, tmp_path):
+        """cancel_agent(agent_id, new_instructions=...) re-spawns with updated description."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state = self._make_state_with_agent()
+        sm = self._make_sm_with_state(state)
+        orch = Orchestrator(state_manager=sm, repo_path=str(tmp_path))
+
+        spawned_specs = []
+
+        async def _capture_loop(task_spec, sem, **kwargs):
+            spawned_specs.append(task_spec)
+
+        with patch.object(orch, "_run_agent_loop", side_effect=_capture_loop):
+            # Must NOT raise TypeError — CLI calls with keyword new_instructions
+            await orch.cancel_agent("agent-1", new_instructions="work on auth instead")
+
+        await asyncio.sleep(0)
+
+        assert len(spawned_specs) == 1
+        assert spawned_specs[0].description == "work on auth instead"
+
+    @pytest.mark.asyncio
+    async def test_cancel_agent_unknown_agent(self, tmp_path):
+        """cancel_agent for an unknown agent_id is a safe no-op (no exception)."""
+        from conductor.state.models import ConductorState
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        sm = self._make_sm_with_state(ConductorState())
+        orch = Orchestrator(state_manager=sm, repo_path=str(tmp_path))
+
+        # Must NOT raise any exception for a nonexistent agent
+        await orch.cancel_agent("nonexistent")
