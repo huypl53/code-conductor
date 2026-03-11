@@ -22,7 +22,7 @@ from conductor.orchestrator.decomposer import TaskDecomposer
 from conductor.orchestrator.errors import DecompositionError, EscalationError
 from conductor.orchestrator.escalation import EscalationRouter, HumanQuery
 from conductor.orchestrator.identity import AgentIdentity, build_system_prompt
-from conductor.orchestrator.models import OrchestratorConfig, TaskSpec
+from conductor.orchestrator.models import AgentRole, ModelProfile, OrchestratorConfig, TaskSpec
 from conductor.orchestrator.monitor import StreamMonitor
 from conductor.orchestrator.ownership import validate_file_ownership
 from conductor.orchestrator.reviewer import ReviewVerdict, review_output
@@ -116,6 +116,7 @@ class Orchestrator:
         max_revisions: int = 2,
         build_command: str | None = None,
         config: OrchestratorConfig | None = None,
+        model_profile: ModelProfile | None = None,
     ) -> None:
         self._state = state_manager
         self._repo_path = repo_path
@@ -124,6 +125,7 @@ class Orchestrator:
         self._human_in = human_in
         self._build_command = build_command
         self._config = config or OrchestratorConfig()
+        self._model_profile = model_profile
         # Explicit max_agents param (non-default) overrides config (backward compat)
         if max_agents != 10:
             self._max_agents = max_agents
@@ -198,44 +200,31 @@ class Orchestrator:
         # Index tasks by ID for fast lookup
         task_map = {t.id: t for t in plan.tasks}
 
-        # 6. Spawn loop
-        pending: dict[str, asyncio.Task] = {}
+        # 6. Compute waves for parallel execution
+        waves = scheduler.compute_waves()
 
-        while scheduler.is_active():
-            ready_ids = scheduler.get_ready()
+        # 7. Execute wave by wave
+        for wave in waves:
+            # Create tasks for all items in this wave
+            wave_tasks: dict[str, asyncio.Task] = {}
+            for task_id in wave:
+                task_spec = task_map[task_id]
+                t = asyncio.create_task(
+                    self._run_agent_loop(task_spec, sem)
+                )
+                wave_tasks[task_id] = t
+                self._active_tasks[task_id] = t
 
-            for task_id in ready_ids:
-                if task_id not in pending:
-                    task_spec = task_map[task_id]
-                    t = asyncio.create_task(
-                        self._run_agent_loop(task_spec, sem)
-                    )
-                    pending[task_id] = t
-                    self._active_tasks[task_id] = t
-
-            if not pending:
-                break
-
-            done_futures, _ = await asyncio.wait(
-                pending.values(), return_when=asyncio.FIRST_COMPLETED
+            # Wait for entire wave to complete
+            results = await asyncio.gather(
+                *wave_tasks.values(), return_exceptions=True
             )
 
-            # Mark completed tasks in the scheduler
-            for fut in done_futures:
-                completed_id = next(
-                    tid for tid, t in pending.items() if t is fut
-                )
-                del pending[completed_id]
-                self._active_tasks.pop(completed_id, None)
-                if fut.exception() is not None:
-                    logger.error(
-                        "Task %s failed: %s", completed_id, fut.exception(),
-                    )
-                scheduler.done(completed_id)
-
-        # Wait for any stragglers (shouldn't normally happen)
-        if pending:
-            await asyncio.gather(*pending.values(), return_exceptions=True)
+            # Clean up and log any failures
+            for task_id, result in zip(wave, results):
+                self._active_tasks.pop(task_id, None)
+                if isinstance(result, Exception):
+                    logger.error("Task %s failed: %s", task_id, result)
 
         await self._post_run_build_check()
 
@@ -658,6 +647,19 @@ class Orchestrator:
         final_verdict: ReviewVerdict | None = None
         revision_num = 0
 
+        # Determine model from profile (ROUTE-01)
+        model: str | None = None
+        if self._model_profile:
+            try:
+                agent_role = (
+                    AgentRole(task_spec.role)
+                    if task_spec.role in AgentRole.__members__
+                    else AgentRole.executor
+                )
+            except ValueError:
+                agent_role = AgentRole.executor
+            model = self._model_profile.get_model(agent_role)
+
         if not review_only:
             # --- Agent execution (holds semaphore) ---
             async with sem:
@@ -670,6 +672,7 @@ class Orchestrator:
                     system_prompt=system_prompt,
                     resume=resume_session_id,
                     permission_handler=handler,
+                    model=model,
                 ) as client:
                     self._active_clients[agent_id] = client
                     try:
