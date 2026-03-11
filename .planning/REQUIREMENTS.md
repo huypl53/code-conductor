@@ -27,9 +27,9 @@ Requirements for the Orchestrator Intelligence milestone. Each maps to roadmap p
 
 ### Verification Pipeline
 
-- [ ] **VERI-01**: `TaskVerifier` checks file content is substantive — detects stubs (pass-only, NotImplementedError, TODO markers, empty returns) via regex patterns
-- [ ] **VERI-02**: `TaskVerifier` checks wiring — target file is imported/referenced by at least one other file in the project
-- [ ] **RVEW-01**: Two-stage review: Stage 1 checks spec compliance (did we build the right thing?), Stage 2 checks code quality (only if Stage 1 passes)
+- [x] **VERI-01**: `TaskVerifier` checks file content is substantive — detects stubs (pass-only, NotImplementedError, TODO markers, empty returns) via regex patterns
+- [x] **VERI-02**: `TaskVerifier` checks wiring — target file is imported/referenced by at least one other file in the project
+- [x] **RVEW-01**: Two-stage review: Stage 1 checks spec compliance (did we build the right thing?), Stage 2 checks code quality (only if Stage 1 passes)
 
 ### Smart Decomposition
 
@@ -76,9 +76,9 @@ All 19 requirements delivered. See `.planning/milestones/v1.1-REQUIREMENTS.md`.
 | STAT-01 | Phase 28 | Complete |
 | STAT-02 | Phase 28 | Complete |
 | DEVN-01 | Phase 28 | Complete |
-| VERI-01 | Phase 29 | Pending |
-| VERI-02 | Phase 29 | Pending |
-| RVEW-01 | Phase 29 | Pending |
+| VERI-01 | Phase 29 | Complete |
+| VERI-02 | Phase 29 | Complete |
+| RVEW-01 | Phase 29 | Complete |
 | DCMP-01 | Phase 30 | Pending |
 | DCMP-02 | Phase 30 | Pending |
 

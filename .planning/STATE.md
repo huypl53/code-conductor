@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Task Verification & Build Safety
 status: planning
-stopped_at: Completed 28-01-PLAN.md
-last_updated: "2026-03-11T11:47:47.309Z"
+stopped_at: Completed 29-01-PLAN.md
+last_updated: "2026-03-11T11:57:32.571Z"
 last_activity: 2026-03-11 — Milestone v1.3 started
 progress:
   total_phases: 13
   completed_phases: 3
-  total_plans: 3
-  completed_plans: 5
+  total_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -50,6 +50,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 28]: parse_agent_report uses best-effort regex extraction — returns None on any failure (no crash)
 - [Phase 28]: STATUS_BLOCK_INSTRUCTIONS and DEVIATION_RULES are prompt-only constants — no code enforcement
 - [Phase 28]: BLOCKED routing uses continue inside the revision loop so it counts as a revision iteration
+- [Phase 29]: Wiring check uses file stem (no extension) for grep to catch import patterns without .py suffix
+- [Phase 29]: Substantive heuristic combines stub pattern match AND fewer than 10 non-comment lines to avoid flagging real files with TODO comments
+- [Phase 29]: review_output() short-circuits: spec compliance failure skips quality review entirely
 
 ### Pending Todos
 
@@ -67,6 +70,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T11:47:43.503Z
-Stopped at: Completed 28-01-PLAN.md
+Last session: 2026-03-11T11:57:27.091Z
+Stopped at: Completed 29-01-PLAN.md
 Resume file: None
