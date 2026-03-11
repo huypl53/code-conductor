@@ -84,6 +84,32 @@ class AgentReport(BaseModel):
     concerns: list[str] = Field(default_factory=list)
 
 
+class ComplexityAnalysis(BaseModel):
+    """Complexity analysis result for a single task.
+
+    Used as structured output from the complexity analysis SDK call.
+    Guides whether a task should be expanded into sub-tasks.
+    """
+
+    task_id: str
+    complexity_score: int = Field(ge=1, le=10)
+    reasoning: str
+    expansion_prompt: str  # AI guidance for expanding this task
+    recommended_subtasks: int = Field(ge=2, le=5, default=3)
+
+
+class ComplexityAnalysisResult(BaseModel):
+    """Wrapper model for structured output from complexity analysis SDK call."""
+
+    analyses: list[ComplexityAnalysis]
+
+
+class ExpansionResult(BaseModel):
+    """Wrapper model for structured output from task expansion SDK call."""
+
+    subtasks: list["TaskSpec"]
+
+
 class TaskSpec(BaseModel):
     """Specification for a single agent task produced by decomposition."""
 
@@ -97,6 +123,9 @@ class TaskSpec(BaseModel):
     material_files: list[str] = Field(default_factory=list)
     requires: list[str] = Field(default_factory=list)
     produces: list[str] = Field(default_factory=list)
+    # Optional complexity fields populated after analysis
+    complexity_score: int | None = Field(default=None, ge=1, le=10)
+    reasoning: str | None = None
 
 
 class TaskPlan(BaseModel):
@@ -111,3 +140,7 @@ class TaskPlan(BaseModel):
     feature_name: str
     tasks: list[TaskSpec]
     max_agents: int = Field(default=4, ge=1, le=10)
+
+
+# Resolve forward reference in ExpansionResult
+ExpansionResult.model_rebuild()
