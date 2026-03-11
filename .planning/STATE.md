@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 13-02-PLAN.md (add Pause button to InterventionPanel, phase 13 complete)
-last_updated: "2026-03-11T02:09:37.928Z"
+stopped_at: Completed 13-01-PLAN.md (wire EscalationRouter as PermissionHandler, add pause command)
+last_updated: "2026-03-11T02:12:43.091Z"
 last_activity: "2026-03-10 — Phase 2 Plan 1 complete: Pydantic v2 state models, enums, and error hierarchy"
 progress:
   total_phases: 14
-  completed_phases: 12
+  completed_phases: 13
   total_plans: 28
-  completed_plans: 27
+  completed_plans: 28
   percent: 10
 ---
 
@@ -77,6 +77,7 @@ Progress: [█░░░░░░░░░] 10%
 | Phase 11-packaging-and-distribution P02 | 2 | 2 tasks | 1 files |
 | Phase 12-fix-cli-cancel-redirect P01 | 10 | 2 tasks | 2 files |
 | Phase 13-wire-escalation-pause P02 | 7 | 1 tasks | 3 files |
+| Phase 13-wire-escalation-pause P01 | 12 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -164,6 +165,9 @@ Recent decisions affecting current work:
 - [Phase 12-fix-cli-cancel-redirect]: Unknown agent_id in cancel_agent returns early as safe no-op (not an error, not a re-spawn)
 - [Phase 13-wire-escalation-pause]: Pause placeholder falls through to final else branch — the only remaining ActiveInput value when not feedback/redirect
 - [Phase 13-wire-escalation-pause]: Purple color scheme (bg-purple-100/600) for Pause distinguishes it from Cancel (red), Feedback (blue), Redirect (amber)
+- [Phase 13-wire-escalation-pause]: PermissionHandler timeout set to escalation_router._human_timeout + 30.0 (150s) to avoid cutting off human escalation window
+- [Phase 13-wire-escalation-pause]: Dashboard pause branch reads orchestrator._human_out/_human_in directly — avoids new parameters to handle_intervention
+- [Phase 13-wire-escalation-pause]: CLI pause requires both queues non-None — fails fast with clear error in auto/non-interactive modes
 
 ### Pending Todos
 
@@ -176,6 +180,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T02:09:37.925Z
-Stopped at: Completed 13-02-PLAN.md (add Pause button to InterventionPanel, phase 13 complete)
+Last session: 2026-03-11T02:12:43.087Z
+Stopped at: Completed 13-01-PLAN.md (wire EscalationRouter as PermissionHandler, add pause command)
 Resume file: None

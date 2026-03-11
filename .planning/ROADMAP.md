@@ -24,7 +24,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 10: Dashboard Frontend** - React dashboard with layered visibility, live stream, and intervention controls (completed 2026-03-10)
 - [x] **Phase 11: Packaging and Distribution** - pip and npm packages with installation and getting-started guide (completed 2026-03-10)
 - [x] **Phase 12: Fix CLI Cancel/Redirect Signatures** - Fix cancel_agent() signature mismatch and redirect command parameter errors (gap closure) (completed 2026-03-11)
-- [ ] **Phase 13: Wire Escalation Router + Pause Surface** - Connect EscalationRouter to ACPClient and add pause command to CLI/dashboard (gap closure)
+- [x] **Phase 13: Wire Escalation Router + Pause Surface** - Connect EscalationRouter to ACPClient and add pause command to CLI/dashboard (gap closure) (completed 2026-03-11)
 - [ ] **Phase 14: Fix Getting-Started Guide .env Claim** - Remove or implement .env auto-loading claim in getting-started guide (gap closure)
 
 ## Phase Details
@@ -214,7 +214,7 @@ Plans:
   1. ACPClient sessions use EscalationRouter as their permission_handler
   2. CLI `pause` command invokes pause_for_human_decision on the orchestrator
   3. Dashboard InterventionPanel has a "Pause" action that triggers pause_for_human_decision
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 13-01-PLAN.md — Wire EscalationRouter into ACPClient + pause command in CLI and dashboard backend
 - [ ] 13-02-PLAN.md — Add Pause button to dashboard frontend InterventionPanel
@@ -247,5 +247,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 10. Dashboard Frontend | 3/3 | Complete    | 2026-03-10 |
 | 11. Packaging and Distribution | 2/2 | Complete    | 2026-03-10 |
 | 12. Fix CLI Cancel/Redirect Signatures | 1/1 | Complete    | 2026-03-11 |
-| 13. Wire Escalation Router + Pause Surface | 1/2 | In Progress|  |
+| 13. Wire Escalation Router + Pause Surface | 2/2 | Complete   | 2026-03-11 |
 | 14. Fix Getting-Started Guide .env Claim | 0/0 | Pending | |

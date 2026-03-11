@@ -148,8 +148,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CLI-01 | Phase 12: Fix CLI Cancel/Redirect Signatures | Complete |
 | CLI-03 | Phase 12: Fix CLI Cancel/Redirect Signatures | Complete |
 | COMM-05 | Phase 12: Fix CLI Cancel/Redirect Signatures | Complete |
-| COMM-03 | Phase 13: Wire Escalation Router + Pause Surface | Pending |
-| COMM-04 | Phase 13: Wire Escalation Router + Pause Surface | Pending |
+| COMM-03 | Phase 13: Wire Escalation Router + Pause Surface | Complete |
+| COMM-04 | Phase 13: Wire Escalation Router + Pause Surface | Complete |
 | COMM-07 | Phase 13: Wire Escalation Router + Pause Surface | Complete |
 | PKG-04 | Phase 14: Fix Getting-Started Guide .env Claim | Pending |
 
