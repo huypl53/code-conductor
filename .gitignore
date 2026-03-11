@@ -9,6 +9,8 @@ dist/
 # Node
 node_modules/
 dist/
+*.tsbuildinfo
+package-lock.json
 
 # Runtime
 .conductor/
