@@ -20,13 +20,23 @@ _console = Console()
 
 
 def run(
-    description: str = typer.Argument(..., help="Feature description"),
+    description: str = typer.Argument(None, help="Feature description"),
     auto: bool = typer.Option(True, "--auto/--interactive", help="Run mode"),
     repo: str = typer.Option(".", "--repo", help="Path to repo root"),
+    resume: bool = typer.Option(False, "--resume", help="Resume interrupted orchestration from state.json"),
     dashboard_port: int = typer.Option(None, "--dashboard-port", help="Start dashboard server on this port"),
 ) -> None:
     """Start the orchestrator for a feature description with live agent display."""
-    asyncio.run(_run_async(description, auto=auto, repo=Path(repo).resolve(), dashboard_port=dashboard_port))
+    if not resume and not description:
+        _console.print("[red]Error: description is required (or use --resume)[/red]")
+        raise typer.Exit(1)
+    asyncio.run(_run_async(
+        description or "",
+        auto=auto,
+        repo=Path(repo).resolve(),
+        resume=resume,
+        dashboard_port=dashboard_port,
+    ))
 
 
 async def _run_async(
@@ -34,6 +44,7 @@ async def _run_async(
     *,
     auto: bool,
     repo: Path,
+    resume: bool = False,
     dashboard_port: int | None = None,
 ) -> None:
     """Async implementation of the run command."""
@@ -52,7 +63,9 @@ async def _run_async(
         human_in=human_in,
     )
 
-    if auto:
+    if resume:
+        orch_coro = orchestrator.resume()
+    elif auto:
         orch_coro = orchestrator.run_auto(description)
     else:
         orch_coro = orchestrator.run(description)
