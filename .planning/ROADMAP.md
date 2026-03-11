@@ -155,7 +155,9 @@ Plans:
   2. A brief inline delegation event cell appears in the transcript before sub-agent cells, keeping the user oriented without requiring side-panel attention
   3. Agent completion cells include the final task summary so the user can see what each agent delivered
   4. With 3+ concurrent agents active, shimmer timers are cleaned up on finalize and no lingering animations remain after all agents complete
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 46-01-PLAN.md — TDD: Visual polish and verification (CSS tokens, delegation order, finalize summary, shimmer cleanup)
 
 ## Progress
 
@@ -204,6 +206,6 @@ Plans:
 | 41. Smooth Cell Animations | v2.1 | 1/1 | Complete | 2026-03-11 |
 | 42. Ctrl-G External Editor | v2.1 | 1/1 | Complete | 2026-03-12 |
 | 43. Agent Cell Widgets | v2.2 | 1/1 | Complete | 2026-03-11 |
-| 44. TranscriptPane Extensions and State Bridge | 1/1 | Complete    | 2026-03-11 | - |
-| 45. SDK Stream Interception and Orchestrator Status | 1/1 | Complete    | 2026-03-11 | - |
-| 46. Visual Polish and Verification | v2.2 | 0/? | Not started | - |
+| 44. TranscriptPane Extensions and State Bridge | v2.2 | 1/1 | Complete | 2026-03-11 |
+| 45. SDK Stream Interception and Orchestrator Status | v2.2 | 1/1 | Complete | 2026-03-11 |
+| 46. Visual Polish and Verification | v2.2 | 0/1 | Not started | - |
