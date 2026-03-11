@@ -52,7 +52,14 @@ def _default_callback(
         if session_id is None:
             return
 
-    ConductorApp(resume_session_id=session_id, dashboard_port=dashboard_port).run()
+    try:
+        ConductorApp(resume_session_id=session_id, dashboard_port=dashboard_port).run()
+    finally:
+        # Restore terminal state if Textual exited uncleanly (crash, kill).
+        # On clean exit, Textual already emits these -- idempotent to repeat.
+        import sys
+        sys.stdout.write("\033[?1003l\033[?1006l\033[?1000l")
+        sys.stdout.flush()
 
 
 app.command("run")(run)

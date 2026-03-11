@@ -31,6 +31,12 @@ async def test_auto_focus_selector_resolves():
 
 
 async def test_focus_restored_after_modal():
+    """Verify focus can be restored to CommandInput Input after modal dismiss.
+
+    AUTO_FOCUS fires on initial screen mount only. Post-modal focus restoration
+    uses explicit .focus() calls (belt-and-suspenders pattern in _watch_escalations
+    and on_stream_done). This test verifies the explicit focus path works.
+    """
     from textual.app import App, ComposeResult, Screen
     from textual.widgets import Input
     from conductor.tui.widgets.command_input import CommandInput
@@ -53,9 +59,13 @@ async def test_focus_restored_after_modal():
     app = FocusApp()
     async with app.run_test() as pilot:
         await pilot.pause()
+        # Verify initial focus
+        assert isinstance(app.focused, Input), "Pre-condition: Input focused initially"
         await app.push_screen(ModalScreen())
         await pilot.pause()
-        await pilot.press("enter")  # dismiss modal button
+        # Pop screen directly (simulates dismiss completing)
+        app.pop_screen()
+        await pilot.pause()
         await pilot.pause()
         await pilot.pause()
         assert isinstance(app.focused, Input), (

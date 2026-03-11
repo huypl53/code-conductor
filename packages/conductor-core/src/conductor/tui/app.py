@@ -33,6 +33,7 @@ class ConductorApp(App):
     """
 
     CSS_PATH = Path(__file__).parent / "conductor.tcss"
+    AUTO_FOCUS = "CommandInput Input"  # focus the Input inside CommandInput on screen activation
 
     # Background task reference store (Pitfall 5: GC-collected tasks die silently)
     _background_tasks: set[asyncio.Task[Any]]
