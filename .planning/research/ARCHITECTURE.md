@@ -1,521 +1,591 @@
 # Architecture Research
 
-**Domain:** Interactive Chat TUI — v1.1 addition to multi-agent orchestration framework
+**Domain:** Textual TUI integration into existing Python multi-agent orchestration framework (Conductor v2.0)
 **Researched:** 2026-03-11
-**Confidence:** HIGH — based on live codebase inspection + official SDK documentation
+**Confidence:** HIGH
 
 ---
 
-## Context: What Already Exists (v1.0 Baseline)
+## Standard Architecture
 
-This document focuses on the v1.1 additions. Understanding what exists is mandatory before designing new components.
+### System Overview
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                     conductor CLI (Typer + Rich)                      │
-│  ┌───────────────────┐  ┌────────────────┐  ┌────────────────────┐   │
-│  │  `conductor run`  │  │  input_loop.py  │  │  display_loop.py   │   │
-│  │  (batch mode)     │  │  (cmd dispatch) │  │  (Rich Live table)  │   │
-│  └─────────┬─────────┘  └───────┬────────┘  └─────────┬──────────┘   │
-│            │                    │ human_in/out queues   │ state poll   │
-├────────────▼────────────────────▼────────────────────────▼────────────┤
-│                         Orchestrator (Python)                          │
-│  ┌─────────────────────────────────────────────────────────────────┐  │
-│  │  orchestrator.py: run() / run_auto() / resume()                  │  │
-│  │  ├── TaskDecomposer (SDK query(), structured JSON output)        │  │
-│  │  ├── DependencyScheduler (asyncio.wait FIRST_COMPLETED)         │  │
-│  │  ├── _run_agent_loop (ACPClient per task, review/revise cycle)  │  │
-│  │  ├── EscalationRouter (auto vs. human via asyncio.Queue pair)   │  │
-│  │  └── Interventions: cancel_agent, inject_guidance, pause         │  │
-│  └─────────────────────────────────────────────────────────────────┘  │
-├─────────────────────────────────────────────────────────────────────── ┤
-│                       ACP / Claude Agent SDK                           │
-│  ┌───────────────────────────────────────────────────────────────┐    │
-│  │  ACPClient (per sub-agent): ClaudeSDKClient wrapper            │    │
-│  │  send() → stream_response() → interrupt()                      │    │
-│  │  PermissionHandler → EscalationRouter.resolve()                │    │
-│  └───────────────────────────────────────────────────────────────┘    │
-├─────────────────────────────────────────────────────────────────────── ┤
-│                         State Layer (Filesystem)                       │
-│  ┌──────────────┐  ┌───────────────────────┐  ┌──────────────────┐   │
-│  │ StateManager │  │ .conductor/state.json │  │  SessionRegistry  │   │
-│  │ (filelock)   │  │ (ConductorState model)│  │ sessions.json     │   │
-│  └──────────────┘  └───────────────────────┘  └──────────────────┘   │
-├─────────────────────────────────────────────────────────────────────── ┤
-│                  Dashboard (FastAPI + React, optional)                  │
-│  ┌──────────────────────────────────────────────────────────────┐     │
-│  │  dashboard/server.py → WebSocket → conductor-dashboard npm    │     │
-│  └──────────────────────────────────────────────────────────────┘     │
-└──────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Terminal (User Layer)                         │
+├─────────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                  ConductorApp (Textual App)                   │   │
+│  │  ┌──────────────────────┐  ┌───────────────────────────────┐ │   │
+│  │  │  TranscriptPane      │  │  AgentMonitorPane (right side) │ │   │
+│  │  │  (ScrollView)        │  │  - AgentStatusRow per agent    │ │   │
+│  │  │  - MessageCell/turn  │  │  - Reads state.json via worker │ │   │
+│  │  │  - MarkdownStream    │  └───────────────────────────────┘ │   │
+│  │  │    for live tokens   │                                     │   │
+│  │  └──────────────────────┘                                     │   │
+│  │  ┌──────────────────────────────────────────────────────────┐ │   │
+│  │  │  CommandInput (Input + slash autocomplete popup)          │ │   │
+│  │  └──────────────────────────────────────────────────────────┘ │   │
+│  │  ┌──────────────────────────────────────────────────────────┐ │   │
+│  │  │  StatusFooter (model, mode, tokens, rate limit)           │ │   │
+│  │  └──────────────────────────────────────────────────────────┘ │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────────────┤
+│                     Background Workers Layer                         │
+│  ┌─────────────────┐  ┌──────────────────┐  ┌──────────────────┐   │
+│  │ SDKStreamWorker │  │ StateWatchWorker  │  │ DashboardWorker  │   │
+│  │ (@work coroutine│  │ (watchfiles +     │  │ (uvicorn server  │   │
+│  │  on Textual     │  │  post_message to  │  │  asyncio.Task on │   │
+│  │  event loop)    │  │  AgentMonitorPane)│  │  same loop)      │   │
+│  └─────────────────┘  └──────────────────┘  └──────────────────┘   │
+├─────────────────────────────────────────────────────────────────────┤
+│                     Existing Preserved Layer                         │
+│  ┌─────────────────┐  ┌──────────────────┐  ┌──────────────────┐   │
+│  │ DelegationMgr   │  │  Orchestrator    │  │  StateManager    │   │
+│  │ (kept intact,   │  │  (UI-agnostic,   │  │  + state.json    │   │
+│  │  input_fn swap) │  │  kept intact)    │  │  (unchanged)     │   │
+│  └─────────────────┘  └──────────────────┘  └──────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Critical observation:** `cli/__init__.py` sets `no_args_is_help=True`, so `conductor` with no arguments currently prints help text. The v1.1 TUI requires a new default path when no args are given.
+### Component Responsibilities
+
+| Component | Responsibility | Implementation |
+|-----------|----------------|----------------|
+| `ConductorApp` | Textual App root — owns event loop, widget tree, screen stack | Replaces `ChatSession.run()`. Calls `asyncio.create_task()` in `on_mount()` for uvicorn; uses `run_worker()` for SDK and state watcher |
+| `TranscriptPane` | Scrollable conversation history, one `MessageCell` per turn | `ScrollableContainer` holding `MessageCell` widgets; newest cell uses `MarkdownStream` while token stream is live |
+| `MessageCell` | Single conversation turn (user or assistant). Immutable once stream ends | Custom widget wrapping `MarkdownStream` (assistant) or `Static` (user). Fixed after `StreamDone` message |
+| `CommandInput` | Single-line input with slash autocomplete popup | `Input` widget with `Suggester` subclass. Popup via `textual-autocomplete` triggered on `/` |
+| `AgentMonitorPane` | Right-side panel showing active agent status rows | `VerticalScroll` of `AgentStatusRow` widgets. Updated via `StateChanged` custom messages posted by `StateWatchWorker` |
+| `AgentStatusRow` | One row per agent: ID, task title, status, elapsed time | Custom widget with `Reactive` attributes for status and elapsed. Auto-refreshes on reactive change |
+| `StatusFooter` | Bottom bar: model name, mode (auto/interactive), token count, rate limit | `Horizontal` container with `Label` widgets; updated via `TokensUpdated` custom message from SDK stream worker |
+| `ApprovalModal` | Modal overlay for agent file change or command approval | `ModalScreen[bool]` — pushed via `push_screen_wait()` from within a `@work` worker |
+| `EscalationModal` | Modal overlay for sub-agent questions relayed to human | `ModalScreen[str]` — pushed via `push_screen_wait()` replacing `DelegationManager._input_fn` |
+| `SDKStreamWorker` | Drives `ClaudeSDKClient` streaming — posts `TokenChunk` and `ToolActivity` messages to transcript | `@work` async coroutine on Textual's event loop; no separate thread needed |
+| `StateWatchWorker` | Watches `state.json` via `watchfiles.awatch` — posts `StateChanged` to app | `@work` async coroutine. Replaces `DelegationManager._status_updater` polling |
+| `DashboardWorker` | Runs uvicorn in background for web dashboard coexistence | `asyncio.create_task(server.serve())` in `on_mount()` — same event loop as Textual |
+| `DelegationManager` | Spawns orchestrators, bridges escalation — kept intact | `input_fn` replaced: was `prompt_toolkit` prompt, becomes `push_screen_wait(EscalationModal(...))` |
 
 ---
 
-## Target Architecture (v1.1 additions in context)
-
-The TUI adds a **conversational loop** execution mode where the orchestrator itself operates as a stateful, multi-turn Claude session with direct tool access — rather than as a one-shot decomposer that spawns agents.
+## Recommended Project Structure
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                     conductor CLI (Typer + Rich)                      │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐   │
-│  │ `conductor run`  │  │  `conductor`      │  │ `conductor       │   │
-│  │ (batch mode,     │  │  (no args →      │  │  status`         │   │
-│  │  UNCHANGED)      │  │  chat TUI NEW)    │  │  UNCHANGED)      │   │
-│  └──────────────────┘  └────────┬─────────┘  └──────────────────┘   │
-│                                  │ NEW                                 │
-├──────────────────────────────────▼─────────────────────────────────── ┤
-│                        Chat TUI Layer (NEW)                            │
-│  ┌─────────────────────────────────────────────────────────────────┐  │
-│  │  cli/chat.py — ChatSession                                       │  │
-│  │  ├── _chat_loop(): async REPL — send prompt, stream response     │  │
-│  │  ├── _render_stream(): incremental Rich output per message       │  │
-│  │  ├── delegation hook: PostToolUse on Delegate custom tool        │  │
-│  │  └── _spawn_agents(): await Orchestrator.run(task_desc)          │  │
-│  └────────┬──────────────────────────────────────┬──────────────── ┘  │
-│           │ persistent ClaudeSDKClient session    │ fresh Orchestrator │
-├───────────▼──────────────────────────────────────▼─────────────────── ┤
-│     ClaudeSDKClient (orchestrator chat)      Orchestrator (batch)      │
-│  ┌─────────────────────────────┐  ┌──────────────────────────────┐   │
-│  │  Persistent session_id       │  │  orchestrator.run(task_desc) │   │
-│  │  Tools: Read/Edit/Bash/etc   │  │  (existing v1.0 path,        │   │
-│  │  Custom tool: Delegate       │  │   UNCHANGED)                 │   │
-│  │  setting_sources: ["project"]│  └──────────────────────────────┘   │
-│  └─────────────────────────────┘                                      │
-└──────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## New Components
-
-### Component 1: `cli/chat.py` — ChatSession
-
-The central new component. Owns the conversational loop end-to-end.
-
-| Responsibility | Implementation |
-|---------------|----------------|
-| Maintain orchestrator's persistent SDK session | `ClaudeSDKClient` (not `query()`), kept open for the full session lifetime |
-| Accept user input | `asyncio.to_thread(input, "> ")` — same pattern as existing `_ainput()` in input_loop.py |
-| Send to SDK and stream response | `client.query(user_input)` then `client.receive_response()` |
-| Render streaming output | Rich `Console.print()` incremental output per `AssistantMessage` |
-| Intercept delegation decisions | `PostToolUse` hook registered on the `Delegate` custom tool |
-| Call `Orchestrator.run()` on delegation | `await orchestrator.run(task_desc)` inside the async hook |
-| Resume sessions across restarts | Read `session_id` from `chat_persistence.py`, pass `resume=session_id` to `ClaudeSDKClient` |
-
-`ClaudeSDKClient` is the correct API here. The official SDK docs are explicit: `query()` creates a new session each call; `ClaudeSDKClient` is for "continuous conversations, chat interfaces, REPLs" with context preserved across `.query()` calls.
-
-**Confidence:** HIGH — ClaudeSDKClient is the explicitly documented API for this use case.
-
-### Component 2: `cli/commands/chat.py` — Typer command wiring
-
-CLI entry point for the interactive mode. Registers a `chat` command on the Typer app. The `cli/__init__.py` modification also sets `invoke_without_command=True` and a default callback so `conductor` (no args) calls `chat` rather than printing help.
-
-```python
-# cli/__init__.py change
-app = typer.Typer(
-    name="conductor",
-    help="Conductor: AI agent orchestration",
-    invoke_without_command=True,
-)
-
-@app.callback()
-def main_callback(ctx: typer.Context):
-    if ctx.invoked_subcommand is None:
-        chat()  # default to chat mode
-```
-
-This preserves all existing subcommands without change.
-
-**Confidence:** HIGH — Typer `invoke_without_command` is a documented feature.
-
-### Component 3: `cli/chat_persistence.py` — Chat session store
-
-Reads/writes `.conductor/chat_session.json` with `{"session_id": "...", "started_at": "..."}`. Used to resume the orchestrator's chat session across `conductor` invocations. Follows the same pattern as the existing `SessionRegistry` for sub-agents. Single writer (the one chat session), no filelock required.
-
-### Component 4: Chat system prompt
-
-The orchestrator's identity in chat mode differs from its batch decomposer role. The chat system prompt establishes:
-- Role as a senior engineer / coding agent with direct tool access
-- Permission to use tools directly for simple/focused tasks
-- When to delegate: multi-file features, tasks requiring a team, complex dependency graphs
-- How to signal delegation: call the `Delegate` custom tool with a task description
-
-This is a prompt artifact, not a code module, but it drives the smart delegation behavior. Requires iterative tuning.
-
-### Component 5: `Delegate` custom in-process tool
-
-An in-process custom tool (MCP-style, no subprocess) defined using the SDK's tool definition API. The orchestrator SDK session calls this tool when it decides to spawn sub-agents. `ChatSession` intercepts the `PostToolUse` hook, runs `Orchestrator.run(task)`, and returns a summary as the tool result.
-
-```python
-DELEGATE_TOOL_SCHEMA = {
-    "name": "Delegate",
-    "description": "Spawn a team of sub-agents to implement a complex multi-file feature.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "task": {
-                "type": "string",
-                "description": "Feature description for the agent team (as if passed to conductor run)"
-            }
-        },
-        "required": ["task"]
-    }
-}
-```
-
-**Confidence:** HIGH — custom in-process tools are a first-class SDK feature, already used conceptually in the existing `ACPClient` via `PermissionHandler`.
-
----
-
-## What Changes vs. What Stays Unchanged
-
-| Module | Status | Change |
-|--------|--------|--------|
-| `cli/__init__.py` | MODIFY | Add `chat` command; set `invoke_without_command=True`, add default callback |
-| `cli/commands/run.py` | UNCHANGED | Batch mode stays identical |
-| `cli/commands/status.py` | UNCHANGED | Status display stays identical |
-| `cli/display.py` | UNCHANGED, REUSED | `_build_table()` reused to show agent progress during delegation |
-| `cli/input_loop.py` | UNCHANGED | Still used exclusively by `conductor run` |
-| `orchestrator/orchestrator.py` | UNCHANGED | `run()`, `run_auto()` called as-is when delegating |
-| `acp/client.py` | UNCHANGED | Sub-agents still use `ACPClient` |
-| `state/` (all files) | UNCHANGED | `StateManager` + `ConductorState` models unchanged |
-| `dashboard/` | UNCHANGED | Optional, still started via `--dashboard-port` |
-| **NEW: `cli/chat.py`** | NEW | `ChatSession` class, chat loop, streaming, delegation hook |
-| **NEW: `cli/chat_persistence.py`** | NEW | Load/save `.conductor/chat_session.json` |
-| **NEW: `cli/commands/chat.py`** | NEW | Typer command wiring |
-
----
-
-## Data Flow
-
-### Flow 1: Direct Task (Orchestrator Handles Itself)
-
-```
-User types: "Show me what files auth.py imports"
-    │
-    ▼
-ChatSession._chat_loop() → client.query(user_input)
-    │
-    ▼
-SDK agent loop: Claude calls Read tool on auth.py
-    │
-    ▼
-client.receive_response() yields AssistantMessage (text + tool calls)
-    │
-    ▼
-ChatSession._render_stream() prints incrementally to terminal
-    │
-    ▼
-ResultMessage received: session complete
-    │
-    ▼
-Session context preserved for next turn (context window accumulates)
-```
-
-### Flow 2: Delegated Task (Orchestrator Spawns Sub-Agents)
-
-```
-User types: "Implement OAuth login with Google, include tests"
-    │
-    ▼
-ChatSession._chat_loop() → client.query(user_input)
-    │
-    ▼
-SDK agent loop: Claude decides this is multi-file/complex work
-Claude calls: Delegate(task="Implement OAuth login with Google, include tests")
-    │
-    ▼
-PostToolUse hook fires in ChatSession._delegation_hook()
-    │
-    ▼
-ChatSession._spawn_agents(task_desc):
-    fresh_orchestrator = Orchestrator(state_manager, repo_path, ...)
-    await fresh_orchestrator.run(task_desc)  ← existing v1.0 path
-    │  spawns agent-A (auth module)
-    │  spawns agent-B (tests)
-    │  review/revise cycle per agent (unchanged)
-    │
-    ▼
-Orchestrator.run() completes
-    │
-    ▼
-Hook returns: {"result": "Completed 2 tasks: src/auth.py, tests/test_auth.py"}
-    │
-    ▼
-SDK agent loop resumes: Claude reads tool result, produces final response
-    │
-    ▼
-ChatSession._render_stream() displays Claude's summary to user
-    │
-    ▼
-Full delegation captured in orchestrator's context window
-```
-
-### Flow 3: Session Resume (Restart Continuity)
-
-```
-User closes terminal, reopens next day, runs `conductor`
-    │
-    ▼
-ChatSession.__init__: read .conductor/chat_session.json → session_id found
-    │
-    ▼
-ClaudeSDKClient(options=..., resume=session_id)
-    │
-    ▼
-Full prior context restored by SDK (files read, tasks delegated, decisions)
-    │
-    ▼
-User types: "How did the auth implementation go?"
-Claude has full context: answers accurately referencing prior work
-```
-
-### Flow 4: Agent Escalation During Delegation
-
-```
-Delegation running: Orchestrator.run() active
-    │
-Sub-agent hits low-confidence action (e.g., "delete production data")
-    │
-    ▼
-EscalationRouter: interactive mode → push HumanQuery to human_out queue
-    │
-    ▼
-ChatSession: human_out queue watcher wakes up
-    │
-    ▼
-Terminal prints: "\n[Agent question]: Are you sure you want to delete X?"
-    │
-    ▼
-User types answer → human_in queue
-    │
-    ▼
-EscalationRouter reads answer, resumes sub-agent
-    │
-    ▼
-Delegation continues, eventually hook returns result to SDK session
-```
-
----
-
-## Project Structure (new files only)
-
-```
-packages/conductor-core/src/conductor/
-├── acp/                              # UNCHANGED
-├── dashboard/                        # UNCHANGED
-├── orchestrator/                     # UNCHANGED
-├── state/                            # UNCHANGED
-└── cli/
-    ├── __init__.py                   # MODIFY: invoke_without_command, default callback
-    ├── display.py                    # UNCHANGED (reused)
-    ├── input_loop.py                 # UNCHANGED
-    ├── chat.py                       # NEW: ChatSession, _chat_loop, hooks, delegation
-    ├── chat_persistence.py           # NEW: .conductor/chat_session.json read/write
-    └── commands/
-        ├── __init__.py               # UNCHANGED
-        ├── run.py                    # UNCHANGED
-        ├── status.py                 # UNCHANGED
-        └── chat.py                   # NEW: Typer command wiring
+conductor/
+├── cli/
+│   ├── __init__.py            # MODIFIED: ConductorApp(...).run() replaces ChatSession
+│   ├── chat.py                # KEPT as --legacy fallback or deleted after migration
+│   ├── chat_persistence.py    # KEPT unchanged (session JSON store)
+│   ├── delegation.py          # MODIFIED: input_fn swap + remove _status_updater/_clear_status_lines
+│   ├── stream_display.py      # KEPT: format_tool_activity(), ContextTracker() reused
+│   ├── input_loop.py          # KEPT: batch-mode input loop (conductor run) unchanged
+│   └── display.py             # KEPT unchanged
+│
+└── tui/                       # NEW module
+    ├── __init__.py
+    ├── app.py                 # ConductorApp — Textual App root, lifecycle, worker launch
+    ├── screens/
+    │   ├── __init__.py
+    │   ├── main.py            # MainScreen — default layout
+    │   ├── approval.py        # ApprovalModal — ModalScreen[bool] for agent action approval
+    │   └── escalation.py      # EscalationModal — ModalScreen[str] for agent question relay
+    ├── widgets/
+    │   ├── __init__.py
+    │   ├── transcript.py      # TranscriptPane + MessageCell
+    │   ├── command_input.py   # CommandInput (Input + slash autocomplete)
+    │   ├── agent_monitor.py   # AgentMonitorPane + AgentStatusRow
+    │   └── status_footer.py   # StatusFooter
+    ├── workers/
+    │   ├── __init__.py
+    │   ├── sdk_stream.py      # SDKStreamWorker — drives ClaudeSDKClient streaming
+    │   ├── state_watcher.py   # StateWatchWorker — watchfiles bridge to TUI messages
+    │   └── dashboard.py       # DashboardWorker — uvicorn asyncio.create_task launcher
+    ├── messages.py            # Custom Textual message types (TokenChunk, ToolActivity,
+    │                          #   StateChanged, TokensUpdated, StreamDone, etc.)
+    └── conductor.tcss         # Textual CSS for layout and styling
 ```
 
 ### Structure Rationale
 
-- **`cli/chat.py`** is separate from `cli/commands/chat.py` following the existing pattern (`run.py` wires the command; the actual logic is in `commands/run.py` calling functions from `cli/`). Core logic in `chat.py` is independently unit-testable.
-- **`cli/chat_persistence.py`** mirrors the `SessionRegistry` pattern already in the codebase. Small and focused.
-- **All new code in `cli/`** because chat is a presentation/interaction concern. Orchestration logic stays in `orchestrator/`.
+- **`tui/`** is isolated from `cli/` so the old `ChatSession` remains for tests and fallback — no forced big-bang migration.
+- **`tui/screens/`** holds screens separately from widgets — Textual treats screens as first-class routing units.
+- **`tui/workers/`** groups all long-running async tasks to make event loop ownership explicit and auditable.
+- **`tui/messages.py`** centralizes custom message types to prevent circular imports; makes the internal event bus explicit.
+- **`tui/conductor.tcss`** separates visual styling from widget logic, allowing layout tuning without Python changes.
 
 ---
 
 ## Architectural Patterns
 
-### Pattern 1: ClaudeSDKClient for the Persistent Orchestrator Session
+### Pattern 1: Textual App as the Single Asyncio Event Loop Owner
 
-**What:** Use `ClaudeSDKClient` (not `query()`) for the orchestrator's chat session. `ClaudeSDKClient` maintains a persistent SDK process with full conversation history across `.query()` calls.
+**What:** `ConductorApp.run()` becomes the asyncio entry point for the entire process. All previously concurrent tasks — SDK streaming, uvicorn, watchfiles — are launched as tasks *inside* Textual's event loop, not alongside it.
 
-**When to use:** Any time the orchestrator needs context continuity across user messages. "It" needs to refer back to files it read, decisions it made, tasks it ran.
+**When to use:** This is the root pattern for the entire migration. Everything else flows from it.
 
-**Trade-offs:** More complex lifecycle (must manage `async with ClaudeSDKClient`) but necessary for chat. `query()` would close and reopen the SDK process each message, losing context despite `resume=session_id` because in-process hook registrations are lost.
+**Trade-offs:** Textual's `app.run()` creates and owns the asyncio event loop. Code that previously used `asyncio.run(...)` must move inside `on_mount()` or become `@work` workers.
 
+**Example:**
 ```python
-async with ClaudeSDKClient(options=ClaudeAgentOptions(
-    cwd=str(repo_path),
-    system_prompt=CHAT_SYSTEM_PROMPT,
-    allowed_tools=["Read", "Edit", "Write", "Bash", "Glob", "Grep"],
-    custom_tools=[DELEGATE_TOOL_SCHEMA],
-    setting_sources=["project"],
-    resume=prior_session_id,  # None on first run
-)) as client:
-    while True:
-        user_input = await _ainput("> ")
-        if user_input.lower() in ("exit", "quit"):
-            break
-        await client.query(user_input)
-        async for message in client.receive_response():
-            render(message)
+# conductor/tui/app.py
+class ConductorApp(App):
+    async def on_mount(self) -> None:
+        # SDK streaming: @work coroutine on Textual's event loop
+        self.run_worker(self._sdk_stream_loop(), exclusive=True)
+
+        # State watcher: asyncio.create_task runs on same event loop
+        self._state_watch_task = asyncio.create_task(self._watch_state())
+
+        # Dashboard server: same event loop, no new thread
+        if self._dashboard_port:
+            server = self._create_uvicorn_server(self._dashboard_port)
+            self._server_task = asyncio.create_task(server.serve())
+
+    async def on_unmount(self) -> None:
+        if hasattr(self, "_server_task"):
+            self._uvicorn_server.should_exit = True
+            await self._server_task
+
+# conductor/cli/__init__.py (modified)
+asyncio.run(...)  # REMOVED
+ConductorApp(resume_session_id=..., dashboard_port=...).run()  # REPLACES
 ```
 
-**Confidence:** HIGH — official SDK docs explicitly list "interactive applications, chat interfaces, REPLs" as the ClaudeSDKClient use case.
+### Pattern 2: Custom Textual Messages as the Internal Event Bus
 
-### Pattern 2: PostToolUse Hook for Delegation Interception
+**What:** Background workers never call widget methods directly. They post custom `Message` subclasses (defined in `tui/messages.py`) to the app, and widgets handle them via `on_<MessageType>` handlers.
 
-**What:** Register a `PostToolUse` hook on the `Delegate` custom tool. When the orchestrator SDK session calls `Delegate`, the hook captures the call, runs `Orchestrator.run()`, and returns a summary as the tool result.
+**When to use:** All cross-worker-to-widget communication. This is the canonical Textual pattern for thread-safe UI updates.
 
-**When to use:** Any time you need Python code to execute in response to Claude calling a specific tool. The hook runs in-process, supports `async`, and controls the tool result that Claude sees.
+**Trade-offs:** Adds a layer of message types but prevents tight coupling. Moving or renaming a widget does not break the worker that feeds it.
 
-**Trade-offs:** Elegant decoupling — Claude decides when to delegate; Python decides how to execute it. The tool result summary is critical: Claude forms its final response based on what the hook returns.
-
+**Example:**
 ```python
-async def _delegation_hook(input_data, tool_use_id, context):
-    task_desc = input_data["tool_input"]["task"]
-    orchestrator = Orchestrator(state_manager=self._state, repo_path=self._repo)
-    await orchestrator.run(task_desc)
-    state = self._state.read_state()
-    completed = [t for t in state.tasks if t.status == "completed"]
-    summary = f"Completed {len(completed)} tasks: " + ", ".join(t.target_file for t in completed)
-    return {"result": summary}
+# conductor/tui/messages.py
+from textual.message import Message
+
+class TokenChunk(Message):
+    def __init__(self, text: str) -> None:
+        self.text = text
+        super().__init__()
+
+class ToolActivity(Message):
+    def __init__(self, activity_line: str) -> None:
+        self.activity_line = activity_line
+        super().__init__()
+
+class StateChanged(Message):
+    def __init__(self, state: ConductorState) -> None:
+        self.state = state
+        super().__init__()
+
+class StreamDone(Message):
+    pass
+
+# conductor/tui/workers/sdk_stream.py
+@work
+async def _sdk_stream_loop(self) -> None:
+    async for message in self._sdk_client.receive_response():
+        if isinstance(message, StreamEvent):
+            chunk = extract_text_delta(message)
+            if chunk:
+                self.post_message(TokenChunk(chunk))
+        elif isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, ToolUseBlock):
+                    activity = format_tool_activity(block.name, block.input)
+                    if activity:
+                        self.post_message(ToolActivity(activity))
+        elif isinstance(message, ResultMessage):
+            self.post_message(TokensUpdated(message.usage))
+    self.post_message(StreamDone())
+
+# conductor/tui/widgets/transcript.py
+class TranscriptPane(ScrollableContainer):
+    def on_token_chunk(self, event: TokenChunk) -> None:
+        self._active_cell.append_token(event.text)
+
+    def on_stream_done(self, event: StreamDone) -> None:
+        self._active_cell.finalize()
+        self._active_cell = None
 ```
 
-**Confidence:** HIGH — PostToolUse hooks are a first-class SDK feature documented officially.
+### Pattern 3: MarkdownStream for Streaming LLM Responses
 
-### Pattern 3: Fresh Orchestrator Per Delegation
+**What:** Each assistant `MessageCell` holds a `MarkdownStream` instance (available in Textual v4+). Incoming `TokenChunk` messages call `await stream.append(chunk)`. On `StreamDone`, the cell is finalized and made immutable. `MarkdownStream` batches rapid updates internally, preventing the 20 appends/second rendering bottleneck of the base `Markdown` widget.
 
-**What:** Construct a new `Orchestrator` instance for each delegation call, sharing only the `StateManager` and `repo_path`.
+**When to use:** For all streaming assistant responses. Do not use `Static` with manual string concatenation — it neither streams live nor renders markdown.
 
-**When to use:** Always for delegation calls. Never reuse an `Orchestrator` instance across `run()` calls.
+**Trade-offs:** Requires Textual v4+. `MarkdownStream` is specifically designed for LLM streaming patterns — this is the primary new feature of Textual v4.
 
-**Trade-offs:** Adds construction overhead (negligible — no I/O in `__init__`). Prevents stale `_active_clients`, `_active_tasks`, `_semaphore` state from a prior run contaminating a new one.
+**Example:**
+```python
+# conductor/tui/widgets/transcript.py
+from textual.widgets import Markdown
 
-**Confidence:** HIGH — from direct inspection of `Orchestrator.__init__` which initializes mutable dict state.
+class MessageCell(Widget):
+    def __init__(self, role: str) -> None:
+        super().__init__()
+        self._role = role
+        self._stream: Markdown.MarkdownStream | None = None
 
-### Pattern 4: Rich Live Rendering Over Textual for v1.1
+    async def start_stream(self) -> None:
+        md = Markdown("")
+        await self.mount(md)
+        self._stream = await Markdown.get_stream(md)
 
-**What:** Use Rich `Console.print()` for incremental streaming output during chat, and `_build_table()` from `display.py` for delegation progress. No Textual dependency in v1.1.
+    async def append_token(self, text: str) -> None:
+        if self._stream:
+            await self._stream.append(text)
 
-**When to use:** v1.1 baseline. Textual can be added in a later phase for full TUI widgets (scrollable history, input line, status panel).
+    def finalize(self) -> None:
+        self._stream = None  # cell is immutable after stream ends
+```
 
-**Trade-offs:** Rich is already a dependency; zero new packages; proven in `conductor run`. Textual would give a richer layout (scrollable message history, persistent input bar) but requires owning the event loop (incompatible with bare `asyncio.to_thread(input)` pattern).
+### Pattern 4: ModalScreen for Approval and Escalation Overlays
+
+**What:** Agent action approvals (file write, command execution) and sub-agent escalation questions use `ModalScreen[T]` pushed via `push_screen_wait()` from within a `@work` coroutine. The screen calls `self.dismiss(result)` and the worker receives the typed result and continues. The rest of the TUI remains interactive while the modal is displayed.
+
+**When to use:** Any time the TUI must block a background operation waiting for human input, without freezing the main UI.
+
+**Trade-offs:** `push_screen_wait()` must be called from a `@work` worker — not from an event handler. Calling it from an event handler deadlocks.
+
+**Example:**
+```python
+# conductor/tui/screens/escalation.py
+class EscalationModal(ModalScreen[str]):
+    def __init__(self, question: str) -> None:
+        self._question = question
+        super().__init__()
+
+    def compose(self) -> ComposeResult:
+        yield Label(self._question)
+        yield Input(placeholder="Your answer...", id="answer")
+        yield Button("Send", id="send", variant="primary")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        answer = self.query_one("#answer", Input).value
+        self.dismiss(answer or "proceed")
+
+# conductor/tui/app.py — wire into DelegationManager
+async def _make_escalation_input_fn(self):
+    """Returns a callable that opens EscalationModal and returns user's answer."""
+    @work
+    async def _ask(question: str) -> str:
+        return await self.push_screen_wait(EscalationModal(question))
+    return _ask
+```
+
+### Pattern 5: StateWatchWorker Replaces _status_updater Polling
+
+**What:** `DelegationManager._status_updater()` currently polls `StateManager.read_state()` every 2 seconds and uses ANSI escape codes (`\033[A\033[2K`) to overwrite terminal lines. Replace this with a `@work` coroutine using `watchfiles.awatch()` — the same mechanism as `conductor.dashboard.watcher` — that posts `StateChanged` messages to `AgentMonitorPane`.
+
+**When to use:** Always in the TUI. File event-driven updates are more responsive than polling and ANSI cursor manipulation is illegal inside a Textual app (Textual owns cursor positioning).
+
+**Trade-offs:** `watchfiles.awatch` must watch the *parent directory* (not `state.json` directly) because `StateManager` uses `os.replace()` which swaps the inode. This is the same documented gotcha already solved in `conductor/dashboard/watcher.py`.
+
+**Example:**
+```python
+# conductor/tui/workers/state_watcher.py
+from watchfiles import awatch
+from conductor.state.manager import StateManager
+
+@work
+async def watch_state(self, state_path: Path) -> None:
+    stop = asyncio.Event()
+    async for changes in awatch(str(state_path.parent), stop_event=stop):
+        changed_names = {Path(p).name for _, p in changes}
+        if state_path.name not in changed_names:
+            continue
+        try:
+            new_state = await asyncio.to_thread(
+                StateManager(state_path).read_state
+            )
+        except Exception:
+            continue  # mid-write atomic swap; skip this cycle
+        self.post_message(StateChanged(new_state))
+
+# conductor/tui/widgets/agent_monitor.py
+class AgentMonitorPane(VerticalScroll):
+    def on_state_changed(self, event: StateChanged) -> None:
+        state = event.state
+        # diff agents, add/remove/update AgentStatusRow widgets
+        active_ids = {a.id for a in state.agents if a.status in ("working", "waiting")}
+        self._sync_rows(state.agents, active_ids)
+```
+
+---
+
+## Data Flow
+
+### User Message → Streaming Response
+
+```
+CommandInput (Input.Submitted event)
+    ↓
+ConductorApp.on_input_submitted()
+    ↓ creates MessageCell("user") in TranscriptPane with user text
+    ↓ creates MessageCell("assistant") with MarkdownStream
+    ↓ launches SDKStreamWorker via run_worker()
+    ↓
+SDKStreamWorker (@work coroutine)
+    ↓ sdk_client.query(text)
+    ↓ async for message in sdk_client.receive_response()
+    │
+    ├─ StreamEvent(text_delta)
+    │     → post_message(TokenChunk(chunk))
+    │           → TranscriptPane.on_token_chunk()
+    │                 → active_cell.append_token(chunk)
+    │                       → MarkdownStream.append(chunk)   [batched, non-blocking]
+    │
+    ├─ AssistantMessage(ToolUseBlock)
+    │     → post_message(ToolActivity(format_tool_activity(name, input)))
+    │           → TranscriptPane.on_tool_activity()
+    │                 → writes dim activity line below streaming cell
+    │
+    ├─ ResultMessage(usage)
+    │     → post_message(TokensUpdated(usage))
+    │           → StatusFooter.on_tokens_updated()
+    │                 → update token label + context warning if >75%
+    │
+    └─ (stream ends)
+          → post_message(StreamDone())
+                → TranscriptPane.on_stream_done()
+                      → active_cell.finalize()        [cell now immutable]
+                      → ChatHistoryStore.save_turn()  [persistence unchanged]
+```
+
+### State File Change → Agent Monitor Panel Update
+
+```
+Orchestrator/StateManager writes state.json (os.replace atomic swap)
+    ↓
+StateWatchWorker (watchfiles.awatch on parent directory)
+    ↓ detects state.json in changed file set
+    ↓ asyncio.to_thread(StateManager.read_state)
+    ↓ post_message(StateChanged(new_state))
+    ↓
+AgentMonitorPane.on_state_changed(event)
+    ↓ diff agents: add new AgentStatusRow, remove completed rows
+    ↓ each AgentStatusRow.status = new_status   [Reactive → auto re-render]
+    ↓ each AgentStatusRow.elapsed = elapsed_secs
+```
+
+### Sub-Agent Escalation → Human → Answer
+
+```
+Orchestrator._human_out.put(HumanQuery(question))
+    ↓
+DelegationManager._escalation_listener() detects queue item
+    ↓ calls self._input_fn(question)
+    ↓ [input_fn is now: await self.app.push_screen_wait(EscalationModal(question))]
+    ↓
+EscalationModal displayed over main screen
+    ↓ rest of TUI (transcript, agent monitor) remains live
+    ↓ user types answer + presses Send → modal.dismiss(answer)
+    ↓
+input_fn returns answer string to _escalation_listener
+    ↓
+DelegationManager puts answer in _human_in queue
+    ↓
+Orchestrator resumes sub-agent with human answer
+```
+
+### Dashboard Server Coexistence
+
+```
+ConductorApp.on_mount() — if --dashboard-port provided:
+    ↓ create_app(state_path) → FastAPI app     [unchanged from v1.x]
+    ↓ uvicorn.Server(Config(...))
+    ↓ asyncio.create_task(server.serve())      [same event loop as Textual]
+    ↓
+Both Textual and uvicorn run as asyncio tasks on one loop.
+Web dashboard connects via WebSocket — state_watcher inside dashboard
+server is separate from StateWatchWorker (each has its own awatch).
+
+ConductorApp.on_unmount():
+    ↓ server.should_exit = True
+    ↓ await server_task  [uvicorn drains gracefully]
+```
+
+---
+
+## Integration Points: New vs Existing
+
+### Components Kept Intact (Zero Changes)
+
+| Module | Why Kept |
+|--------|----------|
+| `conductor/orchestrator/` (all files) | UI-agnostic; no changes needed |
+| `conductor/state/models.py`, `state/manager.py` | Pure data; `ConductorState` and `StateManager` unchanged |
+| `conductor/dashboard/server.py` | FastAPI app unchanged — still `create_app(state_path)` |
+| `conductor/dashboard/watcher.py` | `state_watcher()` coroutine reused inside `DashboardWorker` |
+| `conductor/dashboard/events.py` | `DeltaEvent`, `classify_delta()` unchanged |
+| `conductor/cli/chat_persistence.py` | `ChatHistoryStore` is pure file I/O — reused in `on_stream_done` |
+| `conductor/cli/stream_display.py` | `format_tool_activity()`, `ContextTracker` reused in `SDKStreamWorker` |
+| `conductor/cli/input_loop.py` | Batch-mode `conductor run` unchanged |
+| `conductor/cli/commands/run.py` | Unchanged |
+| `conductor/cli/commands/status.py` | Unchanged |
+
+### Components Modified
+
+| Module | Change |
+|--------|--------|
+| `conductor/cli/__init__.py` | Replace `asyncio.run(_run_chat_with_dashboard(...))` with `ConductorApp(...).run()`. Keep `--dashboard-port`, `--resume`, `--resume-id` flags — pass as constructor args to `ConductorApp`. |
+| `conductor/cli/delegation.py` | Three changes: (1) `input_fn` type stays the same (`Callable[[str], Awaitable[str]]`) but the injected value changes from a `prompt_toolkit` coroutine to `push_screen_wait(EscalationModal(q))`; (2) remove `_status_updater` method entirely — replaced by `StateWatchWorker`; (3) remove `_clear_status_lines()` — ANSI cursor manipulation conflicts with Textual rendering. |
+
+### Components Added (New)
+
+| Module | Purpose |
+|--------|---------|
+| `conductor/tui/app.py` | `ConductorApp` — Textual App root, `on_mount` lifecycle, worker launch |
+| `conductor/tui/screens/main.py` | `MainScreen` — two-column layout (TranscriptPane + AgentMonitorPane + CommandInput + StatusFooter) |
+| `conductor/tui/screens/approval.py` | `ApprovalModal` — file/command approval overlay |
+| `conductor/tui/screens/escalation.py` | `EscalationModal` — agent question relay overlay |
+| `conductor/tui/widgets/transcript.py` | `TranscriptPane` scroll container + `MessageCell` per turn |
+| `conductor/tui/widgets/command_input.py` | `CommandInput` with slash autocomplete |
+| `conductor/tui/widgets/agent_monitor.py` | `AgentMonitorPane` + `AgentStatusRow` |
+| `conductor/tui/widgets/status_footer.py` | `StatusFooter` |
+| `conductor/tui/workers/sdk_stream.py` | `SDKStreamWorker` — drives SDK streaming |
+| `conductor/tui/workers/state_watcher.py` | `StateWatchWorker` — watchfiles bridge |
+| `conductor/tui/workers/dashboard.py` | `DashboardWorker` — uvicorn `asyncio.create_task` launcher |
+| `conductor/tui/messages.py` | All custom Textual message types |
+| `conductor/tui/conductor.tcss` | Textual CSS for layout and visual styling |
+
+---
+
+## Build Order (Incremental Migration)
+
+Build from the inside out — static shell first, then live data, then modals. Each phase is independently testable.
+
+### Phase A: Static Shell (no live data)
+
+Build `ConductorApp`, `MainScreen`, `TranscriptPane`, `CommandInput`, `StatusFooter`. Hard-code a few `MessageCell` widgets to verify layout. Wire `CommandInput.Submitted` to create a user `MessageCell` with the typed text. No SDK, no workers, no delegation.
+
+**Deliverable:** `conductor` opens a Textual TUI with two-column layout. Input creates cells. App exits cleanly on `/exit` or Ctrl+C. Confirms Textual is wired into CLI entry point correctly.
+
+### Phase B: SDK Streaming
+
+Add `SDKStreamWorker`, `MarkdownStream`-backed assistant `MessageCell`, `TokenChunk`/`ToolActivity`/`StreamDone`/`TokensUpdated` messages. Wire `CommandInput.Submitted` to create a live streaming cell and launch the worker. Wire `StatusFooter` token counter.
+
+**Deliverable:** Real Claude responses stream token by token into the transcript. Tool activity lines appear inline. Context tracker threshold warning works.
+
+### Phase C: Agent Monitor Panel
+
+Add `AgentMonitorPane`, `AgentStatusRow`, `StateWatchWorker`, `StateChanged` message. Confirm `watchfiles.awatch` on parent directory picks up `os.replace` writes from `StateManager`.
+
+**Deliverable:** Right panel shows live agent status when a delegation is active. Panel shows nothing when no delegation is running.
+
+### Phase D: Escalation Modal
+
+Add `EscalationModal` and wire it as the new `input_fn` for `DelegationManager`. Remove `_status_updater` from `DelegationManager` (now replaced by `StateWatchWorker`). Remove `_clear_status_lines()`.
+
+**Deliverable:** Sub-agent escalation questions appear as modal overlays over the live TUI. Background transcript and agent monitor remain live. User answer is routed back to the orchestrator correctly.
+
+### Phase E: Approval Modal
+
+Add `ApprovalModal` for file write and command execution approval. Wire from `DelegationManager` or wherever approval was handled in `chat.py`. Test with a mock delegation that triggers an approval request.
+
+**Deliverable:** Approve/deny overlays work. Background TUI stays live during approval.
+
+### Phase F: Slash Commands and Autocomplete
+
+Add slash command dispatch to `CommandInput`. Implement `Suggester` subclass for `/` prefix. Wire `/help`, `/exit`, `/status`, `/summarize`, `/resume`. Add `textual-autocomplete` dropdown for popup display.
+
+**Deliverable:** All existing slash commands work. Autocomplete popup shows candidates when user types `/`.
+
+### Phase G: Dashboard Coexistence and CLI Wiring
+
+Add `DashboardWorker` (uvicorn as `asyncio.create_task` inside `on_mount`). Finalize `conductor/cli/__init__.py` replacement — `ConductorApp(...).run()` replaces `asyncio.run(_run_chat_with_dashboard(...))`. Confirm `--dashboard-port` flag. Confirm `conductor run "..."` batch mode is unaffected.
+
+**Deliverable:** `conductor --dashboard-port 8000` starts both TUI and WebSocket server concurrently in one process. Web dashboard connects and shows live state alongside the terminal.
+
+### Phase H: Session Persistence
+
+Wire `ChatHistoryStore` save into `on_stream_done`. Add session picker startup modal (replaces the `pick_session()` terminal prompt). Wire `--resume`/`--resume-id` flags to `ConductorApp` constructor.
+
+**Deliverable:** Sessions persist across restarts. `--resume` shows a Textual session picker modal.
 
 ---
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Using `query()` for the Chat Loop
+### Anti-Pattern 1: Calling Widget Methods Directly From Workers
 
-**What people do:** Use the existing `query()` function with `resume=session_id` for each user message, since the decomposer and reviewer already use `query()`.
+**What people do:** Inside a `@work` coroutine or `asyncio.create_task`, call `self.transcript_pane.append_cell(...)` directly.
 
-**Why it's wrong:** `query()` creates and destroys a `ClaudeSDKClient` per call. While `resume=session_id` restores remote message history, it loses in-process hook registrations on every call. The `Delegate` hook would need to be re-registered each turn — error-prone and non-obvious.
+**Why it's wrong:** Textual's widget methods are not thread-safe from outside the message dispatch loop. Even async workers can cause rendering race conditions without going through the message bus.
 
-**Do this instead:** Use `ClaudeSDKClient` as an `async with` context manager for the entire chat session lifetime.
+**Do this instead:** Post a custom `Message` subclass via `self.post_message(TokenChunk(text))`. Textual routes it safely to the `on_token_chunk` handler.
 
-### Anti-Pattern 2: `asyncio.run()` Inside a Running Event Loop
+### Anti-Pattern 2: Running Uvicorn With asyncio.run() Alongside Textual
 
-**What people do:** Call `asyncio.run(orchestrator.run(...))` from inside the `PostToolUse` hook handler.
+**What people do:** Start uvicorn with `asyncio.run(server.serve())` in a separate thread or process, then call `ConductorApp().run()` which creates its own asyncio event loop.
 
-**Why it's wrong:** `asyncio.run()` creates a new event loop and raises `RuntimeError: This event loop is already running` when called from inside a running loop.
+**Why it's wrong:** Two separate event loops cannot share `asyncio.Queue` objects. `DelegationManager`'s escalation queues (`human_in`, `human_out`) would silently break — puts and gets would never meet.
 
-**Do this instead:** `await orchestrator.run(task_desc)` directly inside the async hook callback. The hook is already running in the asyncio event loop.
+**Do this instead:** Launch `asyncio.create_task(server.serve())` inside `ConductorApp.on_mount()`. One event loop owns everything.
 
-### Anti-Pattern 3: Reusing an Orchestrator Instance Across Delegations
+### Anti-Pattern 3: Keeping prompt_toolkit Inside Textual
 
-**What people do:** Pass a single `Orchestrator` instance to `ChatSession` and call `run()` on it multiple times across chat turns.
+**What people do:** Keep `PromptSession.prompt_async()` or `patch_stdout()` active inside the Textual app for the `_escalation_input` function.
 
-**Why it's wrong:** `Orchestrator.__init__` initializes `_active_clients`, `_active_tasks`, and `_semaphore` for one run. A second `run()` call may see stale `_active_tasks` from a previous completed run, causing state management errors.
+**Why it's wrong:** `prompt_toolkit` takes over stdin/stdout/terminal state in a way that conflicts with Textual's terminal control. Both cannot own the terminal simultaneously.
 
-**Do this instead:** Construct a fresh `Orchestrator(state_manager, repo_path)` inside the delegation hook. Cheap — `__init__` does no I/O.
+**Do this instead:** Use `ModalScreen` with a Textual `Input` widget for all human input inside the TUI. Remove `prompt_toolkit` dependency entirely in v2.0.
 
-### Anti-Pattern 4: Skipping Session Persistence
+### Anti-Pattern 4: ANSI Escape Codes Inside Textual
 
-**What people do:** Start a fresh `ClaudeSDKClient` on every `conductor` invocation (no `resume`).
+**What people do:** Port `_clear_status_lines()` from `DelegationManager` into a Textual widget, emitting `\033[A\033[2K` to overwrite lines.
 
-**Why it's wrong:** The orchestrator loses all context from prior conversation turns: files it read, tasks it ran, decisions it made. Users cannot continue a work session after closing the terminal.
+**Why it's wrong:** Textual owns terminal cursor positioning. Manual ANSI escape codes conflict with Textual's rendering loop and produce garbled output.
 
-**Do this instead:** Read `chat_session.json` on startup, pass `resume=session_id` to `ClaudeSDKClient`. Capture `session_id` from the `SystemMessage(subtype="init")` on first run and persist it.
+**Do this instead:** Use `Reactive` attributes on `AgentStatusRow`. When `status` or `elapsed` changes, Textual's reactive system handles re-rendering cleanly. Remove `_clear_status_lines()` and `_print_live_status()` entirely.
 
-### Anti-Pattern 5: Blocking Input Inside Textual
+### Anti-Pattern 5: Awaiting push_screen_wait() From an Event Handler
 
-**What people do:** Use `asyncio.to_thread(input)` inside a Textual app to get user input.
+**What people do:** Call `await self.app.push_screen_wait(EscalationModal(...))` directly inside an `on_<event>` handler.
 
-**Why it's wrong:** Textual owns the event loop. Its `Input` widget handles user text through `on_input_submitted` events. Blocking `input()` in a thread fights Textual's rendering thread.
+**Why it's wrong:** `push_screen_wait()` must run inside a Textual `@work` worker. Awaiting it from a regular message handler will deadlock because handlers run on the message processing queue, which cannot process the modal's dismiss event while blocked.
 
-**Do this instead:** Use `asyncio.to_thread(input)` only in a pure asyncio context (no Textual). If Textual is added later, use the `Input` widget and handle `on_input_submitted`.
+**Do this instead:** Event handlers call `self.run_worker(self._handle_escalation(question))` and the `@work` coroutine calls `push_screen_wait()`.
 
----
+### Anti-Pattern 6: Watching state.json Directly With watchfiles
 
-## Integration Points
+**What people do:** Call `watchfiles.awatch(str(state_path))` to watch the state file itself.
 
-### New-to-Existing Boundaries
+**Why it's wrong:** `StateManager` uses `os.replace()` which is an atomic inode swap — the original file descriptor disappears. `watchfiles` watching the file directly misses these events. This is an existing known bug documented in `PROJECT.md` under Key Decisions.
 
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| `ChatSession` → `Orchestrator` | `await orchestrator.run(task_desc)` inside delegation hook | Fresh instance per delegation; share only `StateManager` and `repo_path` |
-| `ChatSession` → `StateManager` | Shared instance passed into `ChatSession.__init__` | Chat mode reads state to show delegation progress |
-| `ChatSession` → `ClaudeSDKClient` | `async with ClaudeSDKClient(options)` | One persistent session per `conductor` invocation |
-| `ChatSession` → `display.py._build_table()` | Direct import, no modification | Delegation progress shown using existing table builder |
-| `cli/commands/chat.py` → `cli/__init__.py` | Typer `app.command("chat")` | Minimal wiring change; existing commands unchanged |
-| `chat_persistence.py` → filesystem | `.conductor/chat_session.json` (JSON) | Single reader/writer; no filelock needed |
-| `ChatSession` → `EscalationRouter` | `human_out`/`human_in` asyncio.Queue passed through to Orchestrator | Agent questions surface in the chat terminal during delegation |
-
-### External Service Boundaries
-
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| Claude Agent SDK (chat) | `ClaudeSDKClient` persistent session | Orchestrator's chat session; lives for the `conductor` process lifetime |
-| Claude Agent SDK (sub-agents) | Existing `ACPClient` wrapper (unchanged) | Sub-agents spawned by `Orchestrator.run()` during delegation |
-| `.conductor/state.json` | Existing `StateManager.mutate()` + `read_state()` | Delegation writes task/agent records; chat mode reads for progress |
-| `.conductor/chat_session.json` | Simple JSON via `chat_persistence.py` | Chat-mode-only; not shared with batch mode |
+**Do this instead:** Watch the parent directory: `watchfiles.awatch(str(state_path.parent))`, then filter: `if state_path.name in changed_names`. This is the same pattern used in `conductor/dashboard/watcher.py`.
 
 ---
 
-## Build Order
+## Scaling Considerations
 
-This ordering minimizes integration risk by building from pure data modules outward to complex interaction.
+This is a single-user local TUI — scaling means responsiveness under load, not distributed scale.
 
-1. **`cli/chat_persistence.py`** — Pure data, no dependencies. Load/save `{session_id, started_at}`. Testable in isolation.
-
-2. **Chat system prompt** (constant in `cli/chat.py`) — Draft the orchestrator's chat identity and delegation heuristics. Not runnable yet; needed for step 3.
-
-3. **`ChatSession` skeleton in `cli/chat.py`** — `ClaudeSDKClient` wiring, system prompt, basic `_chat_loop()` with `asyncio.to_thread(input)` and `receive_response()` rendering. No delegation. Smoke test: direct tool use (read file, run shell command).
-
-4. **`cli/commands/chat.py` + `cli/__init__.py` changes** — Register `chat` command, wire `invoke_without_command`. Validate that `conductor` with no args launches the loop.
-
-5. **`Delegate` custom tool + delegation hook** — Define the in-process tool schema, write `_delegation_hook()` calling `Orchestrator.run()`. End-to-end test: type a delegation request, watch agents run.
-
-6. **Escalation integration during delegation** — Pass `human_out`/`human_in` queues through to `Orchestrator` inside the hook. Test that agent questions surface correctly during delegation.
-
-7. **Session persistence** — Load `chat_session.json` on startup, pass `resume=session_id`, save `session_id` from init `SystemMessage`. Test restart continuity.
-
-8. **Smart delegation heuristics** — Tune the system prompt so the orchestrator makes accurate direct vs. delegate decisions for representative inputs. Iterative prompt engineering; no architecture change.
-
----
-
-## Confidence Assessment
-
-| Area | Confidence | Reason |
-|------|------------|--------|
-| `ClaudeSDKClient` for chat loop | HIGH | Official docs explicitly list chat/REPL as its use case; `query()` comparison table confirms |
-| `PostToolUse` hook for delegation | HIGH | Hooks are first-class SDK features; same pattern already used in `ACPClient` |
-| `Delegate` custom in-process tool | HIGH | Custom tools documented officially; returns async-compatible hook results |
-| Rich Live rendering (no Textual) | HIGH | Already proven in `conductor run`, same library, no new deps |
-| Fresh `Orchestrator` per delegation | HIGH | Direct inspection of `Orchestrator.__init__` confirms mutable state that must not be reused |
-| Session persistence via JSON file | HIGH | Mirrors existing `SessionRegistry` pattern exactly |
-| Textual for richer TUI (future) | MEDIUM | Textual is mature but requires re-owning the event loop; not v1.1 scope |
+| Concern | Approach |
+|---------|----------|
+| Rapid token chunks from fast LLM response | `MarkdownStream` batches updates internally — handles bursts above 20 chunks/second without UI lag |
+| Many concurrent agents (10+) | `AgentMonitorPane` is a `VerticalScroll` — Textual only re-renders dirty regions. Works without special handling up to dozens of agents. |
+| Large session transcript (100+ turns) | All `MessageCell` widgets remain mounted. If performance degrades, add a `max_cells` setting: unmount oldest cells while keeping their content in `ChatHistoryStore` for persistence. |
+| Uvicorn startup during TUI init | `asyncio.create_task(server.serve())` starts immediately in `on_mount()`. TUI is interactive before server is fully ready — no blocking. |
+| Textual v4 requirement | `MarkdownStream` requires Textual v4+. The existing dependency is `rich` (not `textual`). Adding `textual>=4.0` adds a new dependency. Confirm no version conflicts with `rich>=13`. |
 
 ---
 
 ## Sources
 
-- [Claude Agent SDK overview](https://platform.claude.com/docs/en/agent-sdk/overview) — official overview, custom tools, hooks, sessions
-- [How the agent loop works](https://platform.claude.com/docs/en/agent-sdk/agent-loop) — message types, PostToolUse hooks, session continuity
-- [Python SDK reference: ClaudeSDKClient vs query()](https://platform.claude.com/docs/en/agent-sdk/python) — explicit comparison table; confirms ClaudeSDKClient for chat
-- [Textual workers guide](https://textual.textualize.io/guide/workers/) — async worker patterns for future Textual integration
-- [Textual App Basics](https://textual.textualize.io/guide/app/) — event loop ownership considerations
-- Live codebase inspection: `conductor-core/src/conductor/` (2026-03-11)
+- [Textual Workers Guide](https://textual.textualize.io/guide/workers/) — `@work`, `run_worker`, `post_message` thread safety — HIGH confidence (official docs)
+- [Textual Screens Guide](https://textual.textualize.io/guide/screens/) — `ModalScreen[T]`, `push_screen_wait()`, `dismiss()` pattern — HIGH confidence (official docs)
+- [Textual Markdown Widget](https://textual.textualize.io/widgets/markdown/) — `MarkdownStream`, `Markdown.get_stream()`, `append()` — HIGH confidence (official docs)
+- [Textual RichLog Widget](https://textual.textualize.io/widgets/rich_log/) — `write()` API, `markup`, `auto_scroll` — HIGH confidence (official docs)
+- [Textual v4.0.0 — MarkdownStream release](https://simonwillison.net/2025/Jul/22/textual-v4/) — streaming Markdown as first-class v4 feature — HIGH confidence (official release coverage)
+- [Textual Discussion #339 — Long-running async tasks](https://github.com/Textualize/textual/discussions/339) — `asyncio.create_task()` vs `await` inside `on_mount()` — MEDIUM confidence (official maintainer response)
+- [darrenburns/textual-autocomplete](https://github.com/darrenburns/textual-autocomplete) — slash command autocomplete dropdown — MEDIUM confidence (third-party, authored by Textual team member, Textual 2.0+ compatible)
+- Existing codebase: `conductor/cli/chat.py`, `conductor/cli/delegation.py`, `conductor/cli/__init__.py`, `conductor/dashboard/server.py`, `conductor/dashboard/watcher.py` — HIGH confidence (primary source for integration points)
 
 ---
 
-*Architecture research for: Interactive Chat TUI — Conductor v1.1*
+*Architecture research for: Conductor v2.0 — Textual TUI integration*
 *Researched: 2026-03-11*

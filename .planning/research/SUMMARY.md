@@ -1,194 +1,239 @@
 # Project Research Summary
 
-**Project:** Conductor v1.1 — Interactive Chat TUI
-**Domain:** Interactive conversational coding agent TUI added to existing multi-agent orchestration CLI
+**Project:** Conductor v2.0 — Textual TUI Redesign
+**Domain:** Python multi-agent orchestration CLI — replacing prompt_toolkit + Rich with a full Textual widget-based terminal UI
 **Researched:** 2026-03-11
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Conductor v1.1 adds an interactive chat REPL on top of a fully operational v1.0 multi-agent orchestration foundation. The core problem being solved is giving users a persistent conversational entry point (`conductor` with no args) rather than forcing every task through the fire-and-forget `conductor run "task"` batch mode. The recommended approach closely mirrors how Claude Code, Codex CLI, and Aider are built: a persistent SDK session (`ClaudeSDKClient`) with streaming token output, `prompt_toolkit` for input handling, and an explicit delegation boundary that distinguishes between tasks the orchestrator handles directly (file read/edit/shell in-context) versus tasks it escalates to sub-agent teams. Only one new runtime dependency is required — `prompt-toolkit>=3.0.52` — because `ClaudeSDKClient`, `include_partial_messages`, `rich.markdown`, and `rich.syntax` are already present in the existing stack.
+Conductor v2.0 is a terminal UI redesign for an existing Python multi-agent coding orchestration framework. The v1.x foundation (Claude Agent SDK integration, session persistence, slash commands, smart delegation, web dashboard) is fully built and preserved; v2.0 replaces only the UI layer — `prompt_toolkit` + Rich inline output — with a full `Textual`-based TUI that delivers the same UX quality as OpenAI's Codex CLI. Research confirms this is a well-documented migration path with a clear build order: Textual v4+ takes ownership of the asyncio event loop, all existing business logic (orchestrator, state management, delegation, dashboard server) plugs in as workers or tasks on that loop, and the new widget tree maps directly onto already-built infrastructure.
 
-The recommended architecture adds three new modules under `cli/` (`chat.py`, `chat_persistence.py`, `commands/chat.py`) and one small modification to `cli/__init__.py`. All v1.0 components — the orchestrator, ACP client, state manager, session registry, and dashboard — are used unchanged. The delegation pattern is clean: the orchestrator's chat session defines a `Delegate` custom in-process tool; when Claude calls it, a `PostToolUse` hook runs `Orchestrator.run()` with a fresh instance and returns a summary as the tool result. This separates the LLM's decision about when to delegate from the Python code that executes the delegation.
+The recommended approach is an 8-phase incremental migration that builds from the inside out: static TUI shell first, then SDK streaming, then agent monitoring, then modals, slash commands, dashboard coexistence, and session persistence polish. Each phase is independently testable and the existing `conductor run` batch mode is untouched throughout. The most critical architectural decision — that Textual owns the event loop and everything else runs inside it — must be settled in Phase 1 before any UI work begins. Failure to do this produces cascading runtime errors that are expensive to unwind later.
 
-The highest-risk area is the input/display layer, not the business logic. Three pitfalls can corrupt or hang the terminal before a single chat turn completes: mixing `Rich.Live` concurrent refresh with streaming output, using `asyncio.to_thread(input)` for a persistent session (uncancellable thread), and failing to restore terminal raw mode on crash or exception. These must be addressed in Phase 1 before any feature work begins. Context window exhaustion from unbounded chat history is the second major risk and must be addressed in Phase 2 before the system is usable beyond 20-30 turns.
+The primary risks are architectural, not feature-level. Three patterns from the current codebase conflict directly with Textual: `asyncio.run()` alongside `App.run()`, Rich `Console.print()` calls during TUI lifetime, and `prompt_toolkit` terminal ownership. All three must be eliminated in Phase 1. Once event loop ownership is clean, the remaining phases follow well-documented Textual patterns and are medium-complexity at worst. The reference UX target (Codex CLI) maps precisely to available Textual widgets — no novel widget engineering is required.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing v1.0 stack (claude-agent-sdk, rich, typer, asyncio, pydantic, fastapi, watchfiles) requires only one addition: `prompt-toolkit>=3.0.52`. This library provides `PromptSession.prompt_async()` for cancellable async input, `patch_stdout()` to serialize concurrent Rich output safely alongside the active input prompt, and `FileHistory` for persistent arrow-key recall across restarts. Replacing `asyncio.to_thread(input)` with `PromptSession.prompt_async()` is the single most important foundation decision; the existing `_ainput()` in `input_loop.py` must remain unchanged (batch mode still uses it), and the new chat loop is built in a separate module.
+The stack adds exactly one new runtime dependency: `textual>=4.0`. The existing `claude-agent-sdk>=0.1.48`, `rich>=13`, `watchfiles>=1.1`, `fastapi`, `uvicorn`, and `pydantic v2` are all preserved and reused. The `prompt_toolkit` dependency (added in v1.1) is fully removed in v2.0 — it cannot coexist with Textual. The optional third-party library `textual-autocomplete` (authored by a Textual team member) is added for slash command dropdown popups. No database, no new server, no new CLI framework.
 
 **Core technologies:**
-- `ClaudeSDKClient` (already in claude-agent-sdk 0.1.48): persistent multi-turn session for the orchestrator — the correct API for chat/REPL, not `query()` which closes and reopens the session per call
-- `include_partial_messages=True` (ClaudeAgentOptions field, no new dep): token-by-token streaming output; without this users see nothing until Claude finishes the entire response
-- `prompt_toolkit 3.0.52` (only new dep): cancellable async input with history, multiline support, and `patch_stdout()` for concurrent-output-safe prompt rendering
-- `rich.markdown.Markdown` + `rich.syntax.Syntax` (already in rich>=13): render assistant text responses with proper headings, code fences, and syntax highlighting
-- `Delegate` custom in-process tool (new, no dep): signals the orchestrator SDK session when to spawn sub-agents; intercepted by a `PostToolUse` hook that calls `Orchestrator.run()`
+- `textual>=4.0`: Full TUI framework — owns the event loop, widget tree, CSS layout, and screen stack; `MarkdownStream` (v4 feature) enables efficient token-by-token streaming into cells
+- `claude-agent-sdk>=0.1.48` via `ClaudeSDKClient`: Persistent multi-turn session with streaming — already present, wired into `SDKStreamWorker` via `@work` decorator
+- `watchfiles>=1.1`: File event-driven state updates — already present, reused in `StateWatchWorker` watching parent directory (not `state.json` directly) due to atomic inode swap behavior
+- `uvicorn.Config` + `uvicorn.Server` pattern: Dashboard server runs as `asyncio.create_task(server.serve())` inside Textual's loop — replaces `uvicorn.run()` which conflicts with existing loop
+- `textual-autocomplete` (third-party, Textual team): Fuzzy dropdown popup for slash command suggestions
+
+**Critical version note:** `MarkdownStream` requires Textual v4+. This is the primary new feature of Textual v4 and is specifically designed for LLM streaming patterns. `prompt_toolkit` is fully removed — both frameworks claim terminal raw mode and cannot coexist.
 
 ### Expected Features
 
-**Must have (table stakes for v1.1):**
-- REPL input loop with `prompt_toolkit` — the entire premise; nothing works without this
-- Streaming response output with activity indicator — waiting for full response feels broken
-- Ctrl+C to interrupt running agent (stop agent, not quit TUI) — users muscle-memory this
-- Input history (arrow keys via `FileHistory("~/.conductor_history")`) — standard shell expectation
-- Orchestrator direct tool use (read/edit files, run shell) — the new capability in v1.1
-- Smart delegation (direct vs. spawn sub-agents) with visible announcement — the key differentiator
-- Slash commands: `/help`, `/exit`, `/status` — minimum discoverability
-- Session resumption via `resume=session_id` — every restart should pick up prior context
+The v2.0 MVP must prove the Textual redesign is credibly better than the current prompt_toolkit implementation. Full details in `.planning/research/FEATURES.md`.
 
-**Should have (competitive, add when P1 is stable):**
-- Live sub-agent activity feed in TUI during delegation — progress visibility
-- Escalation interrupt from sub-agents surfacing in TUI — requires async interrupt bridge
-- Per-task GSD scope display — low effort, depends on orchestrator judgment being tuned
-- Quality review loop status line — display only, depends on review loop implementation
+**Must have (table stakes — v2.0 core):**
+- Cell-based conversation transcript — discrete user/assistant cells in `VerticalScroll`; missing this makes the redesign feel worse than what it replaces
+- Streaming text into active cell — token-by-token via `MarkdownStream`; static "thinking then full display" is a regression
+- Visual "thinking" indicator — `LoadingIndicator` or `widget.loading = True`; users need feedback before first token
+- Status footer bar — model name, mode, context utilization %; docked `Static` widget wired to existing `ContextTracker`
+- Slash command autocomplete popup — `/` triggers `textual-autocomplete` dropdown; existing `SLASH_COMMANDS` dict becomes candidate list
+- Modal approval overlays — `ModalScreen[bool]` replacing `_escalation_input()` for agent file/command approvals
+- Web dashboard coexistence — uvicorn as `asyncio.create_task` in `on_mount`; both surfaces active simultaneously
 
-**Defer (v2+):**
-- Multi-session support — requires session namespacing across all shared state
-- Voice input — niche use case, high platform complexity
-- Inline diff review in TUI — web dashboard already covers this
+**Should have (competitive advantage — v2.0 polish, after core is stable):**
+- Inline agent monitoring panels — collapsible per-agent panels wired to `StateWatchWorker`; differentiator vs Codex CLI which has no equivalent
+- Syntax-highlighted diffs in transcript — `RichLog.write(Syntax(diff_text, "diff"))` inline in cells
+- Collapsible tool activity within cells — tool calls in `Collapsible`; expands during streaming, collapses after
+- Shimmer/pulse animation on in-progress cells — CSS animation or `LoadingIndicator` on active cell border
+
+**Defer (v2.x+):**
+- `/theme` command with live preview — Textual CSS variable swap at runtime; not blocking the redesign
+- Adaptive light/dark color scheme detection — purely additive
+- Session picker as Textual `ModalScreen` overlay — current terminal UI is functional
+
+**Anti-features to reject:**
+- Full raw log view inside Textual — information overload is the documented v1.x UX problem; web dashboard handles full logs
+- Inline file editor (`TextArea`) — creates accidental edits and focus traps; open `$EDITOR` via `app.suspend()` instead
+- Persistent split-screen layout — wastes space when no agents are running; collapsible panels on demand is correct
 
 ### Architecture Approach
 
-Three new files under `cli/` implement the entire chat TUI. `cli/chat.py` contains `ChatSession` (the async REPL, streaming renderer, and `PostToolUse` delegation hook). `cli/chat_persistence.py` handles reading and writing `.conductor/chat_session.json` for session resumption. `cli/commands/chat.py` wires the Typer command. The single modification to `cli/__init__.py` switches from `no_args_is_help=True` to `invoke_without_command=True` with a callback that routes no-args invocation to chat mode. Every other module in the codebase is unchanged.
+The architecture preserves all existing business logic and adds a new `conductor/tui/` module isolated from `cli/`. `ConductorApp` (Textual App root) replaces `ChatSession.run()` as the process entry point. Background workers (`@work` coroutines) drive SDK streaming, state file watching, and the dashboard server — all on Textual's event loop. Custom `Message` subclasses in `tui/messages.py` form the internal event bus; workers never call widget methods directly. The `DelegationManager` is modified minimally: its `input_fn` callback changes from a `prompt_toolkit` prompt to `push_screen_wait(EscalationModal(...))`, and the polling `_status_updater` / ANSI cursor `_clear_status_lines` methods are deleted entirely.
 
 **Major components:**
-1. `cli/chat.py` (`ChatSession`) — owns the async REPL loop, `ClaudeSDKClient` lifetime, streaming output rendering, and the `PostToolUse` hook that calls `Orchestrator.run()` for delegation
-2. `cli/chat_persistence.py` — reads/writes `.conductor/chat_session.json`; mirrors the existing `SessionRegistry` pattern; enables `resume=session_id` on startup
-3. `Delegate` custom tool + `PostToolUse` hook — the delegation bridge; Claude calls the tool when it decides to spawn agents; the hook executes a fresh `Orchestrator` instance and returns a text summary as the tool result
-4. Chat system prompt — defines the orchestrator's identity in chat mode (direct-tool engineer vs. batch decomposer), delegation heuristics, and structured "decisions made" section; requires iterative tuning
+1. `ConductorApp` (`tui/app.py`) — Textual App root; owns event loop lifecycle; launches workers in `on_mount`; replaces `asyncio.run(_run_chat_with_dashboard(...))`
+2. `TranscriptPane` + `MessageCell` (`tui/widgets/transcript.py`) — scrollable conversation history; each assistant cell wraps `MarkdownStream` while streaming; immutable after `StreamDone`
+3. `SDKStreamWorker` (`tui/workers/sdk_stream.py`) — `@work` coroutine driving `ClaudeSDKClient`; posts `TokenChunk`, `ToolActivity`, `StreamDone`, `TokensUpdated` messages
+4. `AgentMonitorPane` + `AgentStatusRow` (`tui/widgets/agent_monitor.py`) — right-side panel with reactive status per agent; fed by `StateWatchWorker` via `StateChanged` messages
+5. `StateWatchWorker` (`tui/workers/state_watcher.py`) — `watchfiles.awatch` on state file parent directory; replaces `_status_updater` polling
+6. `ApprovalModal` + `EscalationModal` (`tui/screens/`) — `ModalScreen[bool]` and `ModalScreen[str]` pushed via `push_screen_wait()` from `@work` workers
+7. `CommandInput` (`tui/widgets/command_input.py`) — `Input` widget with `textual-autocomplete` slash command popup
+8. `StatusFooter` (`tui/widgets/status_footer.py`) — bottom bar docked via CSS; reactive labels wired to `ContextTracker`
+9. `DashboardWorker` (`tui/workers/dashboard.py`) — `asyncio.create_task(uvicorn_server.serve())` in `on_mount`
 
 ### Critical Pitfalls
 
-1. **Rich Live + streaming terminal corruption** — Do not run `Rich.Live` concurrent with streaming token output in chat mode. Drop the `_display_loop`/Live layer entirely in chat mode; route all output through `prompt_toolkit`'s `patch_stdout()`. Establish this in Phase 1 before any streaming work.
+All 11 pitfalls researched are HIGH confidence based on official Textual docs and GitHub issues. The top 5 require Phase 1 attention. Full details in `.planning/research/PITFALLS.md`.
 
-2. **`asyncio.to_thread(input)` is uncancellable** — Never use `asyncio.to_thread(input)` for the chat input loop. The thread cannot be cancelled from Python (CPython #107505); on Ctrl+C the process hangs until Enter is pressed. Replace with `PromptSession.prompt_async()` as the first implementation step.
-
-3. **Terminal raw mode left dirty on crash** — Wrap the entire chat session entry point in `try/finally` catching `BaseException` (not just `Exception`) to restore terminal state. Test explicitly by force-crashing mid-prompt and verifying `stty -a` shows `echo` on.
-
-4. **Chat history grows unbounded, silently exhausting context** — Track approximate token count client-side after each turn. Warn at 60% utilization; offer session summarization at 75%. Store full history to `.conductor/chat_history.json` separately from what is sent to the API. Must be designed in Phase 2 before any real usage.
-
-5. **Smart delegation is non-deterministic and leaks Orchestrator state** — Define an explicit rule-based delegation policy for the system prompt. Always construct a fresh `Orchestrator` instance per delegation call (never reuse; `__init__` initializes mutable `_active_clients` and `_active_tasks`). Use separate state namespaces for chat-triggered tasks vs. batch tasks.
+1. **Textual owns the event loop — no `asyncio.run()` cohabitation** — Make `ConductorApp(...).run()` the sole process entry point; run uvicorn and SDK as tasks inside `on_mount`; never use `nest_asyncio` as a workaround
+2. **Rich `Console.print()` calls corrupt the Textual renderer** — Remove all `Console.print()` from code paths active during TUI lifetime; `_status_updater` / `_clear_status_lines` ANSI cursor codes are fatal and must be deleted; route all output through Textual widget messages
+3. **`prompt_toolkit` cannot coexist with Textual** — Both frameworks claim terminal raw mode; full removal of `prompt_toolkit` imports from all TUI code paths is required; reimplement input history with Python `deque` and `Up`/`Down` key bindings
+4. **Per-token `widget.update()` causes TUI flicker and CPU saturation** — Buffer streaming tokens; flush to `RichLog` or `MarkdownStream` at 20fps via `set_interval(0.05, flush_buffer)`; never call `Static.update()` per-token
+5. **`asyncio.create_task()` without stored reference causes silent GC-collected workers** — Establish `_background_tasks: set[asyncio.Task]` with `add_done_callback(discard)` convention in Phase 1; prefer Textual `@work` which holds references automatically
+6. **`push_screen_wait()` deadlocks if called from an event handler** — Call only from `@work` coroutines; event handlers delegate to workers
+7. **Reactive attributes set in `__init__` trigger watchers before mount** — Initialize reactives to sentinel values in `__init__`; set real values in `on_mount`; guard watchers with `if not self.is_attached: return`
+8. **Textual test / pytest-asyncio fixture incompatibility** — Put `async with app.run_test() as pilot:` inline in test functions, not fixtures; keep Textual tests in separate files from non-Textual asyncio tests
 
 ## Implications for Roadmap
 
-Based on research, the build order follows a clear dependency chain: fix the CLI entry point and input layer first (nothing else is testable until `conductor` with no args reaches the chat loop), then implement the streaming display and session lifecycle (prerequisites for any real interaction), then add the delegation logic (requires the REPL and display to already work), then tune the orchestrator's intelligence.
+Based on combined research, the architecture already provides an explicit 8-phase build order. The roadmap should follow this order; test infrastructure setup is a prerequisite for Phase 1, not deferred.
 
-### Phase 1: CLI Foundation and Input Layer
+### Phase 1: Architecture Foundation and Event Loop Ownership
 
-**Rationale:** Three pitfalls (Rich Live corruption, uncancellable input, terminal dirty state, Typer no-args conflict) all share the same root cause — the input/display infrastructure — and must be solved together before any feature work. Nothing else is testable until `conductor` alone reaches the chat loop and accepts input cleanly.
+**Rationale:** Three existing patterns (`asyncio.run()`, `Console.print()`, `prompt_toolkit`) conflict fatally with Textual. These must be resolved before any widget work begins — they cannot be fixed incrementally after the fact. Event loop architecture is the load-bearing decision the entire build depends on.
 
-**Delivers:** `conductor` (no args) enters an interactive REPL with safe input handling, clean terminal lifecycle, and proof that streaming output and the input prompt can coexist without corruption.
+**Delivers:** `ConductorApp` entry point replacing `asyncio.run(_run_chat_with_dashboard(...))`; clean test infrastructure separating Textual from non-Textual asyncio tests; zero `prompt_toolkit` imports in TUI code paths; verified SDK subprocess fd inheritance; `_background_tasks` reference-holding convention established
 
-**Addresses:** REPL input loop (table stakes), Ctrl+C interrupt semantics, input history, slash commands MVP (`/help`, `/exit`)
+**Addresses:** Entry-point architecture, test infrastructure, SDK subprocess output audit
 
-**Avoids:** Pitfalls 1 (Rich Live corruption), 2 (uncancellable input), 5 (terminal dirty state), 7 (Typer no-args conflict)
+**Avoids:** Pitfalls 1 (event loop conflict), 2 (console corruption), 3 (prompt_toolkit coexistence), 5 (task GC), 9 (pytest incompatibility)
 
-**Files:** `cli/__init__.py` (modify), `cli/chat.py` (skeleton with `PromptSession`), `cli/commands/chat.py` (new), `cli/chat_persistence.py` (new skeleton)
+### Phase 2: Static TUI Shell
 
-**Research flag:** Standard patterns — `prompt_toolkit` integration is fully documented with official examples. HIGH confidence. No additional research needed.
+**Rationale:** Layout and routing must be verified with hard-coded content before live data is connected. Discovering layout bugs with static widgets is cheap; discovering them after SDK streaming is wired in is expensive.
 
-### Phase 2: Streaming Display and Session Lifecycle
+**Delivers:** `MainScreen` two-column layout with `TranscriptPane`, `CommandInput`, `StatusFooter`, `AgentMonitorPane` placeholder; `CommandInput.Submitted` creates user `MessageCell`; app exits cleanly on `/exit`; Textual confirmed wired to CLI entry point
 
-**Rationale:** Streaming output and session persistence are co-dependent: streaming requires correct handling of all SDK message types (including `ToolUseBlock`), and session persistence requires capturing `session_id` from the `SystemMessage(subtype="init")` that fires on the first streaming turn. Context management must also be addressed here because it silently degrades quality after 20-30 turns.
+**Uses:** `textual>=4.0`, Textual CSS (`conductor.tcss`), `tui/messages.py` message bus
 
-**Delivers:** Real-time token streaming with human-readable tool activity indicators, session resumption across restarts, and client-side context utilization tracking with user warning.
+**Implements:** `ConductorApp`, `MainScreen`, `TranscriptPane`, `CommandInput`, `StatusFooter` (structural only)
 
-**Addresses:** Streaming response display, session resumption, clear working indicator, tool use display in chat
+### Phase 3: SDK Streaming
 
-**Avoids:** Pitfalls 3 (context exhaustion), 6 (streaming blocks event loop), 9 (tool call JSON in chat display)
+**Rationale:** Streaming is the core value of the TUI — it must be built as the third phase to maximize time for performance tuning before polish is layered on. The token buffering strategy must be baked in from the start, not retrofitted.
 
-**Uses:** `include_partial_messages=True`, `ClaudeSDKClient`, `chat_persistence.py`, `rich.markdown.Markdown`
+**Delivers:** Real Claude responses streaming token-by-token into `MarkdownStream`-backed assistant cells; tool activity lines inline; `StatusFooter` token counter live; visual "thinking" indicator before first token
 
-**Research flag:** The distinction between text stream events, tool use events, and result events requires deliberate mapping to UX states. Reference `ARCHITECTURE.md` data flow diagrams for all four flow types. SDK streaming docs are HIGH confidence but the display mapping requires careful design.
+**Uses:** `ClaudeSDKClient` with `include_partial_messages=True`, `MarkdownStream` (Textual v4), `@work` decorator, `TokenChunk`/`ToolActivity`/`StreamDone`/`TokensUpdated` messages
 
-### Phase 3: Smart Delegation and Orchestrator Integration
+**Implements:** `SDKStreamWorker`, streaming `MessageCell`, token buffering at 20fps, `StatusFooter` reactive wiring
 
-**Rationale:** Delegation depends on the chat loop and streaming display both being stable (Phases 1 and 2). A fresh `Orchestrator` must be instantiated per delegation call. The `Delegate` custom tool and `PostToolUse` hook must be registered before the SDK session starts. The delegation system prompt heuristics require iterative tuning that can only happen once the basic dispatch works.
+**Avoids:** Pitfall 6 (streaming performance saturation)
 
-**Delivers:** Orchestrator direct tool use for simple tasks, sub-agent spawning for complex tasks via the `Delegate` tool, transparent delegation announcement ("Spinning up a team for this..."), and `/status` slash command.
+### Phase 4: Agent Monitor Panel
 
-**Addresses:** Smart delegation (direct vs. spawn), orchestrator direct tool use, transparent delegation announcement
+**Rationale:** Agent monitoring is architecturally independent from transcript streaming. Building it as a separate phase isolates the `StateWatchWorker` integration complexity and verifies `watchfiles.awatch` on parent directory behavior before modal work begins.
 
-**Avoids:** Pitfalls 4 (non-deterministic delegation, Orchestrator state leakage), 8 (chat/batch state isolation)
+**Delivers:** Right panel showing live agent status rows when delegation is active; panel empty when no agents running; reactive status/elapsed updates without ANSI codes
 
-**Files:** `cli/chat.py` (add `Delegate` tool schema, `_delegation_hook`, `_spawn_agents`), chat system prompt (new constant)
+**Uses:** `watchfiles.awatch` on parent directory, `StateChanged` custom messages, `Reactive` attributes on `AgentStatusRow`
 
-**Research flag:** Delegation heuristic tuning is empirical — requires testing against representative inputs. Plan a prompt-tuning sub-phase after basic dispatch works. The system prompt rules for "handle directly vs. delegate" cannot be resolved through research alone.
+**Implements:** `AgentMonitorPane`, `AgentStatusRow`, `StateWatchWorker`
 
-### Phase 4: Enhanced TUI Feedback and Escalation Bridge
+**Avoids:** Pitfall 2 (ANSI cursor code deletion confirmed), known watchfiles inode-swap gotcha
 
-**Rationale:** These features depend on Phase 3 delegation working. Live sub-agent activity feed requires state file watching (already in v1.0) integrated with a non-blocking TUI display. Escalation surfacing requires the `human_out`/`human_in` asyncio queues to be wired through the delegation hook, which requires Phase 3 to be complete.
+### Phase 5: Escalation and Approval Modals
 
-**Delivers:** Live sub-agent activity status lines during delegation, escalation questions from sub-agents surfacing interactively in the TUI, per-task GSD scope display.
+**Rationale:** Modal approval overlays require the escalation queue bridge (`human_out` → `Message` → `push_screen_wait()`) to be redesigned around Textual's screen lifecycle. Isolated phase makes testing clean and ensures delegation infrastructure from Phase 4 is proven before modals depend on it.
 
-**Addresses:** Live sub-agent activity feed, escalation interrupt in TUI, UX turn separators and progress clarity
+**Delivers:** `EscalationModal` (`ModalScreen[str]`) wired as new `input_fn` for `DelegationManager`; `ApprovalModal` (`ModalScreen[bool]`) for file/command approvals; background TUI remains live during modal display
 
-**Avoids:** UX pitfalls (no distinction between thinking/delegating, no turn separators, escalation interrupting streaming response)
+**Uses:** `ModalScreen[T]`, `push_screen_wait()` from `@work` workers, `asyncio.Queue` + `Message` bridge pattern
 
-**Research flag:** Standard patterns — async queue integration is well-documented. No additional research needed.
+**Implements:** `EscalationModal`, `ApprovalModal`, `DelegationManager.input_fn` swap, `_status_updater` deletion
+
+**Avoids:** Pitfall 7 (modal approval event loop blocking)
+
+### Phase 6: Slash Commands and Autocomplete
+
+**Rationale:** Slash command routing and autocomplete are self-contained input-layer features. Building after modals ensures command dispatch doesn't interfere with modal screen push/pop.
+
+**Delivers:** All 5 existing slash commands (`/help`, `/exit`, `/status`, `/summarize`, `/resume`) working; `textual-autocomplete` dropdown popup on `/` keypress; tab or enter selects
+
+**Uses:** `textual-autocomplete`, `Input` with custom `Suggester`, existing `SLASH_COMMANDS` dict as candidate list
+
+**Implements:** `CommandInput` slash dispatch, autocomplete popup wiring
+
+### Phase 7: Dashboard Coexistence and CLI Wiring
+
+**Rationale:** Dashboard coexistence is the final integration milestone. `uvicorn.Server.serve()` as `asyncio.create_task` in `on_mount` is the known-correct pattern; verifying it with a real WebSocket connection closes the event loop ownership story.
+
+**Delivers:** `conductor --dashboard-port 8000` starts both Textual TUI and WebSocket server in one process; web dashboard connects and shows live state; `conductor run "..."` batch mode confirmed unaffected; `--resume`/`--resume-id` flags wired to `ConductorApp` constructor
+
+**Uses:** `uvicorn.Config` + `uvicorn.Server` + `await server.serve()`, `asyncio.create_task`, existing `create_app(state_path)` unchanged
+
+**Implements:** `DashboardWorker`, `conductor/cli/__init__.py` final replacement
+
+**Avoids:** Pitfall 10 (uvicorn.run() inside Textual)
+
+### Phase 8: Session Persistence and Polish
+
+**Rationale:** Session persistence hooks into already-built `ChatHistoryStore`. Polish features (diffs, collapsible tool activity, shimmer animation) add value once the core UX is validated. Zero architectural risk.
+
+**Delivers:** `ChatHistoryStore.save_turn()` called on `StreamDone`; session picker `ModalScreen` for `--resume`; syntax-highlighted code blocks verified in `Markdown` widget; syntax-highlighted diffs via `RichLog.write(Syntax(diff_text, "diff"))`; collapsible tool activity in cells; shimmer animation on active cells
+
+**Uses:** Existing `ChatHistoryStore`, `RichLog.write(Syntax(...))`, `Collapsible` widget, CSS animation
+
+**Implements:** Session persistence wire-up, session picker modal, v2.0 polish pass
 
 ### Phase Ordering Rationale
 
-- Phase 1 is non-negotiable first: the Typer entry conflict and input mechanism are blocking issues; nothing is end-to-end testable without resolving them.
-- Phase 2 before Phase 3: streaming and session persistence must be in place before delegation because delegation involves streaming sub-results back through the same rendering path.
-- Phase 3 before Phase 4: live activity feed and escalation bridge both require the delegation hook infrastructure to be operational.
-- Context management (Pitfall 3) belongs in Phase 2, not Phase 4 — it is a session lifecycle concern that will silently cause failures at 20-30 turns even in basic usage.
+- Phases 1-2 are prerequisites for everything: event loop architecture determines whether Phases 3-8 work at all; the static shell verifies the framework is wired before live data is connected
+- Phases 3-4 (streaming + agent monitor) are architecturally independent and could be parallelized; sequential ordering is recommended to keep integration complexity manageable
+- Phase 5 (modals) must follow Phase 4 because `DelegationManager._status_updater` deletion spans the Phase 4/5 boundary
+- Phases 6-7 are independent of each other and of Phase 5; they can be reordered without risk
+- Phase 8 is additive polish — only begin after Phase 7 is fully validated
 
 ### Research Flags
 
-Phases likely needing closer attention during implementation:
-- **Phase 2 (streaming display):** SDK stream event type handling (`TextChunk`, `ToolUseBlock`, `ToolResultBlock`, `ResultMessage`) needs deliberate mapping to UX states. Reference `ARCHITECTURE.md` data flow diagrams before implementing the renderer.
-- **Phase 3 (delegation heuristics):** System prompt tuning is empirical. Plan a dedicated tuning sub-phase with representative test cases (single-file fix, multi-file feature, ambiguous request).
+Phases needing deeper research during planning:
 
-Phases with well-established patterns (minimal additional research needed):
-- **Phase 1:** `prompt_toolkit` + Typer `invoke_without_command` integration is fully documented with official examples. HIGH confidence.
-- **Phase 4:** Async queue bridging and state file watching already exist in v1.0 infrastructure; this is wiring, not novel design.
+- **Phase 3 (SDK Streaming):** `MarkdownStream` API is new in Textual v4 — verify `Markdown.get_stream()` and `await stream.append(chunk)` API surface against actual v4 release notes before coding; token buffering strategy needs validation against actual SDK streaming throughput numbers
+- **Phase 5 (Escalation and Approval Modals):** The `asyncio.Queue` bridge from `DelegationManager._escalation_listener` to `push_screen_wait()` has no direct precedent in Textual docs — prototype this pattern before building the full modal stack; confirm `push_screen_wait()` from a `@work` coroutine vs direct event handler deadlock behavior is correctly understood
+
+Phases with standard patterns (skip research-phase):
+
+- **Phase 2 (Static Shell):** Standard Textual app composition; well-documented in official anatomy blog and widget gallery
+- **Phase 4 (Agent Monitor):** `watchfiles.awatch` + `Reactive` attribute pattern is proven and replicates existing `dashboard/watcher.py`
+- **Phase 6 (Slash Commands):** `textual-autocomplete` is well-documented; existing slash command dict is the candidate list
+- **Phase 7 (Dashboard):** `uvicorn.Config` + `uvicorn.Server` is the documented correct approach; existing `create_app()` is unchanged
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All recommendations from official Anthropic SDK docs, prompt_toolkit official docs, and PyPI release data. Only one new dependency. No conflicting sources found. |
-| Features | HIGH | Cross-validated against Claude Code, Codex CLI, Aider, and OpenCode official docs plus practitioner post-mortems. Competitor feature matrix is complete. |
-| Architecture | HIGH | Based on live codebase inspection and official SDK documentation. All integration boundaries (`ClaudeSDKClient`, `PostToolUse`, custom tools) are from confirmed API surfaces. |
-| Pitfalls | HIGH | Derived from direct codebase analysis (existing `input_loop.py` limitations documented in code comments), official Rich/prompt_toolkit issue trackers, CPython issue tracker, and Claude Agent SDK streaming docs. |
+| Stack | HIGH | Single new dependency (Textual v4); all others existing; versions confirmed from PyPI and official docs 2026-03-11 |
+| Features | HIGH | Textual widget gallery + Codex CLI feature set directly mapped to Textual equivalents; anti-features explicitly documented from UX analysis of v1.x |
+| Architecture | HIGH | 8-phase build order derived from official Textual patterns; integration points mapped from direct codebase review; component boundaries match Textual's documented architectural model |
+| Pitfalls | HIGH | All 11 pitfalls sourced from official Textual docs, GitHub issues with root cause analysis, and direct codebase review; prevention patterns are official recommendations |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Delegation system prompt heuristics:** The exact rules for "handle directly vs. delegate" are not resolvable through research alone — they require empirical tuning against representative inputs. Plan time in Phase 3 for a prompt-engineering sub-phase.
-- **Context window utilization tracking:** The SDK does not surface a token count to the caller by default. Client-side approximation (character count / 4 as token estimate) is the recommended approach, but the accuracy threshold for triggering warnings should be validated in Phase 2.
-- **State isolation schema for chat-triggered delegation:** `ARCHITECTURE.md` recommends session-scoped task ID prefixes (`chat-[session-id]-task-001`). The exact schema extension to `ConductorState` for chat metadata needs to be decided before Phase 3 writes any state. Flag for requirements definition.
+- **`MarkdownStream` exact API surface:** ARCHITECTURE.md uses `Markdown.get_stream()` and `await stream.append(chunk)` — verify against actual Textual v4 release notes before Phase 3 begins; if API differs, `MessageCell` implementation needs adjustment
+- **Claude Agent SDK subprocess fd inheritance:** PITFALLS.md flags that the SDK subprocess may write to inherited terminal stdout, bypassing Textual; must be verified in Phase 1 with a test delegation run; fix requires investigation of `ClaudeAgentOptions` pipe settings if output leaks
+- **`textual-autocomplete` Textual v4 compatibility:** Documented as Textual 2.0+ compatible — verify no breaking changes at v4 before Phase 6
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [Claude Agent SDK Python reference](https://platform.claude.com/docs/en/agent-sdk/python) — `ClaudeSDKClient` vs `query()` comparison, session continuity, chat/REPL use case confirmation
-- [Claude Agent SDK streaming docs](https://platform.claude.com/docs/en/agent-sdk/streaming-output) — `include_partial_messages`, `StreamEvent`, `text_delta` pattern
-- [Claude Agent SDK agent loop docs](https://platform.claude.com/docs/en/agent-sdk/agent-loop) — `PostToolUse` hooks, message types, custom tools
-- [prompt_toolkit official docs](https://python-prompt-toolkit.readthedocs.io/en/stable/) — `PromptSession`, `prompt_async()`, `patch_stdout()`, `FileHistory`, asyncio integration
-- [PyPI: claude-agent-sdk 0.1.48](https://pypi.org/project/claude-agent-sdk/) — confirmed current release, 2026-03-07
-- [PyPI: prompt-toolkit 3.0.52](https://pypi.org/project/prompt-toolkit/) — confirmed current release, 2025-08-27
-- [Claude Code official docs](https://code.claude.com/docs/en/overview) — feature baseline comparison
-- [Codex CLI docs](https://developers.openai.com/codex/cli/features/) — Ctrl+C double-press pattern, input history
-- [Aider docs](https://aider.chat/docs/usage.html) — slash commands, session patterns
-- [OpenCode TUI docs](https://opencode.ai/docs/tui/) — session resume patterns
-- Rich official docs + issue tracker (#1530, discussion #1791) — Live display + concurrent input limitations confirmed
-- prompt_toolkit issue #787 — terminal cleanup on async cancellation confirmed
-- CPython issue #107505 — `asyncio.to_thread` non-cancellability confirmed
-- Live codebase inspection: `conductor-core/src/conductor/` (2026-03-11)
+
+- [Textual official docs](https://textual.textualize.io/) — widget gallery, workers guide, screens guide, `MarkdownStream`, `RichLog`, `LoadingIndicator`, CSS layout, `ModalScreen` pattern
+- [Textual blog](https://textual.textualize.io/blog/) — anatomy of a Textual UI (cell-based chat pattern), high-performance compositor algorithms, Heisenbug (task GC), `MarkdownStream` v4 release
+- [Textual GitHub issues](https://github.com/Textualize/textual/issues/) — #4998 (pytest fixture incompatibility), #5788 (event loop contamination), #600 (event loop ownership), #4691/#4570 (reactive before mount), #2952 (print capture), #3254 (Textual vs prompt_toolkit)
+- [Claude Agent SDK official docs](https://platform.claude.com/docs/en/agent-sdk/) — `ClaudeSDKClient`, `include_partial_messages`, streaming output, subprocess architecture
+- [PyPI: textual](https://pypi.org/project/textual/) — version confirmation
+- [PyPI: claude-agent-sdk](https://pypi.org/project/claude-agent-sdk/) — version 0.1.48 confirmed 2026-03-07
+- Existing Conductor codebase — `cli/chat.py`, `cli/delegation.py`, `cli/__init__.py`, `dashboard/server.py`, `dashboard/watcher.py` — direct code review for integration points
 
 ### Secondary (MEDIUM confidence)
-- [Claude Code vs Codex CLI vs Gemini CLI — codeant.ai](https://www.codeant.ai/blogs/claude-code-cli-vs-codex-cli-vs-gemini-cli-best-ai-cli-tool-for-developers-in-2025) — feature matrix cross-check
-- [Context window management strategies — getmaxim.ai](https://www.getmaxim.ai/articles/context-window-management-strategies-for-long-context-ai-agents-and-chatbots/) — aligns with Anthropic official guidance on context management
-- [Claude Code GitHub issue #3455](https://github.com/anthropics/claude-code/issues/3455) — Ctrl+C interrupt bug, confirmed limitation to avoid replicating
 
-### Tertiary
-- [Building AI Coding Agents for the Terminal — arXiv 2603.05344](https://arxiv.org/html/2603.05344v1) — engineering paper, cross-validates feature set
-- [Minimal agent post-mortem — mariozechner.at](https://mariozechner.at/posts/2025-11-30-pi-coding-agent/) — practitioner anti-feature rationale (full-screen TUI, built-in plan display)
+- [darrenburns/textual-autocomplete](https://github.com/darrenburns/textual-autocomplete) — Textual 2.0+ compatible; authored by Textual team member; actively maintained
+- [Uvicorn maintainer discussion: running inside existing loop](https://github.com/Kludex/uvicorn/discussions/2457) — `uvicorn.Server` + `Config` pattern for async contexts
+- [Codex CLI official docs/changelog](https://developers.openai.com/codex/) — reference UX target; feature set comparison
+- [prompt_toolkit official docs](https://python-prompt-toolkit.readthedocs.io/) — removal/migration reference
 
 ---
 *Research completed: 2026-03-11*

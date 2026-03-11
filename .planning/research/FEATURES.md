@@ -1,24 +1,26 @@
 # Feature Research
 
-**Domain:** Interactive conversational coding TUI (chat-mode coding agent)
+**Domain:** Textual TUI redesign — replacing prompt_toolkit + Rich with a full widget-based terminal UI for a multi-agent coding orchestration framework (Conductor v2.0)
 **Researched:** 2026-03-11
-**Confidence:** HIGH (primary sources: Claude Code official docs, Aider docs, OpenCode TUI docs, Codex CLI docs, practitioner post-mortems)
+**Confidence:** HIGH (Textual official docs, Codex CLI official docs, direct code review of existing CLI, practitioner blog posts)
 
 ---
 
 ## Context: This Is a Subsequent Milestone
 
-This research focuses exclusively on **what's needed for v1.1's interactive chat TUI**. The v1.0 multi-agent orchestration features (orchestrator, ACP, state file, sub-agents, web dashboard, escalation, session persistence) are already built and out of scope here.
+This research focuses exclusively on **what's needed for v2.0's Textual TUI redesign**. All v1.0–v1.2 features are already built and remain functional. The v2.0 goal is to replace `prompt_toolkit` + `Rich` with a full `Textual`-based TUI that matches the UX quality of Codex CLI.
 
-The new surface: `conductor` (no args) launches an interactive REPL where the user chats with the orchestrator, which can handle tasks directly or delegate to sub-agent teams.
+**Existing infrastructure this new TUI sits on top of (all built, no changes needed):**
+- Interactive chat REPL with prompt_toolkit (to be replaced)
+- Rich-based streaming output (to be replaced/enhanced)
+- Slash commands: `/help`, `/exit`, `/status`, `/resume`, `/summarize`
+- Session persistence and resume (`ChatHistoryStore`, `.conductor/sessions/`)
+- Smart delegation — orchestrator decides direct handling vs sub-agent teams
+- Sub-agent status display (Rich tables via `/status` command)
+- Web dashboard with real-time WebSocket updates (coexists with TUI)
+- Context tracking (token utilization warnings)
 
-Existing infrastructure the new TUI layer sits on top of:
-- ACP client/server runtime (orchestrator communication)
-- Shared `.conductor/state.json` (coordination backbone)
-- Shared `.memory/` folder (persistent knowledge)
-- `conductor run "task"` batch mode (non-interactive reference implementation)
-- CLI intervention commands (cancel, redirect, feedback — v1.0)
-- Web dashboard with real-time WebSocket updates (v1.0)
+**Reference UX:** OpenAI Codex CLI (Ratatui/Rust) — the target is to achieve equivalent UX in Python using Textual.
 
 ---
 
@@ -26,135 +28,140 @@ Existing infrastructure the new TUI layer sits on top of:
 
 ### Table Stakes (Users Expect These)
 
-Features users assume exist when they run a `conductor` command. Missing these = product feels like a prototype.
+Features users assume exist when upgrading to a "proper TUI." Missing these = the redesign feels worse than the current prompt_toolkit implementation.
 
-| Feature | Why Expected | Complexity | Existing Dependency |
-|---------|--------------|------------|---------------------|
-| REPL input loop | The entire premise — persistent interactive session, not one-shot | LOW | None — new |
-| Streaming response output | Every modern coding agent streams; waiting for full response feels broken | MEDIUM | ACP streaming exists; wire into display |
-| Ctrl+C to interrupt running agent | Claude Code, Codex, Aider all support this; users muscle-memory it | MEDIUM | v1.0 cancel/redirect exists; needs signal handler in REPL |
-| Graceful Ctrl+C semantics (stop agent, don't quit TUI) | Codex uses double-Ctrl+C pattern; first press stops agent, second exits; single press should not kill session | MEDIUM | None — new |
-| Input history (arrow keys) | Shell muscle memory — up/down arrows to recall prior prompts | LOW | prompt_toolkit supports this natively |
-| Multiline input | Code snippets, file paths with context, complex task descriptions need wrapping | LOW | prompt_toolkit supports this natively |
-| Display tool use as it happens | Users expect to see what the agent is doing (file reads, edits, shell commands) — Claude Code does this | MEDIUM | ACP tool call events exist; needs display layer |
-| Conversation context persistence across turns | Agent must remember what was said earlier in session; not stateless per message | MEDIUM | `.memory/` and ACP session exist; wire into chat loop |
-| Session resumption | Close and re-open TUI; pick up where you left off. Claude Code, Codex, OpenCode all do this | MEDIUM | State file + memory exist; needs session ID tracking |
-| Clear "thinking/working" indicator | User must know agent is running, not frozen. Spinner or live activity | LOW | Rich Live already used in v1.0 batch mode |
-| `/help` command | Users expect a discoverable help system | LOW | None — new |
-| `/exit` or `quit` command | Clean way to exit without killing terminal | LOW | None — new |
+| Feature | Why Expected | Complexity | Textual Mechanism | Existing Dependency |
+|---------|--------------|------------|-------------------|---------------------|
+| Cell-based conversation transcript | Modern chat TUIs (Codex, OpenCode) all use discrete message cells, not a raw scrolling log. Each turn is visually distinct. | MEDIUM | Custom widget extending `Markdown`; `VerticalScroll` container with auto-scroll; `append()` per cell | `ChatHistoryStore` for session history; streaming events from SDK |
+| Streaming text into active cell | Token-by-token text arrival is expected; a static "thinking then full display" feels broken | MEDIUM | `MarkdownStream` (coalesces rapid updates) or `RichLog.write()` appending chunks; `@work(thread=True)` for async streaming | Existing streaming in `_process_message()` — wire into Textual widget |
+| Syntax-highlighted code blocks in transcript | Code output without highlighting is unreadable; users expect what Codex CLI delivers | LOW | `Markdown` widget natively syntax-highlights code fences; `RichLog.write(Syntax(...))` for standalone code blocks | None — purely additive |
+| Visual "thinking" indicator before first token | Users need feedback that the agent is running, not frozen | LOW | `LoadingIndicator` widget (pulsating dots); or `widget.loading = True` property swaps any widget to loading state temporarily | Replaces current `[dim]Thinking...[/dim]` hack |
+| Status footer bar | Codex CLI shows model/path in header; users expect current model, mode, token context info permanently visible | MEDIUM | Custom `Static` widget docked to bottom via CSS `dock: bottom`; reactive attributes auto-update display | `ContextTracker` already tracks token utilization — wire into footer |
+| Slash command autocomplete popup | Users expect `/` to trigger visible suggestions; typing without a popup means guessing what commands exist | MEDIUM | `textual-autocomplete` library (fuzzy dropdown, Textual 2.0+ compatible) OR `Input` widget with built-in `suggester` parameter + `SuggestFromList` | Existing `SLASH_COMMANDS` dict becomes the candidate list |
+| Modal approval overlays | Agent file changes and command execution require approval; a proper modal that grays out the background is the expected pattern | MEDIUM | `ModalScreen` class — push/pop screen stack; `dismiss(result)` returns approval decision; semi-transparent background built in | Existing escalation logic in `DelegationManager` — needs new UI surface |
+| Keyboard-navigable approval dialogs | Arrow keys or Y/N hotkeys in approval modals; mouse-only dialogs feel wrong in a TUI | LOW | `Button` widgets in `ModalScreen`; `BINDINGS` class variable for Y/N keys | Part of modal approval implementation |
 
 ### Differentiators (Competitive Advantage)
 
-Features that make Conductor's chat TUI meaningfully better than typing `claude` or `aider`.
+Features that make the Textual TUI meaningfully better than both the current prompt_toolkit implementation and peer tools.
 
-| Feature | Value Proposition | Complexity | Existing Dependency |
-|---------|-------------------|------------|---------------------|
-| Smart delegation — direct vs spawn | Orchestrator judges: simple file edit = handle directly; "build auth module" = spawn sub-agent team. No other TUI has this | HIGH | Orchestrator intelligence (v1.0); direct tool use is new |
-| Transparent delegation announcement | When spawning sub-agents, TUI says "Spinning up a team for this..." and links to web dashboard for visibility | LOW | Web dashboard (v1.0); state file (v1.0) |
-| Orchestrator direct tool use (file read/edit/shell) | Orchestrator can do quick tasks without spawning agents. Reduces latency and cost for simple work | HIGH | Orchestrator currently orchestration-only; needs tool access in chat mode |
-| Live sub-agent activity feed in TUI | While sub-agents work, TUI shows brief status lines (not full logs) — you see progress without noise | MEDIUM | State file watch (v1.0); needs TUI display component |
-| `/status` command shows agent team | Quick view of what agents are doing right now, directly in TUI | LOW | State file (v1.0); new display command |
-| Escalation from sub-agents surfaces in TUI | When a sub-agent escalates, the TUI interrupts with a question rather than silently stalling | MEDIUM | Escalation logic (v1.0); needs interrupt-to-chat-loop bridge |
-| Per-task GSD scope flexibility announced | TUI shows whether orchestrator is planning full phases vs executing directly — user sees the decision | LOW | Per-task GSD scope (v1.1 target); display layer only |
-| Quality review loop visible in TUI | "Reviewing sub-agent output..." status line; user sees orchestrator is actually checking work | LOW | Review loop (v1.1 target); display layer only |
+| Feature | Value Proposition | Complexity | Textual Mechanism | Existing Dependency |
+|---------|-------------------|------------|-------------------|---------------------|
+| Inline agent monitoring panels | While sub-agents work, dedicated collapsible panels show each agent's status, current tool, and live output — "dashboard-in-terminal." Codex CLI doesn't have this; the web dashboard does, but requires a browser. | HIGH | `Collapsible` widget per agent; `RichLog` inside each panel streaming tool activity; `DataTable` for compact multi-agent status view; updated via message-passing from state file watcher | `StatefulWatcher` (v1.0) already watches state file — wire events into Textual `post_message()` |
+| Syntax-highlighted diffs in transcript | File change diffs inline in the conversation, not just "Edited auth.py: +12/-3". Codex CLI does this. | MEDIUM | `RichLog.write(Syntax(diff_text, "diff", theme=...))` — Rich's `Syntax` accepts language="diff"; `RichLog` accepts Rich renderables directly | Diff text available from ACP tool results — needs extraction and display |
+| Shimmer/pulse animation on in-progress agent cells | Visual differentiation between completed cells (static) and cells that are still receiving streamed content (animated) | MEDIUM | `LoadingIndicator` CSS animation; or custom CSS `animation` keyframes on a border element; Textual supports CSS transitions on reactive properties | Part of cell-based transcript implementation — cells transition from "loading" to "complete" state |
+| Collapsible tool activity within cells | Tool calls (file reads, edits, shell commands) shown as collapsible detail inside a response cell — not polluting the main transcript | MEDIUM | `Collapsible` widget nested inside response cells; expanded by default while streaming, collapsed after completion | Existing `format_tool_activity()` in `stream_display.py` — wrap in Collapsible |
+| `/theme` command with live preview | Switch color themes without restarting; Codex CLI has this. Makes the TUI feel polished. | MEDIUM | Textual CSS variables can be swapped at runtime via `app.theme` or reactive CSS rewrites; `ModalScreen` for theme picker | New feature — no existing dependency |
+| Adaptive color scheme (light/dark detection) | TUI respects the terminal's color scheme rather than hardcoding dark-mode colors | LOW | Textual has built-in `dark` property on `App`; CSS media queries for `@media (prefers-color-scheme: light/dark)` work in Textual | None — purely additive |
+| Web dashboard coexistence with TUI open | Both surfaces active simultaneously — TUI for terminal interaction, web dashboard for remote/detailed/mobile monitoring | MEDIUM | Dashboard HTTP/WebSocket server runs in a background asyncio task; Textual app runs in foreground — both share the same event loop via `asyncio.create_task()` | Dashboard server already asyncio-based — needs clean startup from Textual `App.on_mount()` |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Full-screen TUI (curses-style) | "Looks professional" | Loses terminal scrollback buffer — must re-implement custom scrolling and search. Mouse scrolling feels off. Adds ~500+ lines of layout code for zero functional gain. (Source: practitioner post-mortem) | Inline streaming output using Rich. Users already have a terminal with scrollback. |
-| Syntax-highlighted inline diffs in TUI | "Show me the file changes" | Diffs can be large; inline display bloats conversation; hard to review in terminal | Show brief change summary in TUI ("Edited auth.py: +12 -3 lines"); detailed review in web dashboard or git |
-| Real-time token/cost tracking per message | "I want to see what I'm spending" | Provider APIs report tokens inconsistently; accurate billing-grade tracking is non-trivial; creates vendor coupling | Display turn count and session duration instead. Link to provider console for billing. |
-| Voice input | "Hands-free coding" | Substantial platform-specific complexity (mic access, transcription). Aider has it; rarely used feature. Scope explosion for niche use case | Text only for v1.1. Not a requested feature in PROJECT.md. |
-| Built-in to-do / plan display inside chat | "Show me the plan before executing" | Confuses models more than helps. Plan state in chat history creates redundant context. (Source: minimal agent post-mortem) | Orchestrator writes plans to `.conductor/` files if needed; state file tracks task status |
-| MCP server integration in TUI | "Plug in external tools" | MCP context overhead is 7-9% of context window per server. Adds integration complexity for unclear benefit in chat mode. | Orchestrator inherits project's MCP config from `.claude/` naturally; no new TUI surface needed |
-| Multiple concurrent chat sessions | "Run two things at once" | Session state conflicts with single shared `.conductor/state.json`. Requires session namespacing across all v1.0 infrastructure. v2 feature. | One TUI session at a time. Use `conductor run` for fire-and-forget batch tasks in parallel. |
-| Raw log streaming as primary chat view | "I want to see everything" | Information overload is the #1 identified UX problem. Raw ACP logs destroy the conversational feel. | Layered: TUI shows summarized activity; web dashboard has full log access. |
+| Full raw log view inside Textual app | "I want to see everything the agents are doing" | Information overload is the #1 identified UX problem in v1.x. Raw ACP logs destroy the conversational feel and overwhelm the layout. | Layered model: TUI shows summarized activity per agent cell; web dashboard has full log access with filters and search. |
+| Mouse-based text selection in transcript | "I want to copy text from agent responses" | Textual's mouse handling intercepts events; implementing cross-widget selection is complex and fragile. Terminal native selection works fine if TUI doesn't capture mouse on static content. | Disable mouse capture on completed (non-interactive) cells so the terminal's native selection works. |
+| Inline file editor inside TUI | "Open the changed file in-place for review" | `TextArea` in Textual is a full editor widget — adding it inline creates accidental edits, focus traps, and layout complexity. | Show diff inline (already a differentiator). For editing, open `$EDITOR` via existing Ctrl+G binding or a `/edit` slash command. |
+| Persistent split-screen layout (chat left, agents right) | "Always show agent panels alongside the conversation" | Fixed split wastes screen space when no agents are running; forces minimum terminal width (>100 cols) for readability. | Collapsible agent panels that appear only when agents are active and fold away when idle. |
+| Real-time token cost counter in footer | "Show me what this session is costing" | Provider APIs report tokens inconsistently at streaming time; accurate billing-grade tracking requires post-turn reconciliation. Creates vendor coupling. | Display context utilization % (already tracked in `ContextTracker`) and turn count. Link to provider console for billing. |
+| Custom syntax themes configurable per language | "I want different themes for Python vs shell output" | Per-language theme management creates a config system just for aesthetics. High implementation cost, low user value for a CLI tool. | Single theme per session. `/theme` command to switch globally. Rich/Pygments themes work uniformly across languages. |
+| Drag-and-drop widget rearrangement | "Let me customize my layout" | Textual CSS-based layout doesn't support runtime rearrangement without full re-compose. Complex to implement, rarely used in practice. | Fixed but responsive layout. Terminal width determines panel arrangement via CSS `@media` queries. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[Interactive REPL loop]
-    └──requires──> [Streaming response display]
-    └──requires──> [Input history (prompt_toolkit)]
-    └──requires──> [Ctrl+C interrupt handler]
-    └──requires──> [Session ID tracking]
+[Textual App shell]
+    └──requires──> [Textual installed (textual >= 2.0)]
+    └──enables──> [All Textual widgets below]
 
-[Session resumption]
-    └──requires──> [Session ID tracking]
-    └──requires──> [State file (.conductor/state.json)] (already built)
-    └──requires──> [.memory/ folder] (already built)
+[Cell-based conversation transcript]
+    └──requires──> [Textual App shell]
+    └──requires──> [ChatHistoryStore] (already built — session replay on resume)
+    └──enables──> [Streaming text into active cell]
+    └──enables──> [Syntax-highlighted diffs in transcript]
+    └──enables──> [Shimmer animation on in-progress cells]
+    └──enables──> [Collapsible tool activity within cells]
 
-[Streaming response display]
-    └──requires──> [ACP streaming] (already built)
-    └──requires──> [Rich Live display] (already used in v1.0 batch mode)
+[Streaming text into active cell]
+    └──requires──> [Cell-based conversation transcript]
+    └──requires──> [MarkdownStream or RichLog] (Textual built-in)
+    └──requires──> [SDK streaming events] (already wired in _process_message())
 
-[Ctrl+C interrupt handler]
-    └──requires──> [REPL loop] (signal handler in input loop)
-    └──requires──> [Cancel/redirect logic] (already built v1.0)
+[Modal approval overlays]
+    └──requires──> [Textual App shell]
+    └──requires──> [ModalScreen] (Textual built-in)
+    └──requires──> [DelegationManager.escalation_input()] (already built — replace implementation)
 
-[Orchestrator direct tool use]
-    └──requires──> [REPL loop] (chat mode activates tool access)
-    └──requires──> [Smart delegation logic]
+[Status footer bar]
+    └──requires──> [Textual App shell]
+    └──requires──> [ContextTracker] (already built — provides token utilization data)
+    └──enhances──> [Streaming text into active cell] (live token count during streaming)
 
-[Smart delegation (direct vs spawn)]
-    └──requires──> [Orchestrator direct tool use] (option A of decision)
-    └──requires──> [Sub-agent spawning] (already built v1.0, option B)
-    └──requires──> [Orchestrator intelligence] (already built v1.0, decides which)
+[Slash command autocomplete popup]
+    └──requires──> [Textual App shell]
+    └──requires──> [textual-autocomplete library] OR [Input.suggester built-in]
+    └──requires──> [SLASH_COMMANDS dict] (already built — becomes candidate list)
 
-[Live sub-agent activity feed in TUI]
-    └──requires──> [State file watch] (already built v1.0)
-    └──requires──> [REPL loop] (needs non-blocking display component)
+[Inline agent monitoring panels]
+    └──requires──> [Textual App shell]
+    └──requires──> [StatefulWatcher] (already built — state file events)
+    └──requires──> [Collapsible widget] (Textual built-in)
+    └──requires──> [RichLog widget] (Textual built-in)
+    └──enhances──> [Cell-based conversation transcript] (agents visible alongside conversation)
 
-[Escalation surfaces in TUI]
-    └──requires──> [Escalation logic] (already built v1.0)
-    └──requires──> [REPL loop] (async interrupt into input prompt)
+[Web dashboard coexistence]
+    └──requires──> [Textual App shell]
+    └──requires──> [Dashboard asyncio server] (already built)
+    └──conflicts──> [prompt_toolkit patch_stdout()] — removing prompt_toolkit resolves this conflict
 
-[/status command]
-    └──requires──> [State file] (already built v1.0)
-    └──requires──> [Slash command parser] (new)
+[Syntax-highlighted diffs in transcript]
+    └──requires──> [Cell-based conversation transcript]
+    └──requires──> [RichLog.write(Syntax(...))] (Textual/Rich built-in)
+    └──requires──> [Diff text extraction from ACP tool results] (new — parse tool output)
 ```
 
 ### Dependency Notes
 
-- **Orchestrator direct tool use requires smart delegation:** Direct tool use only makes sense in the context of the orchestrator deciding whether to handle a task itself or spawn agents. These are co-developed.
-- **Ctrl+C semantics require careful design:** First Ctrl+C should interrupt the running agent (cancel signal, already in v1.0) but keep the TUI session alive. Second Ctrl+C (or `/exit`) closes the TUI. Mixing these signals is a known bug in Claude Code (reported GitHub issue #3455).
-- **Streaming display requires non-blocking output:** The input prompt and streaming output must coexist. `prompt_toolkit` provides `patch_stdout` for this. Full-screen TUI is not needed.
-- **Session resumption is additive:** The state file and memory already persist. What's new is tracking a session_id in the TUI and loading the right context on startup.
+- **Cell-based transcript is the foundational widget:** Everything visual in the TUI flows from this. Build it first, then add streaming, then tool activity, then diffs.
+- **MarkdownStream vs RichLog:** `MarkdownStream` is ideal for rich markdown rendering (handles update coalescing). `RichLog` is better when you need to mix Rich renderables (Syntax objects, Tables) with text in the same widget. The transcript cell will likely need `RichLog` for its flexibility, with a `Markdown` sub-widget for the response text.
+- **Modal approval replaces `_escalation_input()`:** The existing `prompt_toolkit`-based escalation input method needs to be replaced with a Textual `ModalScreen`. The `DelegationManager` interface stays the same — only the UI surface changes.
+- **`textual-autocomplete` vs built-in `suggester`:** The built-in `Input.suggester` shows inline ghost text (single suggestion at cursor), not a popup list. For slash commands where users want to browse options, `textual-autocomplete` dropdown is the right choice. Both can coexist: ghost text for command completion, dropdown popup when `/` is typed.
+- **Removing prompt_toolkit resolves stdout conflict:** Current TUI uses `patch_stdout()` to let Rich print during prompt_toolkit input — a known fragile hack. Textual manages all I/O itself, eliminating this problem entirely.
 
 ---
 
 ## MVP Definition
 
-### Launch With (v1.1)
+### Launch With (v2.0 core)
 
-Minimum set to make the interactive TUI actually useful.
+Minimum set to prove the Textual redesign is better than the current implementation.
 
-- [ ] REPL input loop with `prompt_toolkit` — without this nothing works
-- [ ] Streaming response display with activity indicator — without this agent feels frozen
-- [ ] Ctrl+C interrupt (stop agent, not quit TUI) — without this users will kill the process
-- [ ] Input history (arrow keys) — without this input is painful for anything longer than one turn
-- [ ] Orchestrator direct tool use (read/edit files, run shell) — core new capability for v1.1
-- [ ] Smart delegation (direct vs spawn) with transparency — core new behavior for v1.1
-- [ ] Slash commands: `/help`, `/exit`, `/status` — minimum discoverability
-- [ ] Session resumption — without this every `conductor` invocation starts cold
+- [ ] **Textual app shell** — replaces `prompt_toolkit.PromptSession`; all existing slash commands continue to work
+- [ ] **Cell-based transcript** — scrollable, distinct user/assistant cells, markdown rendering in assistant cells
+- [ ] **Streaming into active cell** — token-by-token text arrives; cell expands; auto-scroll to bottom
+- [ ] **Visual "thinking" indicator** — spinner/pulse before first token; transitions to content when streaming starts
+- [ ] **Status footer** — model name, current mode (`--auto` vs interactive), context utilization %
+- [ ] **Slash command autocomplete popup** — `/` triggers dropdown; tab or enter selects; existing 5 commands populated
+- [ ] **Modal approval overlays** — replace `_escalation_input()` escalation for agent file/command approvals
+- [ ] **Web dashboard coexistence** — dashboard server starts in background alongside Textual app
 
-### Add After Validation (v1.x)
+### Add After Core Is Working (v2.0 polish)
 
-Features to add once the core chat loop is working.
+Features to add once the core transcript and input are stable.
 
-- [ ] Live sub-agent activity feed in TUI — add when smart delegation is working; depends on state file watch stability
-- [ ] Escalation interrupt surfaces in TUI — add when base TUI is stable; requires async interrupt handling
-- [ ] Per-task GSD scope flexibility display — add when orchestrator judgment for scope is tuned
-- [ ] Quality review loop status in TUI — add when review loops are implemented
+- [ ] **Syntax-highlighted code blocks** — native to `Markdown` widget; verify fenced code block rendering looks correct
+- [ ] **Syntax-highlighted diffs** — extract diff text from ACP tool results; display via `RichLog.write(Syntax(...))`
+- [ ] **Inline agent monitoring panels** — collapsible per-agent panels wired to `StatefulWatcher` events
+- [ ] **Collapsible tool activity within cells** — tool calls in `Collapsible`; expanded during streaming, collapsed after
+- [ ] **Shimmer animation on in-progress cells** — CSS animation on active cell border or loading indicator overlay
 
-### Future Consideration (v2+)
+### Future Consideration (v2.x+)
 
-- [ ] Multi-session support — defer; requires session namespacing across all shared state
-- [ ] Voice input — defer; niche use case, high platform complexity
-- [ ] Inline diff review in TUI — defer; evaluate demand after v1.1 ships; web dashboard covers this
+- [ ] **`/theme` command with live preview** — swap Textual CSS variables at runtime; modal theme picker
+- [ ] **Adaptive color scheme detection** — Textual `dark` property; CSS light/dark media queries
+- [ ] **Session picker as Textual overlay** — current session list is a plain terminal UI; upgrade to `ModalScreen` with `ListView`
 
 ---
 
@@ -162,59 +169,97 @@ Features to add once the core chat loop is working.
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| REPL input loop | HIGH | LOW | P1 |
-| Streaming display + activity indicator | HIGH | LOW | P1 |
-| Ctrl+C interrupt semantics | HIGH | MEDIUM | P1 |
-| Input history | HIGH | LOW | P1 |
-| Orchestrator direct tool use | HIGH | HIGH | P1 |
-| Smart delegation (direct vs spawn) | HIGH | HIGH | P1 |
-| `/help`, `/exit`, `/status` slash commands | HIGH | LOW | P1 |
-| Session resumption | MEDIUM | MEDIUM | P1 |
-| Live sub-agent activity feed in TUI | MEDIUM | MEDIUM | P2 |
-| Escalation interrupt in TUI | MEDIUM | MEDIUM | P2 |
-| Per-task GSD scope display | LOW | LOW | P2 |
-| Quality review loop status display | LOW | LOW | P2 |
-| Multi-session support | LOW | HIGH | P3 |
-| Voice input | LOW | HIGH | P3 |
+| Textual app shell | HIGH | MEDIUM | P1 |
+| Cell-based transcript | HIGH | MEDIUM | P1 |
+| Streaming into active cell | HIGH | MEDIUM | P1 |
+| Visual "thinking" indicator | HIGH | LOW | P1 |
+| Status footer | MEDIUM | MEDIUM | P1 |
+| Slash command autocomplete popup | HIGH | MEDIUM | P1 |
+| Modal approval overlays | HIGH | MEDIUM | P1 |
+| Web dashboard coexistence | MEDIUM | MEDIUM | P1 |
+| Syntax-highlighted code blocks | MEDIUM | LOW | P2 |
+| Syntax-highlighted diffs | MEDIUM | MEDIUM | P2 |
+| Inline agent monitoring panels | HIGH | HIGH | P2 |
+| Collapsible tool activity within cells | MEDIUM | MEDIUM | P2 |
+| Shimmer animation on in-progress cells | LOW | MEDIUM | P2 |
+| `/theme` command with live preview | LOW | MEDIUM | P3 |
+| Adaptive color scheme detection | LOW | LOW | P3 |
+| Session picker as Textual overlay | LOW | LOW | P3 |
 
 **Priority key:**
-- P1: Must have for v1.1 launch
-- P2: Add when P1 is stable; same milestone if time permits
-- P3: Defer to v2+
+- P1: Required for v2.0 to be a credible replacement for the current TUI
+- P2: Polish pass — makes v2.0 distinctly better than the current TUI
+- P3: Defer to v2.x; worth doing but not blocking the redesign
+
+---
+
+## Codex CLI Reference Patterns Mapped to Textual
+
+| Codex CLI UX Pattern | Textual Equivalent | Confidence | Notes |
+|----------------------|--------------------|------------|-------|
+| Cell-based transcript (discrete message blocks) | `VerticalScroll` + custom `Markdown`-subclass cells added via `mount()` | HIGH | Textual anatomy blog confirms this exact pattern; `on_input` appends cells |
+| Shimmer animation on streaming cells | `LoadingIndicator` widget or CSS `animation` property on cell border | MEDIUM | Textual has `LoadingIndicator` (pulsating dots); true shimmer gradient requires custom CSS animation — achievable but undocumented in Textual |
+| Modal approval overlay (grayed background) | `ModalScreen` with semi-transparent CSS background | HIGH | Built-in; `ModalScreen` automatically applies semi-transparent overlay on background |
+| Slash command autocomplete popup | `textual-autocomplete` dropdown (fuzzy, arrow-key navigation) | HIGH | Library exists, Textual 2.0+ compatible, actively maintained |
+| Syntax-highlighted diffs inline | `RichLog.write(Syntax(diff_text, "diff"))` | HIGH | `RichLog` accepts Rich `Syntax` objects directly; Rich supports "diff" as a Pygments lexer |
+| Status footer (model, path, context) | Custom `Static` widget with `dock: bottom` CSS; reactive attributes for live updates | HIGH | Textual standard pattern; built-in `Footer` is keybindings-only so custom is needed |
+| Agent monitoring sub-panels | `Collapsible` widget + `RichLog` inside; wired to state file events via `post_message()` | MEDIUM | Collapsible built-in; state file event wiring is new integration work |
+| `/theme` live color swap | Textual `app.theme` property (if using named themes) or CSS variable reassignment | MEDIUM | Textual has basic theme support; runtime CSS variable swap is possible but less documented |
+
+---
+
+## Complexity Assessment Per Feature
+
+| Feature | Complexity | Why |
+|---------|------------|-----|
+| Textual app shell (replace PromptSession) | MEDIUM | New framework setup; porting all slash commands; async integration with existing SDK client |
+| Cell-based transcript widget | MEDIUM | Custom widget composition; scroll anchoring; session replay on resume needs cell reconstruction |
+| Streaming text (MarkdownStream/RichLog) | MEDIUM | Coalescing rapid updates; transitions between loading/complete cell state; async producer-consumer |
+| Status footer (custom Static widget) | MEDIUM | Custom widget; reactive state wiring to `ContextTracker`; CSS docking |
+| Slash command autocomplete | MEDIUM | `textual-autocomplete` integration; trigger on `/` specifically vs any input |
+| Modal approval overlays | MEDIUM | `ModalScreen` is straightforward; wiring `dismiss()` back to `DelegationManager.input_fn` callback |
+| Web dashboard coexistence | MEDIUM | Starting the asyncio HTTP/WebSocket server from inside Textual's event loop (`on_mount`); port conflict handling |
+| Syntax-highlighted code blocks | LOW | Native to `Markdown` widget; verify rendering is correct |
+| Syntax-highlighted diffs | MEDIUM | Requires extracting diff text from ACP tool results; `RichLog.write(Syntax(...))` call is simple |
+| Inline agent monitoring panels | HIGH | State file watcher events → Textual message bus → per-agent panel widget updates; panel lifecycle (create/destroy as agents start/finish) |
+| Collapsible tool activity | MEDIUM | Wrapping `format_tool_activity()` output in `Collapsible`; state transition from expanded to collapsed on turn completion |
+| Shimmer animation | MEDIUM | `LoadingIndicator` is low complexity; true shimmer gradient requires custom CSS animation knowledge |
 
 ---
 
 ## Competitor Feature Analysis
 
-| Feature | Claude Code CLI | Codex CLI | Aider | OpenCode | Conductor v1.1 (planned) |
-|---------|----------------|-----------|-------|----------|--------------------------|
-| REPL loop | Yes (core UX) | Yes (core UX) | Yes | Yes | Yes |
-| Streaming output | Yes | Yes (PTY/streaming) | Yes | Yes | Yes |
-| Ctrl+C semantics | Buggy (issue #3455 — agent continues) | Fixed (double-Ctrl+C pattern) | Works | Works | Stop agent, keep TUI alive |
-| Input history | Yes | Yes (Up/Down draft history) | Yes | Yes | Yes (prompt_toolkit) |
-| Slash commands | Yes (extensive: /clear, /compact, /review, etc.) | Yes (/exit, /fork, /review) | Yes (/add, /undo, /model, /mode) | Yes (/thinking, /undo, /redo) | /help, /exit, /status (MVP set) |
-| Direct tool use (file/shell) | Yes | Yes | Yes | Yes | Yes — new for v1.1 |
-| Session resumption | Yes | Yes (resume subcommand) | Partial (via git history) | Yes (session list/resume) | Yes — v1.1 |
-| Sub-agent delegation | Yes (spawn sub-agents) | No | No | No | Yes (+ smart delegation decision) |
-| Chat modes | No (single mode) | No | Yes (code/architect/ask) | No | No (single mode; delegation is implicit) |
-| Undo/redo changes | No (use git) | No (use git) | Yes (/undo via git) | Yes (file + git restore) | No (use git — same approach) |
-| Activity feed while agent runs | Partial (tool calls inline) | Partial | No | No | Yes — live sub-agent status |
-| Multi-agent visibility | No | No | No | No | Yes (via web dashboard link) |
+| Feature | Codex CLI | Claude Code CLI | OpenCode | Conductor v2.0 (planned) |
+|---------|-----------|----------------|----------|---------------------------|
+| Cell-based transcript | Yes (Ratatui cells) | No (inline streaming to terminal) | Yes | Yes (Textual cells) |
+| Streaming into cells | Yes | Yes (inline) | Yes | Yes |
+| Modal approval overlay | Yes (inline in cell flow) | Yes (interactive permission prompts) | Yes | Yes (`ModalScreen`) |
+| Slash command autocomplete | Yes (/theme, /review, /clear, /model, /permissions) | Yes (extensive) | Yes | Yes (existing 5 + /theme) |
+| Syntax-highlighted code | Yes (markdown code fences) | Yes | Yes | Yes (Markdown widget) |
+| Syntax-highlighted diffs | Yes (/theme-able) | Partial | Partial | Yes (RichLog + Rich Syntax) |
+| Status bar/footer | Yes (header: working path) | No visible status bar | Yes | Yes (custom footer widget) |
+| Agent monitoring panels | No | No | No | Yes (differentiator) |
+| Web dashboard coexistence | No | No | No | Yes (differentiator) |
+| Shimmer animation | Yes | No | Partial | Yes (LoadingIndicator / CSS) |
+| Live theme switching | Yes (/theme) | No | No | Deferred (v2.x) |
 
 ---
 
 ## Sources
 
-- [Claude Code overview — Official Docs](https://code.claude.com/docs/en/overview) — HIGH confidence, official Anthropic documentation
-- [Codex CLI features — OpenAI Docs](https://developers.openai.com/codex/cli/features/) — HIGH confidence, official OpenAI documentation
-- [Aider usage — Official Docs](https://aider.chat/docs/usage.html) — HIGH confidence, official Aider documentation
-- [OpenCode TUI — Official Docs](https://opencode.ai/docs/tui/) — HIGH confidence, official OpenCode documentation
-- [What I learned building an opinionated and minimal coding agent — mariozechner.at](https://mariozechner.at/posts/2025-11-30-pi-coding-agent/) — HIGH confidence, detailed practitioner post-mortem
-- [Building AI Coding Agents for the Terminal — arXiv 2603.05344](https://arxiv.org/html/2603.05344v1) — HIGH confidence, peer-reviewed engineering paper
-- [Interrupt signals don't stop agent — Claude Code GitHub issue #3455](https://github.com/anthropics/claude-code/issues/3455) — HIGH confidence, official issue tracker
-- [Double Ctrl+C to quit — OpenCode GitHub issue #9041](https://github.com/anomalyco/opencode/issues/9041) — MEDIUM confidence, community issue discussion
-- [Claude Code vs Codex CLI vs Gemini CLI comparison — codeant.ai 2025](https://www.codeant.ai/blogs/claude-code-cli-vs-codex-cli-vs-gemini-cli-best-ai-cli-tool-for-developers-in-2025) — MEDIUM confidence, comparative analysis
+- [Textual widget gallery — Official Docs](https://textual.textualize.io/widget_gallery/) — HIGH confidence, official Textualize documentation
+- [Textual Markdown widget — Official Docs](https://textual.textualize.io/widgets/markdown/) — HIGH confidence; confirms MarkdownStream for coalesced streaming updates
+- [Textual RichLog widget — Official Docs](https://textual.textualize.io/widgets/rich_log/) — HIGH confidence; confirms Rich Syntax objects accepted as renderables
+- [Textual Screens guide (ModalScreen) — Official Docs](https://textual.textualize.io/guide/screens/) — HIGH confidence; confirms push/pop/dismiss pattern with callback
+- [Textual Footer widget — Official Docs](https://textual.textualize.io/widgets/footer/) — HIGH confidence; confirms Footer is keybinding-only → custom static widget needed
+- [Textual LoadingIndicator — Official Docs](https://textual.textualize.io/widgets/loading_indicator/) — HIGH confidence; pulsating dots; `widget.loading` property for inline replacement
+- [Textual content/markup guide — Official Docs](https://textual.textualize.io/guide/content/) — HIGH confidence; Rich renderables supported alongside Textual markup
+- [textual-autocomplete — GitHub (darrenburns)](https://github.com/darrenburns/textual-autocomplete) — HIGH confidence; fuzzy dropdown, Textual 2.0+ compatible, actively maintained
+- [Anatomy of a Textual User Interface — Textual Blog](https://textual.textualize.io/blog/2024/09/15/anatomy-of-a-textual-user-interface/) — HIGH confidence; official blog showing exact cell-based chat pattern with VerticalScroll + Markdown cells
+- [Codex CLI features — OpenAI Official Docs](https://developers.openai.com/codex/cli/features/) — HIGH confidence; confirms syntax-highlighted diffs, /theme, approval workflows
+- [Codex CLI changelog — OpenAI](https://developers.openai.com/codex/changelog/) — HIGH confidence; multi-agent sub-agent monitoring features added 2025
+- Existing Conductor source: `packages/conductor-core/src/conductor/cli/chat.py` — HIGH confidence; direct code review of features being replaced
 
 ---
-*Feature research for: interactive chat TUI (Conductor v1.1)*
+*Feature research for: Textual TUI redesign (Conductor v2.0)*
 *Researched: 2026-03-11*
