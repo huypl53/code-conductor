@@ -624,6 +624,7 @@ class Orchestrator:
                 self._state.mutate,
                 self._make_complete_task_fn(
                     task_spec.id,
+                    agent_id,
                     review_status=review_status,
                     revision_count=revision_num,
                 ),
@@ -701,10 +702,11 @@ class Orchestrator:
     @staticmethod
     def _make_complete_task_fn(
         task_id: str,
+        agent_id: str,
         review_status: ReviewStatus = ReviewStatus.APPROVED,
         revision_count: int = 0,
     ) -> Callable[[ConductorState], None]:
-        """Return a mutate fn that sets task COMPLETED with review metadata."""
+        """Return a mutate fn that sets task COMPLETED with review metadata and agent DONE."""
 
         def _complete(state: ConductorState) -> None:
             for task in state.tasks:
@@ -713,6 +715,10 @@ class Orchestrator:
                     task.review_status = review_status  # type: ignore[assignment]
                     task.revision_count = revision_count
                     task.updated_at = datetime.now(UTC)
+                    break
+            for agent in state.agents:
+                if agent.id == agent_id:
+                    agent.status = AgentStatus.DONE
                     break
 
         return _complete
