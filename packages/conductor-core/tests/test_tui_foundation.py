@@ -80,3 +80,43 @@ def test_delegation_manager_no_console_required():
     # Must not raise even without console
     dm = DelegationManager(repo_path="/tmp")
     assert dm is not None
+
+
+# ---------------------------------------------------------------------------
+# Test 6: No asyncio.run() in CLI entry point
+# ---------------------------------------------------------------------------
+
+def test_no_asyncio_run_in_cli_entry():
+    """cli/__init__.py must not call asyncio.run() — ConductorApp.run() is the entry point."""
+    import inspect
+    import conductor.cli as cli_module
+
+    source = inspect.getsource(cli_module)
+    assert "asyncio.run(" not in source, (
+        "asyncio.run() found in cli/__init__.py — must use ConductorApp.run() instead"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 7: Background task tracking convention
+# ---------------------------------------------------------------------------
+
+def test_conductor_app_background_task_tracking():
+    """ConductorApp must provide _track_task() and _background_tasks set."""
+    from conductor.tui.app import ConductorApp
+
+    app = ConductorApp()
+    assert hasattr(app, "_background_tasks"), "Missing _background_tasks set"
+    assert hasattr(app, "_track_task"), "Missing _track_task() helper"
+    assert callable(app._track_task)
+
+
+# ---------------------------------------------------------------------------
+# MANUAL INTEGRATION CHECK (not automated — requires a terminal)
+# ---------------------------------------------------------------------------
+# 1. Run: cd packages/conductor-core && conductor
+# 2. Expected: terminal switches to Textual alternate screen mode
+# 3. Expected: placeholder label visible ("Conductor TUI — Phase 31 Foundation")
+# 4. Expected: Ctrl+C exits cleanly and restores the terminal
+# 5. Run: grep -r "prompt_toolkit" src/conductor/tui/ — must return zero results
+# ---------------------------------------------------------------------------
