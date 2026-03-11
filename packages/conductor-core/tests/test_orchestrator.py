@@ -2513,3 +2513,126 @@ class TestFileExistenceGate:
             f"Expected exactly 2 mutate calls (add_agent + complete), "
             f"got {mgr.mutate.call_count}"
         )
+
+
+# ---------------------------------------------------------------------------
+# QUAL-03: Post-run build check
+# ---------------------------------------------------------------------------
+
+
+class TestPostRunBuild:
+    """QUAL-03: Optional post-run build_command runs after tasks complete."""
+
+    @pytest.mark.asyncio
+    async def test_build_command_runs_after_tasks(self, tmp_path):
+        """Orchestrator(build_command='echo ok') -> subprocess called once after tasks."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        tasks = [_make_task_spec("t1", "src/a.py")]
+        plan = _make_plan(tasks)
+        mgr = _make_state_manager()
+        mock_decomposer = AsyncMock()
+        mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        # Pre-create target file so gate doesn't intercept
+        (tmp_path / "src").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "src" / "a.py").write_text("# done")
+
+        proc = AsyncMock()
+        proc.communicate = AsyncMock(return_value=(b"ok", b""))
+        proc.returncode = 0
+
+        with patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer), \
+             patch(f"{_ORCH}.ACPClient", side_effect=lambda **kw: _make_mock_acp_client()), \
+             patch(f"{_ORCH}.review_output", _approved_review_mock()), \
+             patch("asyncio.create_subprocess_shell", new_callable=AsyncMock, return_value=proc) as mock_proc:
+            orch = Orchestrator(
+                state_manager=mgr, repo_path=str(tmp_path), build_command="echo ok"
+            )
+            await orch.run("test feature")
+
+        mock_proc.assert_called_once_with(
+            "echo ok",
+            cwd=str(tmp_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+    @pytest.mark.asyncio
+    async def test_no_build_command_skips_check(self, tmp_path):
+        """Without build_command, asyncio.create_subprocess_shell is never called."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        tasks = [_make_task_spec("t1", "src/a.py")]
+        plan = _make_plan(tasks)
+        mgr = _make_state_manager()
+        mock_decomposer = AsyncMock()
+        mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        # Pre-create target file so gate doesn't intercept
+        (tmp_path / "src").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "src" / "a.py").write_text("# done")
+
+        with patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer), \
+             patch(f"{_ORCH}.ACPClient", side_effect=lambda **kw: _make_mock_acp_client()), \
+             patch(f"{_ORCH}.review_output", _approved_review_mock()), \
+             patch("asyncio.create_subprocess_shell", new_callable=AsyncMock) as mock_proc:
+            orch = Orchestrator(state_manager=mgr, repo_path=str(tmp_path))
+            await orch.run("test feature")
+
+        mock_proc.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_build_failure_logged(self, tmp_path):
+        """Build failure (non-zero returncode) is logged, not raised."""
+        import logging
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        tasks = [_make_task_spec("t1", "src/a.py")]
+        plan = _make_plan(tasks)
+        mgr = _make_state_manager()
+        mock_decomposer = AsyncMock()
+        mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        # Pre-create target file so gate doesn't intercept
+        (tmp_path / "src").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "src" / "a.py").write_text("# done")
+
+        proc = AsyncMock()
+        proc.communicate = AsyncMock(return_value=(b"", b"error: missing module"))
+        proc.returncode = 1
+
+        with patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer), \
+             patch(f"{_ORCH}.ACPClient", side_effect=lambda **kw: _make_mock_acp_client()), \
+             patch(f"{_ORCH}.review_output", _approved_review_mock()), \
+             patch("asyncio.create_subprocess_shell", new_callable=AsyncMock, return_value=proc):
+            orch = Orchestrator(
+                state_manager=mgr, repo_path=str(tmp_path), build_command="tsc"
+            )
+            # Must NOT raise — build failure is logged only
+            await orch.run("test feature")
+
+    @pytest.mark.asyncio
+    async def test_build_runs_after_resume(self, tmp_path):
+        """All tasks already COMPLETED — resume() triggers build_command."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import ConductorState, Task, TaskStatus
+
+        state = ConductorState(tasks=[
+            Task(id="t1", title="Done", description="d",
+                 status=TaskStatus.COMPLETED, target_file="/tmp/f1.txt"),
+        ])
+        mgr = _make_state_manager()
+        mgr.read_state = MagicMock(return_value=state)
+
+        proc = AsyncMock()
+        proc.communicate = AsyncMock(return_value=(b"ok", b""))
+        proc.returncode = 0
+
+        with patch("asyncio.create_subprocess_shell", new_callable=AsyncMock, return_value=proc) as mock_proc:
+            orch = Orchestrator(
+                state_manager=mgr, repo_path=str(tmp_path), build_command="echo ok"
+            )
+            await orch.resume()
+
+        mock_proc.assert_called_once()
