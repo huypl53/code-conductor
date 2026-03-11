@@ -24,6 +24,7 @@ dependencies = [
   "fastapi>=0.135",
   "uvicorn>=0.41",
   "watchfiles>=1.1",
+  "prompt-toolkit>=3.0.52",
 ]
 
 [project.scripts]
