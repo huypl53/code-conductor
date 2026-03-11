@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Textual TUI Redesign
 status: executing
-stopped_at: "Completed 33-01-PLAN.md"
-last_updated: "2026-03-11T14:04:17Z"
-last_activity: "2026-03-11 — Phase 33 Plan 01 Streaming Widget Lifecycle complete (5 new tests, 599 total)"
+stopped_at: "Completed 33-02-PLAN.md"
+last_updated: "2026-03-11T14:08:08Z"
+last_activity: "2026-03-11 — Phase 33 Plan 02 SDK Streaming Integration complete (2 new tests, 601 total)"
 progress:
   total_phases: 13
   completed_phases: 5
   total_plans: 8
-  completed_plans: 9
-  percent: 25
+  completed_plans: 10
+  percent: 28
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-11)
 ## Current Position
 
 Phase: 33 of 38 (SDK Streaming)
-Plan: 1 of 2
-Status: In progress (Plan 01 complete, Plan 02 next)
-Last activity: 2026-03-11 — Phase 33 Plan 01 Streaming Widget Lifecycle complete (5 new tests, 599 total)
+Plan: 2 of 2 (Phase 33 complete)
+Status: Phase 33 complete, ready for Phase 34
+Last activity: 2026-03-11 — Phase 33 Plan 02 SDK Streaming Integration complete (2 new tests, 601 total)
 
-Progress: [██░░░░░░░░] 25%
+Progress: [██▓░░░░░░░] 28%
 
 ## Accumulated Context
 
@@ -53,6 +53,9 @@ Progress: [██░░░░░░░░] 25%
 - [Phase 33]: MarkdownStream.write() is correct API (not append()); resolves research flag concern
 - [Phase 33]: StatusFooter uses reactive attributes + on_tokens_updated handler (hybrid: bus-consistent + auto-repaint)
 - [Phase 33]: Textual messages bubble UP not DOWN; post_message to specific widget for targeted delivery
+- [Phase 33]: SDK connected lazily on first message (not on_mount) to avoid blocking app startup
+- [Phase 33]: @work(exclusive=True, exit_on_error=False) for streaming -- prevents double-submit and crash on SDK error
+- [Phase 33]: Session ID from uuid4.hex[:8] on mount, overridable by resume or SDK ResultMessage
 
 ### Pending Todos
 
@@ -73,5 +76,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Completed 33-01-PLAN.md
+Stopped at: Completed 33-02-PLAN.md
 Resume file: None
