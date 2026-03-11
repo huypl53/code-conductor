@@ -1,275 +1,304 @@
 # Pitfalls Research
 
-**Domain:** Adding UX polish (alt-screen, borderless CSS, animations, external editor) to existing Textual TUI — Conductor v2.1
-**Researched:** 2026-03-11
-**Confidence:** HIGH (codebase analysis + Textual official docs + confirmed Phase 38 bug log)
+**Domain:** Adding real-time agent visibility (labeled agent cells, tool-use interception, state-driven transcript) to existing Textual TUI — Conductor v2.2
+**Researched:** 2026-03-12
+**Confidence:** HIGH (direct codebase analysis of app.py, transcript.py, agent_monitor.py, SDK types.py, message_parser.py)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Widget.animate("styles.tint", ...) Fails — Dot-Path Attribute Not Resolved
+### Pitfall 1: Blocking the Orchestrator Text Stream While Handling Tool-Use Events
 
 **What goes wrong:**
-`Widget.animate("styles.tint", Color(...), ...)` raises `AttributeError` at runtime. Textual's animator calls `getattr(self, attribute)` internally, and the dot-path `"styles.tint"` is not resolved — only top-level attribute names work. The animation callback fires but the tint never changes.
+The current `_stream_response` worker in `app.py` (line 364) iterates `async for message in self._sdk_client.receive_response()`. If agent-cell creation logic (mounting a new `AgentCell` widget) is awaited inside this same loop iteration, the SDK receive loop pauses. Any subsequent stream tokens arriving while the cell is mounting are queued but not delivered until the mount completes. On slow systems or with many concurrent agents, this produces visible "stutter" — text streaming stops mid-sentence while the agent cell mounts.
 
 **Why it happens:**
-This was the exact bug hit in Phase 38 (documented in `38-01-SUMMARY.md`, commit `cb4d868`). The research doc for Phase 38 recommended `animate("styles.tint", ...)` as the pattern, but live execution showed that Textual's `animate()` does a simple `getattr(widget, "styles.tint")` which fails since Python attribute access does not resolve dot paths. The fix was a `set_interval` + sine wave on `self.styles.tint` directly.
+`await self.mount(widget)` takes a round-trip through Textual's event loop to paint the widget and trigger `on_mount`. All `await` points in a `@work` coroutine yield back to the event loop; the SDK's async generator is only advanced on resume. Any non-trivial mount (composing children, running animations) delays the next `receive_response()` iteration.
 
 **How to avoid:**
-Use `set_interval` + a manual sine-wave tick function that writes to `self.styles.tint` directly. Do not attempt `animate("styles.tint", ...)` or `animate("tint", ...)` unless the Textual version explicitly documents dot-path support in `ANIMATABLE`. The current implementation in `transcript.py` already uses the correct pattern:
-```python
-self._shimmer_timer = self.set_interval(_SHIMMER_INTERVAL, self._shimmer_tick)
+Post a Textual message (`self.post_message(AgentCellRequested(...))`) from inside the stream loop instead of `await`-ing the mount directly. The message handler runs on the next event loop iteration, independently of the stream loop. The stream continues advancing while the mount happens in parallel on the Textual event loop. Pattern already established in the codebase: `TokensUpdated` is posted rather than awaited (app.py lines 382-384).
 
-def _shimmer_tick(self) -> None:
-    self._shimmer_phase += _SHIMMER_INTERVAL
-    t = (math.sin(2 * math.pi * self._shimmer_phase / _SHIMMER_PERIOD) + 1) / 2
-    alpha = _SHIMMER_ON.a * t
-    self.styles.tint = Color(_SHIMMER_ON.r, _SHIMMER_ON.g, _SHIMMER_ON.b, alpha)
+```python
+# Inside the stream loop — post, don't await
+elif event.get("type") == "content_block_start":
+    block = event.get("content_block", {})
+    if block.get("type") == "tool_use" and block.get("name") == "conductor_delegate":
+        self.post_message(AgentCellRequested(task_description=...))
+# NOT: await pane.add_agent_cell(...)
 ```
 
 **Warning signs:**
-- `AttributeError: 'Styles' object has no attribute 'styles'` in logs
-- Animation `on_complete` callback fires but widget color never visually changes
-- Shimmer appears to work in unit tests (where `styles.tint` assignment is direct) but not in running app
+- Text streaming visibly pauses each time an agent cell appears
+- `receive_response()` latency correlates with number of active agents
+- Profiling shows `mount()` on the hot path inside the stream loop
 
 **Phase to address:**
-Any phase adding CSS property animations — verify against Textual source before choosing `animate()` over `set_interval`.
+The phase intercepting tool-use events from the SDK stream — establish the post-message pattern before wiring any cell lifecycle.
 
 ---
 
-### Pitfall 2: Shimmer Timer Not Stopped on Widget Finalization — Timer Leak
+### Pitfall 2: tool_use Input Not Fully Available in content_block_start — Must Reconstruct from Deltas
 
 **What goes wrong:**
-`AssistantCell.finalize()` must stop the `set_interval` shimmer timer. If `_shimmer_timer.stop()` is not called before `self._is_streaming = False`, the timer callback keeps firing after the cell is finalized. Each tick checks `_is_streaming` and tries to clear the tint, but the timer itself runs indefinitely, consuming CPU and producing spurious widget refreshes on an immutable cell.
+The SDK emits tool-use information across multiple stream events. The `content_block_start` event marks the beginning of a tool use block and may carry partial or empty `input` (`{}`). The actual tool arguments accumulate in subsequent `content_block_delta` events with `delta.type == "input_json_delta"`. Code that reads the task description from `content_block_start.content_block.input` will get an empty dict on every real invocation.
 
 **Why it happens:**
-`set_interval` returns a `Timer` object that runs independently of widget state. Unlike `animate()` which has built-in completion callbacks, `set_interval` has no automatic stop condition. If the finalization code path is interrupted by an exception, or if `_is_streaming` is set before `_shimmer_timer.stop()`, the orphaned timer continues ticking.
+The Anthropic streaming protocol follows a "start / delta / stop" structure for all content blocks including tool use. The current `_stream_response` handler already navigates this for text deltas (lines 367-375), but tool-use input deltas use a different delta type (`input_json_delta`) and must be JSON-concatenated before parsing. A naive implementation reads the start event and misses the actual arguments.
 
 **How to avoid:**
-In `finalize()`, always stop the timer first, then clear `_is_streaming`:
+Track pending tool-use blocks by `content_block_index` (the index field in `content_block_start` events). Accumulate `input_json_delta` strings. On `content_block_stop`, parse the accumulated JSON. Only then post the `AgentCellRequested` message with the full task description.
+
 ```python
-async def finalize(self) -> None:
-    if self._stream is not None:
+# State inside the worker
+_pending_tool_inputs: dict[int, list[str]] = {}  # index → accumulated json
+
+# On content_block_start with type == "tool_use"
+_pending_tool_inputs[index] = []
+_pending_tool_names[index] = block.get("name", "")
+
+# On content_block_delta with delta.type == "input_json_delta"
+_pending_tool_inputs[index].append(delta.get("partial_json", ""))
+
+# On content_block_stop
+full_input = json.loads("".join(_pending_tool_inputs.pop(index, [])) or "{}")
+if _pending_tool_names.pop(index, "") == "conductor_delegate":
+    self.post_message(AgentCellRequested(task_description=full_input.get("task", "")))
+```
+
+**Warning signs:**
+- Agent cells appear with empty or `"(unknown task)"` label even when the orchestrator is clearly delegating
+- Task description always shows `{}` in debug logs
+- Works in unit tests that use pre-built `AssistantMessage` objects (which have complete input) but fails on real streaming
+
+**Phase to address:**
+The phase implementing tool-use event interception — write a stream event state machine that tracks start/delta/stop, not just start.
+
+---
+
+### Pitfall 3: Single `_active_cell` Reference Broken by Multiple Concurrent Agent Cells
+
+**What goes wrong:**
+`app.py` stores exactly one `_active_cell: Any | None`. Adding per-agent streaming cells to the transcript creates N simultaneous streaming cells. If `_active_cell` is reused to hold the "most recently created" agent cell, the `StreamDone` handler calls `cell.finalize()` on whichever cell happens to be in `_active_cell` at that moment — not the one that just finished streaming. Other cells are never finalized and their shimmer timers run forever.
+
+**Why it happens:**
+The single-cell architecture was designed for a one-turn-at-a-time chat flow: user sends → one orchestrator response → `StreamDone`. Agent visibility adds N agent cells that stream concurrently (multiple agents run in parallel). There is no existing mechanism to correlate a "finalize" signal with a specific cell.
+
+**How to avoid:**
+Each agent cell must be identified by a stable key (agent ID or task ID). Store a `dict[str, AgentCell]` keyed by agent_id, not a single `_active_cell`. Finalize a cell when its specific completion signal arrives (state.json shows agent DONE, or `TaskNotificationMessage` for that agent arrives). Do not reuse the orchestrator `_active_cell` slot.
+
+```python
+# In ConductorApp
+_agent_cells: dict[str, "AgentCell"] = {}
+
+# On AgentCellCreated(agent_id, cell):
+self._agent_cells[agent_id] = cell
+
+# On AgentCellFinalized(agent_id):
+cell = self._agent_cells.pop(agent_id, None)
+if cell and cell._is_streaming:
+    await cell.finalize()
+```
+
+**Warning signs:**
+- After all agents complete, some agent cells still show shimmer animation
+- `_shimmer_timer` is not None on cells that should be finalized
+- CPU usage stays elevated after delegation completes
+
+**Phase to address:**
+The phase creating agent cell lifecycle — define the multi-cell registry before writing any cell finalization logic.
+
+---
+
+### Pitfall 4: State.json Race Condition — AgentStateUpdated Arrives Before AgentCell Is Mounted
+
+**What goes wrong:**
+`AgentMonitorPane._watch_state` has a 200ms debounce (`debounce=200` in `awatch`). When an agent starts, state.json is written before the SDK stream emits the `conductor_delegate` tool-use event (the orchestrator writes state when the sub-agent registers, then returns the result). This means `AgentStateUpdated` (for the new agent) fires before the corresponding `AgentCellRequested` message is processed by the transcript. The agent panel in the monitor pane shows the agent as active, but no matching cell exists in the transcript yet.
+
+The reverse also happens: when an agent finishes, the transcript cell may receive a finalize signal (from `TaskNotificationMessage`) before state.json is updated, leaving the monitor pane showing the agent as active while the transcript cell is already finalized.
+
+**Why it happens:**
+Two independent data paths update UI state: the SDK stream (for the orchestrator's own perspective) and the state.json file watcher (for sub-agent registration). These run concurrently with no ordering guarantee.
+
+**How to avoid:**
+Treat the two data sources as independent. Do not require them to be in sync. The transcript cell lifecycle should be driven by one source (SDK stream events + TaskStarted/TaskNotification messages). The AgentMonitorPane is already driven by state.json independently. Do not attempt to create transcript cells in response to `AgentStateUpdated` — this creates a dependency between the two paths. Use `TaskStartedMessage` (already parsed by the SDK's `message_parser.py`) as the transcript trigger; use `AgentStateUpdated` only for the monitor pane.
+
+**Warning signs:**
+- Agent cells appear in transcript at different times than the monitor pane panels
+- Spurious duplicate cells when state.json fires multiple events for one agent start
+- KeyError on agent_id when `AgentStateUpdated` arrives before the cell registry is populated
+
+**Phase to address:**
+The phase wiring state.json updates to the transcript — establish that the transcript uses SDK stream events and the monitor pane uses state.json; never cross-wire them.
+
+---
+
+### Pitfall 5: TaskStartedMessage / TaskNotificationMessage Are SystemMessage Subclasses — Existing isinstance Check Catches Them Wrong
+
+**What goes wrong:**
+The current `_stream_response` loop checks `isinstance(message, StreamEvent)` and `isinstance(message, ResultMessage)` but has no branch for `SystemMessage`. In the SDK's `message_parser.py` (line 143-183), `TaskStartedMessage`, `TaskProgressMessage`, and `TaskNotificationMessage` are all subclasses of `SystemMessage`. They carry the `task_id`, `description`, and `session_id` needed to create and finalize agent cells. Because the current stream loop does not handle `SystemMessage`, these messages are silently dropped.
+
+**Why it happens:**
+When `include_partial_messages=True` (already set in `app.py` line 275), the SDK emits `StreamEvent` objects for partial tokens. But `TaskStartedMessage` and friends are parsed as `system` type messages — not stream events. They arrive interleaved with `StreamEvent` and `ResultMessage` in the same `receive_response()` iterator. The existing loop has an implicit "else: ignore" for any message type that isn't `StreamEvent` or `ResultMessage`.
+
+**How to avoid:**
+Add explicit handling for `SystemMessage` subtypes in the stream loop:
+
+```python
+from claude_agent_sdk.types import (
+    TaskStartedMessage, TaskProgressMessage, TaskNotificationMessage
+)
+
+elif isinstance(message, TaskStartedMessage):
+    self.post_message(AgentCellRequested(
+        task_id=message.task_id,
+        description=message.description,
+        session_id=message.session_id,
+    ))
+
+elif isinstance(message, TaskNotificationMessage):
+    self.post_message(AgentCellFinalized(
+        task_id=message.task_id,
+        status=message.status,
+        summary=message.summary,
+    ))
+```
+
+Note: `TaskStartedMessage` is a subclass of `SystemMessage`, so `isinstance(message, SystemMessage)` would match — check for the specific subclass first to avoid ambiguity.
+
+**Warning signs:**
+- No agent cells appear even though the orchestrator is delegating (tool-use events arrive, cells are never created)
+- `TaskStartedMessage` is emitted by the SDK (visible in debug logging) but no handler fires
+- Works when driven by hook callbacks but not from the stream loop
+
+**Phase to address:**
+The phase intercepting SDK events for agent cell creation — add all three `Task*Message` branches to the stream loop in the same phase as `StreamEvent` handling.
+
+---
+
+### Pitfall 6: Mounting New Cells During Active Scrolling — Scroll Position Jumps
+
+**What goes wrong:**
+`TranscriptPane._maybe_scroll_end()` (transcript.py line 190) scrolls to bottom only if the user is already near the bottom (`scroll_offset.y >= max_scroll_y - 2`). When an agent cell streams continuously, it grows in height, pushing `max_scroll_y` down. Each new token append triggers a layout recalculation. If the user has scrolled up to read previous content, mounting a new agent cell causes a layout shift and the scroll position appears to jump to an unexpected position (not to where the user was, not to the bottom).
+
+**Why it happens:**
+Textual's `VerticalScroll` container recalculates layout on every child size change. When a streaming `AgentCell` receives tokens and its `RichMarkdown` widget grows, the scroll container's `max_scroll_y` increases. If the user is at position Y and a cell above them grows, their apparent view position shifts. The `_maybe_scroll_end` guard only protects against forced scroll-to-bottom, not against scroll-position drift from height changes.
+
+**How to avoid:**
+Before mounting a new agent cell, record the current `scroll_offset.y` and `max_scroll_y`. After the mount completes, check if the new max differs; if the user was not at the bottom, restore their scroll position explicitly:
+
+```python
+async def add_agent_cell(self, ...) -> "AgentCell":
+    was_at_bottom = self._is_at_bottom
+    cell = AgentCell(...)
+    await self.mount(cell)
+    if was_at_bottom:
+        self.scroll_end(animate=False)
+    # else: preserve scroll position — do not force scroll
+    return cell
+```
+
+Also: if multiple agent cells stream simultaneously, only auto-scroll for the most recently active one. The user following one agent should not be yanked away when a different agent appends a token.
+
+**Warning signs:**
+- Scroll position jumps when reading older content while agents are active
+- User scrolls up to review output; position resets unexpectedly on every token
+- The "scroll to bottom if near bottom" guard works for one cell but not for N cells growing simultaneously
+
+**Phase to address:**
+The phase adding `add_agent_streaming()` to `TranscriptPane` — test scroll behavior with 3 concurrent agents before considering the phase complete.
+
+---
+
+### Pitfall 7: Finalizing a Cell That Was Never Started — start_streaming() Not Called
+
+**What goes wrong:**
+`AssistantCell.finalize()` (transcript.py lines 116-126) calls `self._stream.stop()` if `_stream is not None`. But `_stream` is only set by `start_streaming()`. If the orchestrator calls `conductor_delegate` but immediately returns an error (delegation fails before any text is emitted), the agent cell is created, but `start_streaming()` is never called. When `finalize()` runs, `self._stream is None`, which is handled — but `self._is_streaming` is `True` (set in `__init__` when `text is None`). This leaves the `LoadingIndicator` visible indefinitely since `finalize()` only stops the stream, not the indicator.
+
+**Why it happens:**
+The current `AssistantCell` finalize path assumes `start_streaming()` was called before `finalize()`. The error path in `_stream_response` (app.py lines 394-407) calls `start_streaming()` before `append_token(error_message)` to handle this case for the orchestrator cell. The same defensive call must be made for agent cells when delegation fails before streaming begins.
+
+**How to avoid:**
+In `AgentCell.finalize()` (which will likely mirror `AssistantCell.finalize()`), always check if `start_streaming()` was called and, if not, remove the `LoadingIndicator` explicitly:
+
+```python
+async def finalize(self, error_message: str | None = None) -> None:
+    if not self._started_streaming:
+        # Delegation failed before streaming began — remove spinner
+        try:
+            await self.query_one(LoadingIndicator).remove()
+        except Exception:
+            pass
+        if error_message:
+            await self.mount(Static(f"Error: {error_message}"))
+    else:
         await self._stream.stop()
-        self._stream = None
-    # Stop timer BEFORE clearing streaming flag
-    if self._shimmer_timer is not None:
-        self._shimmer_timer.stop()
-        self._shimmer_timer = None
-    self.styles.tint = _SHIMMER_OFF
+        ...
     self._is_streaming = False
 ```
-The current implementation in `transcript.py` already does this correctly. New phases adding animations must replicate the same cleanup sequence.
 
 **Warning signs:**
-- CPU usage remains elevated after a response finishes streaming
-- `_shimmer_tick` appears in profiling output on cells that are not actively streaming
-- Timer count grows with each exchange (visible via `app._workers`)
+- Agent cells show a spinning `LoadingIndicator` long after the delegation attempt failed
+- `finalize()` returns immediately (no-ops) but the cell still looks "active"
+- The cell is never removed and stays in the transcript as a zombie
 
 **Phase to address:**
-Phase adding shimmer or any `set_interval`-based animation — enforce stop-before-clear in code review.
+The phase implementing `AgentCell` finalization — write a test where delegation fails immediately (before any token is emitted) and verify the cell reaches a clean non-streaming state.
 
 ---
 
-### Pitfall 3: app.suspend() Race Condition — Textual Driver Eats Vim Keystrokes
+### Pitfall 8: Widget ID Collision Between AgentPanel and AgentCell When agent_id Has Special Characters
 
 **What goes wrong:**
-When launching an external editor (vim) via `app.suspend()`, Textual's input driver thread continues reading stdin for a brief window after `suspend()` is called and before the editor takes terminal ownership. Keystrokes typed in the terminal during this race window are consumed by Textual and discarded. In practice: the user types in vim's normal mode but some characters go to Textual's input handler instead.
+`AgentMonitorPane` creates `AgentPanel` widgets with `id=f"agent-{agent_id}"` (agent_monitor.py line 36). If the transcript creates `AgentCell` widgets with a similar ID scheme (`id=f"agent-cell-{agent_id}"`), and `agent_id` contains characters that are invalid in CSS selectors (dots, slashes, colons — common in UUID-based IDs or path-based IDs), `self.query_one(f"#agent-{agent_id}")` will raise a `NoMatches` or `InvalidSelector` exception. The current codebase uses this exact query pattern (agent_monitor.py line 169).
 
 **Why it happens:**
-This is a documented race in Textual issue #1093, fixed by PR #4064 (which introduced `app.suspend()`). The `suspend()` context manager is the correct approach, but the race window is not zero on all terminals. On Kitty terminal, escape sequences can still interfere with input handling even with `suspend()`.
+Agent IDs in the orchestrator (`AgentRecord.id` in models.py) are strings with no format constraint in the model. If an orchestrator generates IDs like `"agent/1"`, `"wave-2.agent-3"`, or UUIDs with uppercase letters, the CSS selector `#agent-agent/1` is invalid. Textual's CSS selector parser does not escape these characters.
 
 **How to avoid:**
-- Use `app.suspend()` as the context manager (not a manual termios save/restore). This is the only supported path for external editor integration.
-- Do not spawn `subprocess.run(["vim", ...])` directly without `app.suspend()`. The terminal will be in raw mode when Textual runs; vim will receive a broken terminal.
-- After the editor exits, read the temp file content inside the `with app.suspend():` block, before the block exits and Textual recaptures the terminal.
-- Test on Kitty specifically if supporting that terminal — it has known edge cases.
+Sanitize agent IDs before using them as CSS IDs. Replace any non-alphanumeric character with a hyphen or underscore:
 
 ```python
-import tempfile, subprocess, os
-async def _open_in_editor(self) -> str | None:
-    with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f:
-        path = f.name
-    with self.app.suspend():
-        subprocess.run([os.environ.get("EDITOR", "vim"), path])
-        content = open(path).read()
-    os.unlink(path)
-    return content.strip() or None
+def _safe_widget_id(self, agent_id: str) -> str:
+    import re
+    return "agent-" + re.sub(r"[^a-zA-Z0-9_-]", "-", agent_id)
 ```
 
+Use this sanitized ID for both the `AgentPanel` (monitor pane) and the `AgentCell` (transcript). Keep the original `agent_id` as a data attribute (`self._agent_id = agent_id`) for logic lookups.
+
 **Warning signs:**
-- Vim opens but character input is garbled or missing on first keypress
-- Terminal left in broken state (no echo, no line wrap) after vim exits
-- Cursor remains hidden after returning to Textual
+- `InvalidSelector` or `NoMatches` exceptions in the agent monitor log when updating an existing panel
+- Panel creation succeeds but `update_status()` fails to find the panel by ID
+- Only triggered with certain orchestrator configurations that produce unusual agent IDs
 
 **Phase to address:**
-Phase implementing Ctrl-G external editor integration — use `app.suspend()` from the start; do not prototype with raw `subprocess.run`.
+The phase creating both `AgentPanel` and `AgentCell` widgets — add the `_safe_widget_id` sanitizer from the start; do not wait for it to break in production.
 
 ---
 
-### Pitfall 4: Terminal State Not Restored After Editor Crash or SIGKILL
+### Pitfall 9: Hook-Based Agent Attribution vs. Stream-Based — Choosing the Wrong Interception Layer
 
 **What goes wrong:**
-If vim crashes (SIGSEGV, OOM kill, or user sends SIGKILL to the process), the `with app.suspend():` block exits without vim having restored terminal state. The terminal may be left in raw mode, no-echo, or with mouse tracking enabled. Textual recaptures the terminal and renders correctly — but if Textual itself then crashes or exits uncleanly, the user's shell is left broken (no echo, no line wrapping).
+The SDK supports two ways to observe tool use: (1) `StreamEvent` events in the `receive_response()` loop with `content_block_start/delta/stop` events, and (2) `hooks` callbacks in `ClaudeAgentOptions` (`PreToolUse`, `PostToolUse`, `SubagentStart`, `SubagentStop`). If a developer uses both simultaneously — stream events to detect `conductor_delegate` and hooks to detect `SubagentStart` — they get two fires for the same logical event. Agent cells are created twice, or finalization from one path conflicts with creation from the other.
 
 **Why it happens:**
-`app.suspend()` saves terminal settings and restores them on block exit via a `try/finally`. But if the block exit itself raises an exception (e.g., the temp file write fails after vim exits), the `finally` may not complete. Additionally, `app.suspend()` does not catch SIGKILL — no cleanup runs on process kill.
+The SDK hook system and the stream event system are independent notification channels. `SubagentStart` hook fires when a Task tool invocation begins a sub-agent session. `content_block_start` for `tool_use` fires when the orchestrator emits the tool call into the stream. These are different events in the lifecycle, but both can appear to signal "agent starting". Using both without a deduplication layer creates double-registration.
 
 **How to avoid:**
-- Wrap the entire `app.suspend()` block in its own `try/except` inside the Textual event handler. Log errors; do not let them propagate up to crash the app.
-- After exiting `suspend()`, immediately call `self.app.refresh()` to force Textual to re-assert its terminal state.
-- For Ctrl-G integration, disable the Ctrl-G binding while the editor is open to prevent double-launch.
+Pick one interception layer and commit to it for all agent visibility signals:
+
+- **SDK stream events** (`content_block_start`, `TaskStartedMessage`, `TaskNotificationMessage`): already flowing through the existing `receive_response()` loop; no new infrastructure needed; lower latency for text visibility.
+- **Hooks** (`SubagentStart`, `SubagentStop`, `PreToolUse`): fire outside the stream loop via callbacks; useful for actions that block tool execution (e.g., permission prompts), but adds callback infrastructure.
+
+For v2.2 (read-only visibility, no blocking), stream events are the correct layer. Hooks are for permission enforcement. Do not mix them for the same signal.
 
 **Warning signs:**
-- Terminal shows no echo after `conductor` exits following a vim crash
-- Running `stty sane` is required to recover the terminal after testing
-- Textual's `cursor_visible` flag is out of sync with terminal state
+- Agent cells appear twice per delegation
+- `AgentCell` in transcript and `AgentPanel` in monitor pane are out of sync by one state
+- `_agent_cells` dict already contains a key when `AgentCellRequested` fires for a new agent
 
 **Phase to address:**
-Phase implementing external editor — add `try/except` around suspend block and post-exit `refresh()` call before merging.
-
----
-
-### Pitfall 5: Borderless Design — CSS Specificity Fights with Widget DEFAULT_CSS
-
-**What goes wrong:**
-Removing borders from existing widgets via `conductor.tcss` (app-level CSS file) requires understanding Textual's CSS cascade. A rule like `Input { border: none; }` in `conductor.tcss` will win over `CommandInput Input { border: none; }` in `CommandInput.DEFAULT_CSS`. But a rule like `Input { border: tall $accent; }` in `Input.DEFAULT_CSS` (Textual's built-in widget CSS) will lose to any app-level rule. The failure mode is: a seemingly correct `border: none;` rule in `conductor.tcss` appears to do nothing because a compound selector in a widget's own `DEFAULT_CSS` has higher specificity.
-
-**Why it happens:**
-Textual's specificity rules: App-level CSS (CSS_PATH or CSS class var) wins over any widget `DEFAULT_CSS`. Within the same level, more-specific selectors win (IDs > classes > types). The existing `conductor.tcss` uses only ID and type selectors (`#app-body`, `Screen`). The widget `DEFAULT_CSS` uses compound type selectors like `CommandInput Input`. To remove a border declared in `CommandInput.DEFAULT_CSS`, the app-level rule must be at least as specific: `CommandInput Input { border: none; }` — not just `Input { border: none; }`.
-
-There is also a known Textual bug (issue #1335, fixed in PR #1336) where DEFAULT_CSS from a widget's ancestor can override the widget's own DEFAULT_CSS when the widget has no instances mounted in other screens. This is fixed in Textual 8.x.
-
-**How to avoid:**
-- Use compound selectors in `conductor.tcss` that match the widget hierarchy: `CommandInput Input { border: none; }` not just `Input { border: none; }`.
-- When making something borderless, target `border: none;` and also `padding: 0;` — padding is often set alongside border in DEFAULT_CSS and causes visual indentation even when the border is removed.
-- Use `!important` only as a last resort for Textual built-in widgets with deeply nested DEFAULT_CSS rules.
-- Test with `textual console` + CSS inspector to verify which rule is winning.
-
-**Warning signs:**
-- `border: none;` in `conductor.tcss` appears to have no effect on a widget
-- Removing a widget's border leaves a gap/padding where the border was
-- CSS rule works in isolation but not when the widget is inside a container
-
-**Phase to address:**
-Phase implementing borderless/minimal chrome design — audit each widget's `DEFAULT_CSS` for compound selectors before writing override rules.
-
----
-
-### Pitfall 6: Input Auto-Focus Timing — focus() Before Widget Enters Focus Chain
-
-**What goes wrong:**
-Calling `self.query_one(CommandInput).query_one(Input).focus()` in `on_mount()` may not work if the widget has not yet entered Textual's focus chain. In Textual v2.0+, `allow_focus()` is evaluated during the focus chain update, which happens after `on_mount` completes — not during it. A `focus()` call during `on_mount` may be silently ignored if the widget's focusability state has not yet been registered.
-
-**Why it happens:**
-Textual issue #5605 (March 2025) documents that `can_focus` set in `on_mount` is no longer respected in v2.0+ because the focus chain is evaluated before mount handlers run. The same timing issue affects explicit `focus()` calls: if the widget has `disabled=True` at the time `focus()` is called, focus is rejected but no error is raised.
-
-In the current code, `CommandInput` is disabled during session replay. After replay, `_replay_session()` calls `cmd.query_one(Input).focus()`. This works because `disabled` is set to `False` just before `focus()` — the sequence is correct. But any new phase that calls `focus()` during `on_mount` (before `disabled` state is resolved) will silently fail.
-
-**How to avoid:**
-- Always set `disabled = False` before calling `.focus()`.
-- For auto-focus on startup, use Textual's built-in `FOCUS_ON_MOUNT` or `auto_focus` Screen attribute (a CSS selector) instead of manual `focus()` calls in `on_mount`:
-  ```python
-  class ConductorApp(App):
-      AUTO_FOCUS = "#command-input Input"
-  ```
-- If overriding `allow_focus()` instead of `can_focus`, ensure the method returns the correct value before `focus()` is called — not after.
-- Prefer `call_after_refresh(self.focus_input)` if `focus()` must be called during mount to defer it until after the focus chain is updated.
-
-**Warning signs:**
-- Input widget is visible but not focused on startup (cursor not blinking in the input)
-- `widget.has_focus` is `False` immediately after calling `widget.focus()` in `on_mount`
-- Focus lands on wrong widget after modal dismissal
-
-**Phase to address:**
-Phase adding auto-focus input on TUI start — use `AUTO_FOCUS` class attribute, not manual `focus()` in `on_mount`.
-
----
-
-### Pitfall 7: Focus Stolen After Modal Dismissal
-
-**What goes wrong:**
-After an `EscalationModal` or approval modal is dismissed via `push_screen_wait()`, focus may return to Textual's default focus target (the first focusable widget) rather than `CommandInput`. This means the user must click or Tab to the input before they can type.
-
-**Why it happens:**
-Textual restores focus to the widget that had focus before the modal was pushed. If `CommandInput` was disabled during streaming when the modal opened, it was not in the focus chain — so there is no "previous focus" to restore. Textual falls back to its `AUTO_FOCUS` selector or the first widget in the FOCUS chain.
-
-The current code in `app.py` already handles this manually:
-```python
-# Restore focus to CommandInput after modal dismissal
-cmd = self.query_one(CommandInput)
-cmd.query_one(Input).focus()
-```
-But this code is inside a `try/except` that silently swallows failures. If the widget is still disabled when this code runs, focus is silently dropped.
-
-**How to avoid:**
-- After `push_screen_wait()` returns, always check that `CommandInput.disabled == False` before calling `focus()`.
-- Use Textual's `Screen.FOCUS_NEXT` or return focus explicitly by saving the focused widget before push and restoring it after.
-- Do not rely on Textual's automatic focus restoration after modal dismissal — it is unreliable when widget `disabled` state changes during the modal's lifetime.
-
-**Warning signs:**
-- After dismissing a modal, the cursor is not in the input field
-- User must press Tab to re-focus the input after every escalation
-- Focus appears to be on a panel widget that is not interactive
-
-**Phase to address:**
-Same phase as modal approval overlay work — the focus restoration pattern must be verified for each modal type.
-
----
-
-### Pitfall 8: alt-screen Mode — Mouse Escape Codes Printed to Terminal on Crash
-
-**What goes wrong:**
-If Textual crashes (unhandled exception in a worker or in `on_mount`) while in full alt-screen mode, Textual's cleanup may not run. Mouse tracking escape sequences (`\033[?1003l`, `\033[?1006l`) remain active in the terminal. The user's shell shows mouse movement as raw escape codes (`^[[M...`). Running `reset` or `stty sane` is required.
-
-**Why it happens:**
-Textual enables mouse tracking and alt-screen via terminal escape sequences. The driver registers a signal handler for SIGTERM and SIGINT to restore state, but unhandled exceptions in coroutines bypass this cleanup. This is a known issue (Textual #82 — "Mouse codes are printed to the terminal on exit").
-
-**How to avoid:**
-- Wrap the top-level `ConductorApp(...).run()` call in a `try/finally`:
-  ```python
-  try:
-      ConductorApp(...).run()
-  finally:
-      # Belt-and-suspenders: ensure terminal cleanup
-      import sys
-      sys.stdout.write("\033[?1003l\033[?1006l\033[?1000l")
-      sys.stdout.flush()
-  ```
-- Use `@work(exit_on_error=False)` on all workers that can raise exceptions, so Textual handles exceptions gracefully rather than crashing.
-- Never use bare `asyncio.create_task()` for Textual background work — use `@work` so exceptions propagate through Textual's error handling path.
-
-**Warning signs:**
-- After a crash, mouse movements show as `^[[M` in the terminal
-- Terminal remains in no-echo mode after `conductor` exits unexpectedly
-- `stty -a` shows `raw` mode after a crash
-
-**Phase to address:**
-Phase implementing alt-screen mode — add the `try/finally` cleanup wrapper at the CLI entry point before any alt-screen features are enabled.
-
----
-
-### Pitfall 9: Ctrl-G Binding Conflicts With Existing Textual Key Handling
-
-**What goes wrong:**
-Textual's `Input` widget has built-in keybindings that may intercept keys before app-level bindings run. Ctrl-G (`\x07`, BEL character) is not a standard Textual binding, but the key routing path is: widget bindings → screen bindings → app bindings. If `CommandInput` or the inner `Input` widget has an `on_key` handler that consumes all unrecognized keys (returning early), Ctrl-G will never reach the app-level `action_open_editor` binding.
-
-**Why it happens:**
-Textual's key routing: keys are first offered to the focused widget, then bubble up. A key is "consumed" if a handler calls `event.stop()` or if Textual matches it to a local binding. Since `CommandInput` uses a plain `Input` widget and does not override key handling, Ctrl-G should bubble up. But if `SlashAutocomplete` (textual-autocomplete) consumes key events to update its dropdown, it may intercept Ctrl-G before the app sees it.
-
-**How to avoid:**
-- Define Ctrl-G as an `App`-level binding: `BINDINGS = [Binding("ctrl+g", "open_editor", "Open editor")]`.
-- Verify the binding reaches the app by testing with `textual console` and watching the key event log. If autocomplete intercepts it, add an explicit `on_key` handler in `CommandInput` that checks for `ctrl+g` before yielding to autocomplete.
-- Do not use `ctrl+g` as the binding name — use `ctrl+g` (lowercase, with plus), not `C-g` or `^G`.
-
-**Warning signs:**
-- Pressing Ctrl-G in the input field does nothing (no log output, no editor opens)
-- The binding appears in the footer help but does not activate
-- Ctrl-G only works when the input is not focused
-
-**Phase to address:**
-Phase implementing Ctrl-G external editor — verify key routing with `textual console` before building editor plumbing.
+The phase defining the event interception strategy — document the single chosen path in a comment at the top of the stream loop before writing any cell creation code.
 
 ---
 
@@ -277,12 +306,12 @@ Phase implementing Ctrl-G external editor — verify key routing with `textual c
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| `animate("styles.tint", ...)` instead of `set_interval` | Reads like declarative animation | `AttributeError` at runtime — dot-path not resolved by Textual animator | Never — use `set_interval` + direct `styles.tint` assignment |
-| Manual `focus()` in `on_mount` without `disabled` check | Simple, obvious | Silent focus failure when widget is disabled; requires debugging to find | Never — always check `disabled == False` before calling `focus()` |
-| `subprocess.run(["vim", ...])` without `app.suspend()` | One-liner | Terminal left in raw mode; Vim receives broken terminal input | Never — must use `app.suspend()` context manager |
-| `border: none;` in TCSS without matching specificity | Quick visual change | Rule ignored when widget has higher-specificity DEFAULT_CSS | Never — match compound selector of the DEFAULT_CSS rule being overridden |
-| Bare `try/except: pass` around `focus()` calls | Suppresses noise | Silent focus failures never investigated; UX regression ships undetected | Only in non-critical paths with explicit comment explaining why |
-| Alt-screen without `try/finally` terminal cleanup | Simpler entry point | Mouse codes in terminal after crash; user must run `reset` | Never in production — always add belt-and-suspenders cleanup |
+| Reuse `_active_cell` for agent cells | No new registry code | Wrong cell finalized; shimmer timer leaks on all other cells | Never — add `_agent_cells: dict[str, AgentCell]` from the start |
+| Create agent cells in `AgentStateUpdated` handler instead of SDK stream | Single data path | 200ms debounce delay on cell creation; misses agents that never write to state.json | Never — state.json and SDK stream are independent paths |
+| Skip the input_json_delta accumulation; read input from `content_block_start` | Simpler code | Task description always empty on real streaming invocations | Never — the Anthropic streaming protocol requires delta accumulation |
+| Use raw agent_id string as widget CSS ID | No sanitization code | `InvalidSelector` crash on agent IDs with dots, slashes, or spaces | Never — always sanitize with `re.sub` before using as CSS ID |
+| `await pane.mount(AgentCell(...))` directly in stream loop | Simple, linear code | Blocks `receive_response()` for the mount duration; streaming stutters | Never — use `post_message(AgentCellRequested(...))` to decouple |
+| Intercept both hooks and stream events for agent visibility | Belt-and-suspenders coverage | Duplicate cells; double-finalization; state machine becomes inconsistent | Never — pick one interception layer |
 
 ---
 
@@ -290,13 +319,12 @@ Phase implementing Ctrl-G external editor — verify key routing with `textual c
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| vim via Ctrl-G | `subprocess.run(["vim", ...])` without suspending Textual | `with app.suspend(): subprocess.run(["vim", path])` |
-| vim exit and file read | Reading temp file after `suspend()` block exits | Read file inside the `with app.suspend():` block, before Textual recaptures terminal |
-| `app.suspend()` in async context | `await asyncio.create_subprocess_exec(...)` inside suspend | `suspend()` is synchronous — use blocking `subprocess.run()`; do not mix async subprocess inside it |
-| Border removal in TCSS | `Input { border: none; }` targeting Textual built-in widgets | Use compound selector: `CommandInput Input { border: none; }` to match DEFAULT_CSS specificity |
-| `AUTO_FOCUS` vs manual `focus()` | Calling `Input.focus()` in `on_mount` before widget enters focus chain | Set `AUTO_FOCUS = "#command-input Input"` on `ConductorApp` class; remove manual `focus()` from `on_mount` |
-| Shimmer + finalize order | Set `_is_streaming = False` before stopping timer | Stop timer first (`_shimmer_timer.stop()`), then clear tint, then set `_is_streaming = False` |
-| Modal focus restoration | Rely on Textual's automatic post-modal focus restoration | Explicitly call `cmd.query_one(Input).focus()` after `push_screen_wait()` returns, with `disabled` check |
+| SDK `receive_response()` + tool-use detection | Reading `content_block_start.content_block.input` for task description | Accumulate `input_json_delta` strings; parse JSON on `content_block_stop` |
+| `TaskStartedMessage` in stream loop | Not handling `SystemMessage` subclasses because the loop only checks `StreamEvent` and `ResultMessage` | Add `isinstance(message, TaskStartedMessage)` branch before the generic `SystemMessage` fallthrough |
+| `AgentStateUpdated` → transcript | Using `AgentStateUpdated` to trigger cell creation in `TranscriptPane` | Use SDK stream events (`TaskStartedMessage`) for transcript; `AgentStateUpdated` for monitor pane only |
+| Multiple streaming cells + scroll | `scroll_end(animate=False)` on every token append across all cells | Only call `scroll_end` if `_is_at_bottom` was True before the new content; preserve user scroll position |
+| `AgentPanel` + `AgentCell` shared ID | `id=f"agent-{agent_id}"` used in both widgets | Sanitize agent_id for CSS; use distinct prefixes (`agent-panel-`, `agent-cell-`) to prevent collisions |
+| SDK hooks + stream events | Registering both `SubagentStart` hook and `TaskStartedMessage` handler | Choose stream events for v2.2 read-only visibility; reserve hooks for permission enforcement |
 
 ---
 
@@ -304,10 +332,10 @@ Phase implementing Ctrl-G external editor — verify key routing with `textual c
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| `set_interval` at > 30fps for shimmer | CPU spike; other widget updates lag | Use `_SHIMMER_INTERVAL = 1/15` (15fps max for tint animation) | > 30fps on low-end hardware or tmux with 60Hz refresh |
-| Multiple shimmer timers per session | Timer count grows across exchanges; memory creep | Verify `_shimmer_timer is None` before calling `set_interval`; stop old timer if somehow active | After 10+ exchanges without restart |
-| `app.refresh()` after every `app.suspend()` return | Full TUI repaint on every Ctrl-G press | Already handled by Textual — do not add manual `refresh()` unless cursor state is visually broken | Every editor open/close |
-| Borderless design forcing 1px height reductions | Layout calculation changes cause off-by-one in height math | After removing borders, verify `height: 1fr` calculations still account for removed border space | After removing any border from a widget with explicit height |
+| N concurrent shimmer timers at 15fps each | CPU usage scales linearly with agent count | Each `AgentCell` uses the same 15fps `set_interval` from transcript.py; this is acceptable up to ~10 agents; above 10, reduce to 10fps | > 10 concurrent agents |
+| MarkdownStream `write()` called on every token across N cells | Markdown parse latency accumulates; each write triggers a re-render | Batch tokens per cell (collect for 50ms, then write) if > 5 agents are streaming simultaneously | > 5 concurrent streaming agents |
+| `on_agent_state_updated` doing DOM diffing on every state.json write | `query(AgentPanel)` traversal scales with number of panels; called on every debounced write | The 200ms debounce in `awatch` already throttles this; acceptable up to ~20 agents | > 20 agents with state.json writing at high frequency |
+| Mounting `AgentCell` via `post_message` + handler creates a one-event-loop-tick delay | First token of agent output arrives before cell is mounted; first chunk is lost | Buffer the first token in the `AgentCellRequested` message; re-emit it after cell is mounted | Every invocation if not handled — first token always lost |
 
 ---
 
@@ -315,25 +343,24 @@ Phase implementing Ctrl-G external editor — verify key routing with `textual c
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| External editor opens but input field still shows content | Confusing state — content in input and editor | Clear `CommandInput` input field before opening editor; fill it with editor content on return |
-| Ctrl-G binding not shown in status bar | User does not discover the feature | Add `Binding("ctrl+g", "open_editor", "Open editor", show=True)` — `show=True` makes it appear in footer |
-| Borderless design removes visual input affordance | User cannot tell where to type | Keep a bottom border or background color on `CommandInput` to indicate the input region |
-| Alt-screen hides terminal history above TUI | User cannot scroll back to pre-TUI output | This is expected and correct — document it; provide `/history` or similar to re-surface transcript |
-| Focus auto-set to wrong widget on startup | User starts typing and input lands in wrong field | Use `AUTO_FOCUS` selector that targets the inner `Input` widget by ID, not the wrapper widget |
-| Shimmer on too many cells simultaneously | Visual noise; performance hit | Only the currently-streaming cell should shimmer; all finalized cells are static |
+| Agent cell label shows agent_id (a UUID or opaque string) | User cannot tell which agent is which | Show agent `name` and `role` from `AgentRecord`; use `TaskStartedMessage.description` for task context |
+| Agent cell remains in transcript after agent completes | Transcript grows unboundedly during long sessions with many agents | Finalize (stop shimmer, freeze content) but keep cell; do not remove — removal during active streaming causes layout thrash |
+| Orchestrator cell and agent cells interleaved with no visual distinction | User cannot tell orchestrator output from agent output | Use distinct accent colors per cell type: existing `$accent` for orchestrator, a different CSS variable (`$success` or custom) for agent cells |
+| No indication that the orchestrator is in delegation (planning) phase | User sees blank streaming area while orchestrator is reasoning | Show an "Orchestrator: Planning..." status in StatusFooter or as a static cell during the orchestrator's pre-delegation reasoning phase |
+| State.json watcher 200ms debounce means agent panel appears 200ms after agent starts | Minor but noticeable lag before the monitor pane updates | Acceptable; do not reduce debounce below 100ms (atomic-write inode swap on `os.replace` already solved by parent-directory watch — documented in PROJECT.md Key Decisions) |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Shimmer animation:** Verify `_shimmer_timer.stop()` is called in `finalize()` before `_is_streaming = False`. Check timer count after 5 exchanges.
-- [ ] **External editor:** Test with `EDITOR=vim` and `EDITOR=nano`. Verify terminal state is clean after normal exit AND after Ctrl-C inside vim. Run `stty -a` after each test.
-- [ ] **Borderless design:** Verify no compound-selector DEFAULT_CSS rules are being silently ignored. Use `textual console` CSS inspector to confirm winning rule for each changed widget.
-- [ ] **Auto-focus:** Verify cursor is in the input field immediately on startup without any Tab press. Test with `ConductorApp` launched both fresh and in resume mode.
-- [ ] **Focus after modal:** Dismiss an escalation modal, then immediately type — verify characters go to `CommandInput`, not to the transcript or agent panel.
-- [ ] **Alt-screen crash cleanup:** Kill the process with `kill -9 <pid>` while TUI is running. Verify terminal is usable afterward (no raw mode, no escape code output).
-- [ ] **Ctrl-G key routing:** Verify Ctrl-G works when focus is in `CommandInput` AND when focus is elsewhere (agent panel, etc.).
-- [ ] **animate() not used:** Grep confirms no `self.animate("styles.tint"` or `self.animate("tint"` in the codebase — all shimmer is via `set_interval`.
+- [ ] **Tool-use input accumulation:** Verify task description in `AgentCellRequested` is populated from accumulated `input_json_delta`, not from `content_block_start.input`. Test with real orchestrator delegation, not unit tests with pre-built `AssistantMessage` objects.
+- [ ] **SystemMessage handling in stream loop:** Confirm `TaskStartedMessage` and `TaskNotificationMessage` are handled in `_stream_response`. Add a test that injects a `TaskStartedMessage` into the `receive_response()` mock and verifies cell creation fires.
+- [ ] **Multi-cell shimmer cleanup:** After a full delegation cycle (3+ agents), verify zero shimmer timers remain active on finalized cells. CPU should return to baseline after all agents complete.
+- [ ] **Scroll preservation:** Scroll up 10 lines while an agent is streaming. Verify the scroll position is preserved when new tokens arrive. Scroll position should only auto-advance if the user was at the bottom before the token arrived.
+- [ ] **CSS ID sanitization:** Test with an orchestrator that generates agent IDs containing dots or slashes. Verify `update_status()` can find the `AgentPanel` after the ID is sanitized.
+- [ ] **Failed delegation cell state:** Trigger a delegation failure before any agent text is emitted. Verify the agent cell reaches a non-streaming state (no spinner, no shimmer) and shows an error message.
+- [ ] **Single interception path:** Grep confirms no `hooks` configuration for `SubagentStart` or `PreToolUse` if the stream event path is used. Zero duplicate cell creation events in logs during delegation.
+- [ ] **Cell registry cleanup:** After delegation completes, verify `_agent_cells` dict is empty (all entries popped on finalization). Memory does not grow across multiple delegation cycles.
 
 ---
 
@@ -341,13 +368,12 @@ Phase implementing Ctrl-G external editor — verify key routing with `textual c
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Timer leak from unfinalised shimmer | LOW | Add `if self._shimmer_timer is not None: self._shimmer_timer.stop()` guard in `finalize()`; run existing shimmer tests |
-| Terminal broken after editor crash | LOW | Add `try/except` around `app.suspend()` block; call `app.refresh()` on exit; add `try/finally` terminal cleanup at CLI entry point |
-| Borderless CSS rule not applying | LOW | Inspect with `textual console`; add compound selector matching DEFAULT_CSS specificity; add `!important` only if compound selector fails |
-| Focus not landing on input | LOW | Replace manual `focus()` in `on_mount` with `AUTO_FOCUS = "#command-input Input"` on `ConductorApp` |
-| Ctrl-G intercepted by autocomplete | MEDIUM | Add explicit `on_key` in `CommandInput` to intercept and re-post Ctrl-G before autocomplete processes it |
-| Modal dismissal loses focus | LOW | Ensure `disabled = False` before `focus()` call in post-modal handler; add explicit focus restoration in each `on_button_pressed` |
-| Alt-screen mouse codes on crash | LOW | Add `try/finally` at CLI entry point; write escape codes to stdout in `finally` block |
+| Stream loop blocking on mount | MEDIUM | Move all `await mount(...)` calls out of the stream loop into message handlers; existing `TokensUpdated` pattern in app.py is the model |
+| Empty task description on all agent cells | LOW | Add delta accumulation state machine to stream loop; add integration test with real SDK stream fixture |
+| Shimmer timer leaks on finalized cells | LOW | Add `_agent_cells` cleanup in finalization; add test that counts active timers after delegation cycle |
+| Scroll position jump during streaming | LOW | Wrap all `mount()` calls in `add_agent_cell()` with `_is_at_bottom` guard; restore scroll offset if user was not at bottom |
+| Duplicate agent cells from mixed hook + stream event path | MEDIUM | Remove hook registrations; audit stream loop for double-fire conditions; add `if agent_id in _agent_cells: return` guard |
+| Widget ID crash on unusual agent IDs | LOW | Add `_safe_widget_id()` sanitizer to `AgentPanel` and `AgentCell`; update `query_one()` calls to use sanitized form |
 
 ---
 
@@ -355,31 +381,29 @@ Phase implementing Ctrl-G external editor — verify key routing with `textual c
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| `animate("styles.tint")` AttributeError | Any new animation phase | Grep: zero `animate("styles.tint"` or `animate("tint"` in codebase |
-| Shimmer timer leak | Phase adding shimmer/animations | Timer count stays constant across 10 exchanges; CPU stable after streaming ends |
-| Ctrl-G / editor subprocess without suspend | Phase adding external editor | `stty -a` shows cooked mode after vim exits; no garbled input on first vim keystroke |
-| Terminal state after editor crash | Phase adding external editor | `kill -TERM <vim-pid>` while in editor; TUI recovers; terminal clean after TUI exit |
-| Borderless CSS specificity fight | Phase implementing borderless design | `textual console` confirms correct rule wins; no unintended widget gaps |
-| Auto-focus timing | Phase adding auto-focus | Cursor in input on startup; no Tab required; works in both fresh and resume mode |
-| Focus stolen after modal | Phase adding modal approval or Ctrl-G | Immediately type after modal dismissal; keystrokes land in input |
-| Alt-screen cleanup on crash | Phase enabling full alt-screen mode | `kill -9` test; terminal clean; no mouse codes in output |
+| Stream loop blocking on mount | Phase implementing tool-use interception | Streaming text continues uninterrupted while agent cell mounts; no visible stutter |
+| Empty task description from missing delta accumulation | Phase implementing tool-use interception | Integration test with real streaming fixture shows non-empty task description in agent cell |
+| `_active_cell` reuse breaking multi-cell finalization | Phase defining AgentCell lifecycle | After 3-agent delegation, zero shimmer timers on finalized cells; CPU returns to baseline |
+| `TaskStartedMessage` silently dropped in stream loop | Phase wiring SDK events to agent cells | Unit test: mock `receive_response()` yields `TaskStartedMessage`; verify `AgentCellRequested` fires |
+| State.json / SDK stream race causing out-of-order cell creation | Phase wiring state.json to transcript | Delete the cross-wire; confirm transcript uses SDK stream only; monitor pane uses state.json only |
+| Cell never started (`start_streaming()` not called) before `finalize()` | Phase implementing AgentCell finalization | Test: delegation fails before first token; cell shows error, no spinner, no shimmer |
+| CSS ID collision / invalid selector | Phase creating AgentPanel + AgentCell | Test with agent_id = "wave-1.agent/2"; both widgets created and queryable without exception |
+| Mixed hook + stream event double-fire | Phase defining interception strategy | Grep: no hook registrations for SubagentStart/PreToolUse in the stream visibility path |
+| Scroll jump during streaming | Phase adding `add_agent_streaming()` to TranscriptPane | Manual test: scroll up while 3 agents stream; position holds until user returns to bottom |
 
 ---
 
 ## Sources
 
-- Codebase: `packages/conductor-core/src/conductor/tui/widgets/transcript.py` — confirmed `set_interval` shimmer implementation (Phase 38 bug fix) (HIGH confidence — direct code)
-- Codebase: `.planning/phases/38/38-01-SUMMARY.md` — "Widget.animate('styles.tint') fails with AttributeError" confirmed in production (HIGH confidence — project history)
-- [Textual issue #1093: Launching subprocesses like Vim from Textual apps](https://github.com/Textualize/textual/issues/1093) — `app.suspend()` race condition with stdin; fixed by PR #4064 (HIGH confidence — official repo)
-- [Textual issue #5605: The moment of setting the focus has changed after 2.0.0](https://github.com/Textualize/textual/issues/5605) — `can_focus` set in `on_mount` ignored in v2.0+; `allow_focus()` override required (HIGH confidence — official repo, March 2025)
-- [Textual issue #1335: Default CSS overrides more specific rules](https://github.com/Textualize/textual/issues/1335) — DEFAULT_CSS specificity bug; fixed in PR #1336 (HIGH confidence — official repo)
-- [Textual issue #82: Mouse codes are printed to the terminal on exit](https://github.com/Textualize/textual/issues/82) — alt-screen escape code cleanup on crash (HIGH confidence — official repo)
-- [Textual issue #5140: Gracefully handle termination signals](https://github.com/Textualize/textual/issues/5140) — SIGTERM/SIGKILL cleanup path (MEDIUM confidence — official repo)
-- [Textual CSS Guide — Specificity](https://textual.textualize.io/guide/CSS/) — DEFAULT_CSS has lower specificity than app CSS; compound selectors for override (HIGH confidence — official docs)
-- [Textual Animation Guide](https://textual.textualize.io/guide/animation/) — `Widget.animate()` signature; `set_interval` alternative (HIGH confidence — official docs)
-- [Textual App Basics — app.suspend()](https://textual.textualize.io/guide/app/) — suspend() context manager behavior; Unix-only support (HIGH confidence — official docs)
-- [Textual Discussion #4143: Input widget and auto focus disabling](https://github.com/Textualize/textual/discussions/4143) — `disabled` widget not receiving focus (MEDIUM confidence — official repo discussion)
+- Codebase: `packages/conductor-core/src/conductor/tui/app.py` — `_stream_response` worker, `_active_cell` pattern, `TokensUpdated` post-message pattern (HIGH confidence — direct code analysis)
+- Codebase: `packages/conductor-core/src/conductor/tui/widgets/transcript.py` — `AssistantCell` lifecycle (`start_streaming`, `append_token`, `finalize`), `_maybe_scroll_end` scroll guard (HIGH confidence — direct code analysis)
+- Codebase: `packages/conductor-core/src/conductor/tui/widgets/agent_monitor.py` — `AgentPanel` ID scheme, `_watch_state` debounce, `on_agent_state_updated` DOM diffing (HIGH confidence — direct code analysis)
+- Codebase: `.venv/lib/python3.13/site-packages/claude_agent_sdk/types.py` — `StreamEvent`, `TaskStartedMessage`, `TaskProgressMessage`, `TaskNotificationMessage`, `HookEvent` union, `SubagentStartHookInput` (HIGH confidence — installed SDK source)
+- Codebase: `.venv/lib/python3.13/site-packages/claude_agent_sdk/_internal/message_parser.py` — confirms `task_started/task_progress/task_notification` parsed from `"system"` type messages; confirms `StreamEvent` parsed from `"stream_event"` type (HIGH confidence — installed SDK source)
+- Codebase: `.planning/PROJECT.md` — Key Decision: "Watch parent directory for state changes — watchfiles misses atomic os.replace inode swaps on direct file watch" (HIGH confidence — project decision log)
+- [Anthropic Streaming API — Tool Use](https://docs.anthropic.com/en/api/messages-streaming#tool-use) — `content_block_start` / `input_json_delta` / `content_block_stop` protocol for tool-use input accumulation (HIGH confidence — official docs)
+- [Textual `post_message` vs `await mount` in workers](https://textual.textualize.io/guide/workers/) — worker `await` yields event loop; post_message is fire-and-forget; established pattern for decoupling stream processing from DOM mutation (HIGH confidence — official docs)
 
 ---
-*Pitfalls research for: v2.1 UX Polish — alt-screen, borderless CSS, animations, external editor on existing Textual TUI*
-*Researched: 2026-03-11*
+*Pitfalls research for: v2.2 Agent Visibility — adding labeled agent cells, tool-use interception, state.json-driven transcript to existing Textual TUI*
+*Researched: 2026-03-12*

@@ -1,533 +1,474 @@
 # Architecture Research
 
-**Domain:** Textual TUI UX Polish — v2.1 feature integration into existing ConductorApp
-**Researched:** 2026-03-11
-**Confidence:** HIGH
+**Domain:** Agent visibility in Textual TUI — labeled per-agent output streams integrated into existing streaming transcript
+**Researched:** 2026-03-12
+**Confidence:** HIGH (full source code inspection, SDK type definitions verified)
 
 ---
 
-## Standard Architecture
+## Current System Architecture
 
-### System Overview
-
-The existing v2.0 TUI is a flat-compose App with four widgets sharing the same Screen. V2.1 adds behaviour at specific integration seams without restructuring the component tree.
+### Component Map (Before v2.2)
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                  ConductorApp(App)                                    │
-│                                                                       │
-│  CLASS-LEVEL additions (v2.1):                                        │
-│    AUTO_FOCUS = "Input"           ← auto-focus fix                   │
-│    TITLE = "Conductor"                                                │
-│    CSS = "Screen { border: none; padding: 0; }"  ← borderless        │
-│    BINDINGS = [Binding("ctrl+g", "open_editor")]  ← editor hotkey    │
-│                                                                       │
-│  ┌─────────────────────────────────────────────────────────────────┐  │
-│  │  Screen (full alt-screen, no border, no padding)                │  │
-│  │  ┌────────────────────────────────┐  ┌──────────────────────┐   │  │
-│  │  │  TranscriptPane                │  │  AgentMonitorPane    │   │  │
-│  │  │  (VerticalScroll)              │  │  width: 30           │   │  │
-│  │  │  - UserCell                    │  │  border-left:        │   │  │
-│  │  │  - AssistantCell               │  │    solid $primary    │   │  │
-│  │  │    + shimmer animation         │  │    20%               │   │  │
-│  │  │      (set_interval, existing)  │  └──────────────────────┘   │  │
-│  │  └────────────────────────────────┘                             │  │
-│  │  ┌─────────────────────────────────────────────────────────┐   │  │
-│  │  │  CommandInput                                            │   │  │
-│  │  │  - Input (focused on mount via AUTO_FOCUS)               │   │  │
-│  │  │  - SlashAutocomplete                                     │   │  │
-│  │  │  - Ctrl-G triggers action_open_editor() on App          │   │  │
-│  │  └─────────────────────────────────────────────────────────┘   │  │
-│  │  ┌─────────────────────────────────────────────────────────┐   │  │
-│  │  │  StatusFooter (dock: bottom)                             │   │  │
-│  │  └─────────────────────────────────────────────────────────┘   │  │
-│  └─────────────────────────────────────────────────────────────────┘  │
-│                                                                       │
-│  action_open_editor():                                                │
-│    suspend() context manager → subprocess vim tempfile → resume      │
-│    → post_message(EditorContentReady(text))                           │
-│    → CommandInput fills Input.value with tempfile content             │
-└──────────────────────────────────────────────────────────────────────┘
+ConductorApp (Textual App)
+├── _ensure_sdk_connected()          # Lazy SDK init, creates DelegationManager
+├── _stream_response(@work)          # SDK streaming worker — ONE active at a time
+│   └── async for message in sdk.receive_response()
+│       ├── StreamEvent → content_block_delta → text_delta → AssistantCell.append_token()
+│       └── ResultMessage → TokensUpdated → StatusFooter
+│       (AssistantMessage with ToolUseBlock: NOT YET HANDLED)
+├── _watch_escalations(@work)        # Modal escalation bridge via DelegationManager queues
+├── compose()
+│   ├── TranscriptPane               # Scrollable VerticalScroll — conversation history
+│   │   ├── UserCell(text)           # Immutable user turn
+│   │   └── AssistantCell(text?)     # Static or streaming assistant turn
+│   ├── AgentMonitorPane             # Right panel — state.json watcher
+│   │   └── _watch_state(@work)      # watchfiles → AgentStateUpdated messages
+│   │       └── on_agent_state_updated() → mounts/updates/removes AgentPanel widgets
+│   ├── CommandInput
+│   └── StatusFooter
+└── DelegationManager
+    └── handle_delegate()            # MCP tool handler
+        └── Orchestrator.run()       # Runs INSIDE _stream_response (called by SDK tool invoke)
 ```
 
-### Component Responsibilities for v2.1
+### Key Insight: Delegation Is Invisible to the Transcript
 
-| Component | v2.1 Change | How |
-|-----------|-------------|-----|
-| `ConductorApp` | Add `AUTO_FOCUS`, `BINDINGS`, CSS override | Class-level additions only |
-| `conductor.tcss` | Borderless Screen, remove `$surface` background artifacts | Edit CSS file |
-| `CommandInput` | Remove `border-top` or soften it for borderless feel; ensure Input is focusable | Edit `DEFAULT_CSS` |
-| `AssistantCell` | No change — shimmer via `set_interval` works; `styles.animate()` is optional upgrade | Optional refactor |
-| `ConductorApp.action_open_editor` | New method — `suspend()` + vim + `EditorContentReady` | New method on App |
-| `EditorContentReady` | New message type in `messages.py` | New `Message` subclass |
-| `CommandInput.on_editor_content_ready` | Fill `Input.value` with editor text; optionally auto-submit | New handler |
+When the orchestrator calls `conductor_delegate`:
+
+1. SDK emits `AssistantMessage` with `ToolUseBlock(name="conductor_delegate", input={"task": "..."})`.
+2. SDK calls `DelegationManager.handle_delegate()` which runs `Orchestrator.run()` synchronously from the SDK's perspective. This entire sub-agent team execution happens inside the `receive_response()` async generator.
+3. `_stream_response` only intercepts `StreamEvent` (partial tokens) and `ResultMessage` (final usage). The `AssistantMessage` carrying the tool_use block is currently silently dropped.
+4. `AgentMonitorPane._watch_state` does detect agent activity via `state.json` — but nothing surfaces in `TranscriptPane`.
+
+The gap: **TranscriptPane never learns that delegation happened.** It shows "Assistant" thinking, then a reply, with no indication that sub-agents ran.
 
 ---
 
-## Recommended Project Structure
+## Integration Architecture for v2.2
 
-All v2.1 changes land in existing files. No new modules needed.
+### What Changes vs. What Is New
+
+| Component | Status | Change Type |
+|-----------|--------|-------------|
+| `app.py._stream_response` | MODIFIED | Add `AssistantMessage` + `ToolUseBlock` interception; hold `OrchestratorStatusCell` reference |
+| `TranscriptPane` | MODIFIED | Add `add_agent_cell()`, `add_orchestrator_status()`, `on_agent_state_updated()`, internal `_agent_cells` dict |
+| `messages.py` | MODIFIED | Add `OrchestratorStatusChanged` message |
+| `AgentCell` widget | NEW | Labeled cell in transcript showing agent name, role, task |
+| `OrchestratorStatusCell` widget | NEW | Status-only cell for orchestrator planning/delegation phase |
+| `AssistantCell` | UNCHANGED | Reused as-is |
+| `AgentMonitorPane` | UNCHANGED | Already works; no changes needed |
+| `DelegationManager` | UNCHANGED | Already exposes queues; no changes needed |
+| `state/models.py` | UNCHANGED | `AgentRecord.name`, `AgentRecord.role`, `Task.title` are sufficient |
+
+---
+
+## Data Flow: SDK Stream to Agent Cell Creation
+
+### Full Sequence
 
 ```
-conductor/tui/
-├── app.py                  # MODIFIED: AUTO_FOCUS, BINDINGS, action_open_editor()
-├── conductor.tcss          # MODIFIED: borderless Screen, remove stray borders
-├── messages.py             # MODIFIED: add EditorContentReady message
-└── widgets/
-    ├── command_input.py    # MODIFIED: DEFAULT_CSS tweak, on_editor_content_ready()
-    └── transcript.py       # UNCHANGED (shimmer stays as-is for now)
+User types message
+        │
+        ▼
+_stream_response(@work) starts
+        │
+        ├── [existing] StreamEvent: content_block_delta / text_delta
+        │       └── AssistantCell.append_token(chunk)
+        │
+        ├── [NEW] AssistantMessage with ToolUseBlock(name="conductor_delegate")
+        │       │   This fires BEFORE the SDK calls handle_delegate()
+        │       └── task_desc = block.input["task"]
+        │               │
+        │               ▼
+        │       post OrchestratorStatusChanged("Delegating: <task_desc>")
+        │               │
+        │               ▼
+        │       ConductorApp.on_orchestrator_status_changed()
+        │           → pane.add_orchestrator_status(text)
+        │           → OrchestratorStatusCell mounted in TranscriptPane
+        │           → self._active_orchestrator_status = cell
+        │
+        │   [SDK calls DelegationManager.handle_delegate() — blocks inside recv loop]
+        │   [Orchestrator.run() runs sub-agent team — state.json changes during this]
+        │           │
+        │           ▼ (watchfiles detects parent dir change — ALREADY WORKING)
+        │   AgentMonitorPane._watch_state(@work) posts AgentStateUpdated(state)
+        │           │
+        │           ├── [existing] AgentMonitorPane.on_agent_state_updated()
+        │           │       └── Updates AgentPanel right-panel widgets (unchanged)
+        │           │
+        │           └── [NEW] TranscriptPane.on_agent_state_updated()
+        │                   └── For new agents in state.agents (WORKING/WAITING):
+        │                       → mount AgentCell(agent_id, name, role, task_title)
+        │                       → store in self._agent_cells[agent_id]
+        │                   └── For existing agents:
+        │                       → cell.update_status(task_title, status)
+        │                   └── For agents gone DONE/IDLE:
+        │                       → cell.finalize()
+        │                       → remove from self._agent_cells (cell stays mounted)
+        │
+        └── [existing] ResultMessage → StreamDone
+                │
+                └── [NEW] self._active_orchestrator_status.finalize()
+                        └── OrchestratorStatusCell shows "Delegation complete"
 ```
 
-### Structure Rationale
+### Agent Output Strategy
 
-- **No new files:** All four features touch existing seams. Adding new modules would split context unnecessarily.
-- **`action_open_editor` on App, not CommandInput:** Actions in Textual bubble up the widget tree. Binding Ctrl-G at the App level means it fires regardless of which widget has focus. The App is the correct owner of external process lifecycle (`suspend()`).
-- **`EditorContentReady` in messages.py:** Keeps the event bus explicit. CommandInput receives the filled text via message rather than a direct method call — consistent with how `StreamDone` and `TokensUpdated` already work.
+Sub-agent SDK streams are separate processes — they are not visible to the TUI's `receive_response()` loop. The TUI can only observe sub-agents through `state.json`.
+
+**For v2.2:** Use `state.json` as the source of agent identity (name, role, task title, status). Agent cells show who is running and what they are doing, updated on each `AgentStateUpdated` event. This mirrors exactly what `AgentMonitorPane` already does — the transcript view is a timeline snapshot of the same data.
+
+**Not in v2.2:** Live streaming of what each sub-agent is generating. That would require per-agent log tailing or dedicated output channels — a separate infrastructure investment.
+
+---
+
+## Component Design
+
+### New: `AgentCell` Widget
+
+**Location:** `packages/conductor-core/src/conductor/tui/widgets/transcript.py`
+
+**Constructor:** `AgentCell(agent_id: str, agent_name: str, agent_role: str, task_title: str)`
+
+**Visual:** Same border-left pattern as `AssistantCell` but with a distinct color (e.g., `$secondary` or `$warning`) and a two-line header showing `{agent_name} — {agent_role}` plus task title below.
+
+**Methods:**
+- `update_status(task_title: str, status: str)` — called on each `AgentStateUpdated` while agent is active
+- `finalize()` — marks cell as done visually (e.g., "[DONE]" suffix on label), sets `_is_active = False`
+
+**Lifecycle:** Mounted when agent first appears in `state.json` as WORKING/WAITING. Stays mounted permanently (transcript is history). `finalize()` called when agent leaves WORKING/WAITING.
+
+**Pattern:** Mirrors `AssistantCell` but no streaming mode needed — content is state snapshots, not token streams.
+
+### New: `OrchestratorStatusCell` Widget
+
+**Location:** `packages/conductor-core/src/conductor/tui/widgets/transcript.py`
+
+**Constructor:** `OrchestratorStatusCell(status_text: str)`
+
+**Visual:** Distinct style from both `AssistantCell` and `AgentCell`. Suggests "system event" — e.g., `$primary` tint, different label like "Orchestrator".
+
+**Methods:**
+- `update(text: str)` — update displayed status
+- `finalize()` — mark as complete ("Delegation complete" or similar)
+
+**Lifecycle:** Created in `app.py._stream_response` when `conductor_delegate` ToolUseBlock detected. Finalized in `StreamDone` handler.
+
+### Modified: `TranscriptPane`
+
+**New state:** `self._agent_cells: dict[str, AgentCell] = {}` mapping `agent_id` to mounted cell.
+**New state:** (optional) `self._orchestrator_status_cell: OrchestratorStatusCell | None = None`
+
+**New methods:**
+- `async add_agent_cell(agent_id, agent_name, agent_role, task_title) -> AgentCell`
+- `async add_orchestrator_status(text) -> OrchestratorStatusCell`
+- `async on_agent_state_updated(event: AgentStateUpdated)` — diff logic (new/update/finalize)
+
+**Diff logic in `on_agent_state_updated`:**
+
+```python
+async def on_agent_state_updated(self, event: AgentStateUpdated) -> None:
+    from conductor.state.models import AgentStatus
+    state = event.state
+
+    active = {
+        a.id: a
+        for a in state.agents
+        if a.status in (AgentStatus.WORKING, AgentStatus.WAITING)
+    }
+    tasks = {t.assigned_agent: t for t in state.tasks if t.assigned_agent}
+
+    for agent_id, agent in active.items():
+        task = tasks.get(agent_id)
+        task_title = task.title if task else "(unknown task)"
+        if agent_id not in self._agent_cells:
+            cell = await self.add_agent_cell(
+                agent_id, agent.name, agent.role, task_title
+            )
+            self._agent_cells[agent_id] = cell
+        else:
+            self._agent_cells[agent_id].update_status(task_title, str(agent.status))
+
+    for agent_id in list(self._agent_cells):
+        if agent_id not in active:
+            self._agent_cells[agent_id].finalize()
+            del self._agent_cells[agent_id]
+```
+
+### New Message: `OrchestratorStatusChanged`
+
+**Location:** `packages/conductor-core/src/conductor/tui/messages.py`
+
+```python
+class OrchestratorStatusChanged(Message):
+    """Orchestrator entered planning/delegation phase — create status cell."""
+    def __init__(self, status_text: str, done: bool = False) -> None:
+        self.status_text = status_text
+        self.done = done
+        super().__init__()
+```
+
+Note: `DelegationStarted` and `DelegationComplete` already exist in `messages.py` but are unused. These could be repurposed instead of adding `OrchestratorStatusChanged` — verify usage before adding a duplicate.
+
+---
+
+## Integration Points
+
+### Integration Point 1: `AssistantMessage` Interception (app.py)
+
+**Where:** `_stream_response`, inside `async for message in self._sdk_client.receive_response()`.
+
+**Current state:** Only `StreamEvent` and `ResultMessage` are handled. `AssistantMessage` is silently dropped.
+
+**Change:** Add `elif isinstance(message, AssistantMessage):` branch.
+
+The SDK emits `AssistantMessage` with `content: list[ContentBlock]`. When the orchestrator invokes `conductor_delegate`, one of those blocks will be `ToolUseBlock(name="conductor_delegate", input={"task": "..."})`. This fires **before** `handle_delegate()` is called, giving the TUI a chance to show status before the delegation loop starts.
+
+```python
+from claude_agent_sdk import AssistantMessage, ResultMessage
+from claude_agent_sdk.types import StreamEvent, ToolUseBlock
+
+elif isinstance(message, AssistantMessage):
+    for block in message.content:
+        if isinstance(block, ToolUseBlock) and block.name == "conductor_delegate":
+            task_desc = block.input.get("task", "Delegating task...")
+            pane = self.query_one(TranscriptPane)
+            self._active_orchestrator_status = await pane.add_orchestrator_status(
+                f"Delegating: {task_desc[:80]}"
+            )
+```
+
+**File:** `packages/conductor-core/src/conductor/tui/app.py`
+**Risk:** LOW — adding a new `elif` branch. The existing `StreamEvent` and `ResultMessage` branches are unaffected.
+
+### Integration Point 2: `AgentStateUpdated` Subscription (transcript.py)
+
+**Where:** `TranscriptPane` class — new `on_agent_state_updated` handler.
+
+**Current state:** `AgentStateUpdated` is only handled by `AgentMonitorPane`. Textual's message bus delivers to all subscribers — `TranscriptPane` just needs to declare the handler.
+
+**Change:** `TranscriptPane.on_agent_state_updated()` with diff logic above. Requires `_agent_cells` dict initialized in `__init__`.
+
+**File:** `packages/conductor-core/src/conductor/tui/widgets/transcript.py`
+**Risk:** LOW — same message, same pattern as `AgentMonitorPane.on_agent_state_updated`.
+
+### Integration Point 3: `OrchestratorStatusCell` Finalization (app.py)
+
+**Where:** `ConductorApp.on_stream_done()` or the `finally` block of `_stream_response`.
+
+**Change:** `self._active_orchestrator_status` reference held on `ConductorApp`. When `StreamDone` fires, call `finalize()`.
+
+```python
+# In ConductorApp.__init__:
+self._active_orchestrator_status: Any | None = None  # OrchestratorStatusCell | None
+
+# In _stream_response finally block:
+if self._active_orchestrator_status is not None:
+    try:
+        await self._active_orchestrator_status.finalize()
+    except Exception:
+        pass
+    self._active_orchestrator_status = None
+```
+
+**File:** `packages/conductor-core/src/conductor/tui/app.py`
+**Risk:** LOW — mirroring the existing `self._active_cell` pattern.
+
+---
+
+## Component Boundary Responsibilities
+
+| Component | Owns | Does NOT Own |
+|-----------|------|--------------|
+| `app.py._stream_response` | Detecting `conductor_delegate` ToolUseBlock; creating `OrchestratorStatusCell`; finalizing it on `StreamDone` | Agent cell lifecycle; state.json watching |
+| `TranscriptPane` | Mounting and updating `AgentCell` widgets on `AgentStateUpdated`; cell reference tracking via `_agent_cells` dict | Watching state.json (AgentMonitorPane owns the worker) |
+| `AgentMonitorPane` | Right-panel `AgentPanel` widgets; `_watch_state(@work)` worker posting `AgentStateUpdated` | Posting to TranscriptPane; creating transcript cells |
+| `DelegationManager` | Running orchestrator; escalation queues | Any TUI cell lifecycle |
+| `state.json` | Source of truth: agent identity, role, status, task assignment | Sub-agent output content |
 
 ---
 
 ## Architectural Patterns
 
-### Pattern 1: AUTO_FOCUS for Input on Mount
+### Pattern 1: `AgentStateUpdated` Fan-Out (Shared Message, Independent Handlers)
 
-**What:** Set `AUTO_FOCUS = "Input"` on `ConductorApp`. Textual evaluates this CSS selector against the widget tree when the default Screen activates and focuses the first match.
+**What:** Both `AgentMonitorPane` and `TranscriptPane` handle the same `AgentStateUpdated` message independently. Each maintains its own view of the same underlying state.
 
-**When to use:** Any time you want a specific widget to receive keyboard focus at startup without calling `set_focus()` in `on_mount`.
+**Why:** Textual's message bus delivers to all subscribers automatically. Adding a handler in `TranscriptPane` does not require changes to `AgentMonitorPane`. The widgets are decoupled.
 
-**Trade-offs:** `AUTO_FOCUS` is evaluated on Screen activation, not App mount — meaning it also fires when a modal is dismissed and the main screen becomes active again. That is the correct behaviour here: Ctrl-G editor and escalation modals should both return focus to the Input naturally.
+**Trade-off:** Both widgets run the same O(n) diff on each state change. At the scale of a single delegation (typically 2-10 agents), this is negligible.
 
-**Implementation — where it goes:**
-```python
-# conductor/tui/app.py
-class ConductorApp(App):
-    AUTO_FOCUS = "Input"  # CSS selector — matches any Input widget
-    CSS_PATH = Path(__file__).parent / "conductor.tcss"
-```
+### Pattern 2: Cell Reference Tracking
 
-Note: the existing `on_stream_done` and `_replay_session` handlers both manually call `cmd.query_one(Input).focus()` as a belt-and-suspenders restore. With `AUTO_FOCUS` in place those calls become redundant but harmless — leave them for the cases where the main screen was never deactivated (no modal was pushed).
+**What:** `TranscriptPane._agent_cells: dict[str, AgentCell]` maps `agent_id → AgentCell`. Enables idempotent updates — `AgentStateUpdated` fires multiple times per agent lifetime as tasks progress.
 
-**Confidence:** HIGH — `AUTO_FOCUS` is a documented App/Screen class variable. Default is `"*"` (first focusable widget). Setting it to `"Input"` pins it to the Input widget class.
+**Why:** Without tracking, every state change would mount a duplicate cell. The dict is the deduplication mechanism.
 
----
+**Trade-off:** Small memory overhead per agent. Dict is cleared when agent finalizes (cell stays mounted in scroll history for the session).
 
-### Pattern 2: Alt-Screen Mode (Default Textual Behaviour)
+### Pattern 3: Finalized Cells Stay Mounted
 
-**What:** Textual's default `App.run()` already uses full alt-screen mode. The terminal is taken over completely on start and restored on exit. No flag is needed.
+**What:** When an agent reaches DONE/IDLE, `AgentCell.finalize()` updates the visual state (e.g., status label changes to "DONE"), but the cell is never removed from `TranscriptPane`.
 
-**When to use:** This is implicit — calling `ConductorApp().run()` without `inline=True` runs in alt-screen mode.
+**Why:** `TranscriptPane` is a conversation history. Removing cells would discard the timeline record of what happened. Users scrolling up should see which agents ran.
 
-**The actual problem:** The current `Screen` in `conductor.tcss` may have `background: $surface` which produces a coloured background that differs from the user's terminal. Removing or softening the Screen background colour creates a "native" alt-screen feel.
+**Trade-off:** Memory grows with delegation history. Acceptable for a single-session TUI. If sessions become very long, cells could be collapsed rather than removed.
 
-**Implementation — no App.run() change needed:**
-```python
-# No change to CLI entry point.
-# ConductorApp(...).run()  ← already alt-screen by default
-```
+### Pattern 4: Orchestrator Status as Ephemeral Cell
 
-```css
-/* conductor.tcss — remove background to use terminal's native background */
-Screen {
-    layers: base overlay;
-    /* Remove: background: $surface; */
-}
-```
+**What:** `OrchestratorStatusCell` is created at delegation start and finalized at `StreamDone`. It represents a transient system event (not a persistent agent record).
 
-**Confidence:** HIGH — `inline=True` is the flag for inline mode. Without it, alt-screen is the default. Verified in official Textual app guide.
+**Why:** The orchestrator status is different from agent cells — it marks the moment of delegation decision, not an ongoing agent's work. It should be visually distinguishable.
 
----
-
-### Pattern 3: Borderless Design via CSS
-
-**What:** Remove all `border-*` declarations from the main layout widgets. Use spacing (padding/margin) and background tint contrast to create visual separation instead of lines.
-
-**When to use:** When the goal is a "content-first" design that feels native to the terminal rather than a window-within-a-terminal.
-
-**Trade-offs:** Modals (`FileApprovalModal`, `CommandApprovalModal`, `EscalationModal`) retain their `border: solid $primary` — that separation is intentional for an overlay. Only the main screen layout becomes borderless.
-
-**Specificity rule:** `DEFAULT_CSS` has the lowest specificity in Textual. The external CSS file (`conductor.tcss`) overrides `DEFAULT_CSS`. The App-level `CSS` class variable overrides both. Use `conductor.tcss` for layout-level borderless rules so individual widget `DEFAULT_CSS` handles widget-internal styles.
-
-**Implementation:**
-```css
-/* conductor.tcss */
-Screen {
-    layers: base overlay;
-    /* No border, no background override — uses terminal default */
-}
-
-#app-body {
-    width: 1fr;
-    height: 1fr;
-    layout: horizontal;
-    /* No border */
-}
-```
-
-```css
-/* CommandInput DEFAULT_CSS — remove the border-top separator */
-CommandInput {
-    height: 3;
-    padding: 0 1;
-    background: $panel;
-    /* Remove: border-top: solid $primary 30%; */
-}
-```
-
-```css
-/* AgentMonitorPane DEFAULT_CSS — keep left separator for column boundary */
-AgentMonitorPane {
-    width: 30;
-    height: 1fr;
-    background: $panel;
-    border-left: solid $primary 20%;  /* keep — this creates column separation */
-    padding: 1 1;
-}
-```
-
-**Confidence:** MEDIUM — CSS specificity rules verified from official Textual docs. The specific visual outcome depends on terminal theme and needs manual review.
-
----
-
-### Pattern 4: External Editor via App.suspend()
-
-**What:** `App.suspend()` is a synchronous context manager that temporarily surrenders the terminal to an external process. Inside the `with self.suspend():` block, Textual stops reading input and rendering output. The external process has full terminal control. When the block exits, Textual resumes.
-
-**When to use:** Any time the TUI needs to hand off to a full-screen terminal program (vim, nano, fzf, git commit editor).
-
-**Trade-offs:**
-- `suspend()` is not available on Windows or in Textual Web — only Unix-like terminals.
-- The action must be synchronous (`def`, not `async def`). `subprocess.run()` is blocking and runs in the `with suspend():` block directly — do not use `asyncio.create_subprocess_exec` here.
-- After suspension ends, focus returns to whatever Textual last had focused. `AUTO_FOCUS` kicks in if the Screen reactivates. For the editor case, manually restoring Input focus after writing to `Input.value` is the safe approach.
-
-**Implementation — where each piece lives:**
-
-```python
-# conductor/tui/messages.py — new message
-class EditorContentReady(Message):
-    """Text returned from an external editor session."""
-    def __init__(self, text: str) -> None:
-        self.text = text
-        super().__init__()
-```
-
-```python
-# conductor/tui/app.py — new binding and action
-import subprocess
-import tempfile
-import os
-
-class ConductorApp(App):
-    AUTO_FOCUS = "Input"
-    BINDINGS = [
-        Binding("ctrl+g", "open_editor", "Open in editor", show=False),
-    ]
-
-    def action_open_editor(self) -> None:
-        """Open current input text in $EDITOR (default: vim) for multiline composition."""
-        from conductor.tui.widgets.command_input import CommandInput
-        from conductor.tui.messages import EditorContentReady
-
-        try:
-            cmd_input = self.query_one(CommandInput)
-            current_text = cmd_input.query_one(Input).value
-        except Exception:
-            current_text = ""
-
-        editor = os.environ.get("EDITOR", "vim")
-
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".md",
-            prefix="conductor_",
-            delete=False,
-        ) as f:
-            f.write(current_text)
-            tmp_path = f.name
-
-        try:
-            with self.suspend():
-                subprocess.run([editor, tmp_path], check=False)
-            with open(tmp_path) as f:
-                text = f.read().strip()
-        finally:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-
-        if text:
-            self.post_message(EditorContentReady(text))
-```
-
-```python
-# conductor/tui/widgets/command_input.py — receive editor content
-from conductor.tui.messages import EditorContentReady
-
-class CommandInput(Widget):
-
-    def on_editor_content_ready(self, event: EditorContentReady) -> None:
-        """Fill the Input with text returned from the external editor."""
-        inp = self.query_one(Input)
-        inp.value = event.text
-        inp.cursor_position = len(event.text)
-        inp.focus()
-        event.stop()
-```
-
-**Why the action lives on App, not CommandInput:** `suspend()` is an App method. Placing the action on `ConductorApp` avoids passing an App reference into the widget. The BINDING on `ConductorApp` fires regardless of current focus — even if a modal is somehow active — because App bindings have the broadest scope.
-
-**Why `EditorContentReady` is posted as a message, not a direct method call:** `action_open_editor` runs on the app. Calling `cmd_input.query_one(Input).value = text` directly from the action would work (actions run on the event loop), but posting a message keeps the widget API clean and consistent with how other cross-widget updates work in this codebase (`StreamDone`, `TokensUpdated`).
-
-**Confidence:** HIGH for `suspend()` pattern — verified in official Textual docs and GitHub issue #1093 (resolved in PR #4064). MEDIUM for the `EDITOR` env var approach — standard Unix convention, not Textual-specific.
-
----
-
-### Pattern 5: Animation — set_interval vs Widget.animate()
-
-**What:** The existing shimmer in `AssistantCell` uses `set_interval` at 15 fps, manually computing a sine-wave alpha and writing to `self.styles.tint` each tick. This is a correct and working pattern. `Widget.animate()` is an alternative that delegates interpolation to Textual's animator.
-
-**When to use `set_interval` (existing approach):** Non-linear, cyclical animations (ping-pong, sine wave) where you want full control over the easing curve. The current shimmer is a good fit — it loops continuously while streaming.
-
-**When to use `Widget.animate()` / `styles.animate()`:** One-shot transitions with a natural end state: fade-in on mount, fade-out on finalize, slide entrance. `styles.animate("opacity", value=0.0, duration=0.3, easing="out_cubic")` for cell exit animations.
-
-**v2.1 recommendation:** Keep the existing shimmer as-is. Add `styles.animate()` only for new one-shot transitions: fade-in when an `AssistantCell` mounts, fade-out or brief flash when it finalizes. This adds polish without changing the working shimmer logic.
-
-**Possible addition — cell mount fade-in:**
-```python
-# conductor/tui/widgets/transcript.py
-class AssistantCell(Widget):
-
-    def on_mount(self) -> None:
-        """Fade in from transparent on mount for a smooth entrance."""
-        self.styles.opacity = 0.0
-        self.styles.animate("opacity", value=1.0, duration=0.25, easing="out_cubic")
-```
-
-**Animatable style properties (verified):** `opacity`, `offset`. `tint` animates because `Color` satisfies the `Animatable` protocol in Textual (it supports linear interpolation). The existing shimmer directly sets `styles.tint` on each tick — `styles.animate("tint", ...)` would also work for a single-cycle transition.
-
-**Confidence:** HIGH for `styles.animate("opacity", ...)` — documented in official animation guide. MEDIUM for `styles.animate("tint", ...)` — Color implements the Animatable protocol per search findings, not explicitly documented with examples.
-
----
-
-## Data Flow
-
-### Ctrl-G Editor Flow
-
-```
-User presses Ctrl+G
-    ↓
-ConductorApp.action_open_editor() (sync action, runs on event loop)
-    ↓ reads CommandInput > Input.value as starting text
-    ↓ writes to tempfile
-    ↓ with self.suspend():
-    │     Textual stops rendering and input capture
-    │     subprocess.run(["vim", tmp_path])  ← blocking, terminal is vim's
-    │     vim exits
-    │ Textual resumes rendering and input capture
-    ↓ reads tempfile content
-    ↓ os.unlink(tmp_path)
-    ↓ self.post_message(EditorContentReady(text))
-    ↓
-CommandInput.on_editor_content_ready(event)
-    ↓ inp.value = event.text
-    ↓ inp.cursor_position = len(event.text)
-    ↓ inp.focus()
-    ↓ event.stop()
-```
-
-### Auto-Focus Flow (startup and post-modal)
-
-```
-ConductorApp.run() starts
-    ↓ Textual activates default Screen
-    ↓ Screen evaluates AUTO_FOCUS = "Input"
-    ↓ first Input widget (inside CommandInput) receives focus
-    ↓ user can type immediately
-
-[Modal pushed]
-    ↓ ModalScreen renders over main Screen
-    ↓ Modal's own AUTO_FOCUS or explicit focus targets modal Input
-
-[Modal dismissed]
-    ↓ main Screen reactivates
-    ↓ AUTO_FOCUS re-evaluated → Input focused again
-    (belt-and-suspenders: existing explicit focus() calls in on_stream_done
-     and _replay_session also fire, which is harmless)
-```
-
-### Borderless Design — CSS Cascade
-
-```
-Textual CSS specificity order (lowest to highest):
-    Widget DEFAULT_CSS
-    ↓
-    App CSS_PATH (conductor.tcss)       ← primary layout rules live here
-    ↓
-    App CSS class variable              ← for minimal overrides if needed
-    ↓
-    inline styles (self.styles.*)       ← shimmer tint, animate() calls
-
-Borderless:
-    conductor.tcss: Screen { layers: base overlay; }  ← no background override
-    conductor.tcss: #app-body { ... }                 ← no border
-    CommandInput DEFAULT_CSS: remove border-top
-    UserCell DEFAULT_CSS: keep border-left (content separator, not chrome)
-    AssistantCell DEFAULT_CSS: keep border-left (content separator)
-    Modal DEFAULT_CSS: keep border: solid $primary (overlay identity)
-```
-
----
-
-## Integration Points: New vs Existing
-
-### Unchanged Components
-
-| Component | Why Unchanged |
-|-----------|---------------|
-| `TranscriptPane` | No v2.1 changes needed; optional fade-in on `AssistantCell.on_mount` is additive |
-| `AgentMonitorPane` | No change — border-left is correct as column separator |
-| `StatusFooter` | No change — `dock: bottom` and height: 1 stay |
-| `modals.py` | No change — modal borders are intentional chrome |
-| `messages.py` | Add one new message type only (`EditorContentReady`) |
-| `_stream_response`, `_replay_session` | No change to streaming or replay logic |
-
-### Modified Components
-
-| Component | Modification | Scope |
-|-----------|-------------|-------|
-| `app.py` | Add `AUTO_FOCUS = "Input"`, `BINDINGS = [Binding("ctrl+g", ...)]`, `action_open_editor()` method | ~30 lines added |
-| `conductor.tcss` | Remove `background: $surface` from Screen; remove `border-top` from CommandInput override if desired | ~5 lines changed |
-| `command_input.py` | Remove `border-top: solid $primary 30%` from `DEFAULT_CSS`; add `on_editor_content_ready()` handler | ~10 lines changed |
-| `messages.py` | Add `EditorContentReady(Message)` | ~6 lines added |
-
-### New Message Types
-
-| Message | Posted By | Handled By |
-|---------|-----------|------------|
-| `EditorContentReady(text)` | `ConductorApp.action_open_editor` | `CommandInput.on_editor_content_ready` |
-
----
-
-## Build Order
-
-Build order respects dependencies: each phase is independently testable and does not require the next phase to function.
-
-### Phase 1: Auto-Focus (no dependencies)
-
-**What to change:** Add `AUTO_FOCUS = "Input"` to `ConductorApp`.
-
-**Test:** Open TUI, verify Input is focused immediately without pressing Tab. Verify after Ctrl-C restart. Verify after escalation modal is dismissed.
-
-**Risk:** LOW. Single class variable. Textual's default `"*"` already focuses the first focusable widget; this just pins it to `Input` specifically.
-
----
-
-### Phase 2: Borderless Design (depends on Phase 1 for clean baseline)
-
-**What to change:** Edit `conductor.tcss` and `CommandInput.DEFAULT_CSS`.
-
-**Test:** Open TUI, verify no stray border lines between widgets. Verify modal overlays still have visible borders. Verify layout does not collapse (widths still correct via `1fr`).
-
-**Risk:** LOW-MEDIUM. CSS changes are visual only. The main risk is accidentally removing a border that provides layout structure (e.g., the AgentMonitorPane left border). Keep the pane's `border-left` as a column separator.
-
----
-
-### Phase 3: External Editor (depends on Phase 1; independent of Phase 2)
-
-**What to change:** Add `Binding` and `action_open_editor` to `ConductorApp`; add `EditorContentReady` to `messages.py`; add `on_editor_content_ready` to `CommandInput`.
-
-**Test:** Press Ctrl-G → vim opens → type text → `:wq` → TUI resumes → Input contains typed text. Test with `EDITOR=nano`. Test cancel (`vim :q!`) → Input unchanged. Test with pre-existing Input text → vim opens with that text as starting content.
-
-**Risk:** MEDIUM. `suspend()` is Unix-only (not Windows, not Textual Web). The subprocess.run call is blocking — this is intentional, correct behaviour inside `with suspend():`. Risk is terminal emulator compatibility (some terminals have edge cases with suspend/resume and certain programs like fzf — vim is widely tested and should be fine).
-
----
-
-### Phase 4: Smooth Animations (depends on nothing; fully additive)
-
-**What to change:** Optionally add `on_mount` fade-in to `AssistantCell`.
-
-**Test:** Send a message → verify AssistantCell fades in over ~250ms. Finalize streaming → no jarring snap. Performance: rapidly send multiple messages, verify no animation backlog causes lag.
-
-**Risk:** LOW. `styles.animate("opacity", ...)` is a well-documented Textual API. If it causes any visual artifact, removing the `on_mount` override is a one-line revert.
+**Trade-off:** One more reference to track on `ConductorApp`. The `self._active_orchestrator_status` pattern is identical to `self._active_cell`.
 
 ---
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Using App.run(inline=True) for Alt-Screen
+### Anti-Pattern 1: Routing Agent Output Through SDK Stream Events
 
-**What people do:** Set `inline=True` on `App.run()` thinking it enables "full screen" mode.
+**What people do:** Try to capture each sub-agent's SDK tokens and stream them directly into per-agent transcript cells.
 
-**Why it's wrong:** `inline=True` does the opposite — it runs the app as an inline widget below the terminal prompt, not in alt-screen mode. The default (no `inline`) is already full alt-screen.
+**Why it's wrong:** Sub-agents run inside `DelegationManager.handle_delegate()`, which is called by the SDK tool invocation mechanism — not directly observable by the TUI's `receive_response()` loop. The TUI only sees the orchestrator's SDK stream. Sub-agent streams are entirely separate processes.
 
-**Do this instead:** Call `ConductorApp(...).run()` without `inline=True`. Alt-screen is the default.
+**Do this instead:** Use `state.json` as the data source for agent identity and status. Show task title and status snapshot. This is the established pattern in `AgentMonitorPane`.
 
----
+### Anti-Pattern 2: `AgentMonitorPane` Posts to `TranscriptPane`
 
-### Anti-Pattern 2: async action_open_editor
+**What people do:** Make `AgentMonitorPane.on_agent_state_updated()` post a new `AgentCellRequested` message for `TranscriptPane` to handle.
 
-**What people do:** Make `action_open_editor` an `async def` and use `asyncio.create_subprocess_exec` to launch the editor.
+**Why it's wrong:** Creates sibling coupling. `AgentMonitorPane` should not know `TranscriptPane` exists. Violates Textual's model where widgets post to self/parent/app — not to sibling widgets.
 
-**Why it's wrong:** `asyncio.create_subprocess_exec` does not suspend the Textual rendering loop or give the editor terminal control. The editor and Textual fight over the terminal simultaneously, producing garbled output.
+**Do this instead:** Both panes subscribe to `AgentStateUpdated` independently. The message bus handles fan-out. No coordination layer needed.
 
-**Do this instead:** Make the action `def` (synchronous). Use `with self.suspend():` and `subprocess.run()` (blocking). Textual's suspend mechanism correctly hands off terminal control.
+### Anti-Pattern 3: Widget Mutations from Background Tasks
 
----
+**What people do:** Call `await transcript_pane.mount(AgentCell(...))` directly from `asyncio.create_task()` or a non-Textual background task.
 
-### Anti-Pattern 3: Binding Ctrl-G on CommandInput
+**Why it's wrong:** Textual widget mutations must happen on the Textual event loop (thread). Direct calls from arbitrary asyncio tasks can corrupt the DOM.
 
-**What people do:** Add the `BINDINGS = [Binding("ctrl+g", ...)]` to `CommandInput` instead of `ConductorApp`.
+**Do this instead:** Use `post_message()` from background tasks. All `mount()` calls happen in message handlers on the Textual event loop. The existing `AgentMonitorPane` pattern (`_watch_state` posts `AgentStateUpdated`, handler does `await self.mount(AgentPanel(...))`) is the correct model.
 
-**Why it's wrong:** `suspend()` is an App method. More importantly, Input widgets capture key events for text entry — the binding may not fire when the Input widget is focused and in text-entry mode. App-level bindings have higher priority and fire regardless of focus.
+### Anti-Pattern 4: Handling `conductor_delegate` in `StreamEvent` Events
 
-**Do this instead:** Put the binding on `ConductorApp`. The action references `CommandInput` via `self.query_one(CommandInput)`.
+**What people do:** Try to detect delegation by looking for `tool_use` type in `StreamEvent.event["type"] == "content_block_start"` with partial JSON accumulation.
 
----
+**Why it's wrong:** The `AssistantMessage` with a complete `ToolUseBlock` is delivered by the SDK after the full tool call is assembled. It carries the complete `input` dict. `StreamEvent` delivers raw Anthropic API stream chunks — `content_block_start` for tool_use would only have the tool name, not the input. The `AssistantMessage` is cleaner, complete, and already the pattern used in `cli/chat.py` for ToolUseBlock handling.
 
-### Anti-Pattern 4: Removing Cell Border-Left for Borderless Design
-
-**What people do:** Remove `border-left` from `UserCell` and `AssistantCell` when pursuing a borderless design.
-
-**Why it's wrong:** The cell `border-left` is a content indicator (user vs assistant role), not chrome. Removing it makes the transcript visually ambiguous — messages blend together.
-
-**Do this instead:** Remove borders from the layout containers (`Screen`, `#app-body`, `CommandInput`). Keep the cell border-left as a semantic marker. The distinction is: chrome borders (decorative, around containers) vs content borders (meaningful, indicating message role).
+**Do this instead:** Handle `AssistantMessage` in `_stream_response` and check `isinstance(block, ToolUseBlock)`. The SDK assembles the complete message and delivers it.
 
 ---
 
-### Anti-Pattern 5: Direct Input.value Assignment Instead of Message
+## Build Order
 
-**What people do:** In `action_open_editor`, directly set `self.query_one(CommandInput).query_one(Input).value = text` after `suspend()` returns.
+Dependencies flow downward — each step can be tested independently before the next begins.
 
-**Why it's wrong:** This works, but tightly couples the App to the widget's internal structure. It also bypasses the message bus that the rest of the codebase uses consistently.
+| Step | Component | What to Build | Dependency |
+|------|-----------|--------------|------------|
+| 1 | `messages.py` | `OrchestratorStatusChanged` message (or reuse `DelegationStarted`) | None |
+| 2 | `transcript.py` | `AgentCell` widget (constructor, `update_status`, `finalize`, CSS) | None |
+| 3 | `transcript.py` | `OrchestratorStatusCell` widget (constructor, `update`, `finalize`, CSS) | None |
+| 4 | `transcript.py` | `TranscriptPane` extensions: `add_agent_cell()`, `add_orchestrator_status()`, `on_agent_state_updated()`, `_agent_cells` dict | Steps 2, 3 |
+| 5 | `app.py` | `AssistantMessage`/`ToolUseBlock` interception in `_stream_response`; `_active_orchestrator_status` reference; finalization in `StreamDone` | Steps 1, 3, 4 |
+| 6 | `conductor.tcss` | CSS for new cell types (color differentiation) | Steps 2, 3 |
 
-**Do this instead:** Post `EditorContentReady(text)` and handle it in `CommandInput.on_editor_content_ready`. This is consistent with how `StreamDone`, `TokensUpdated`, and `AgentStateUpdated` are handled — workers and actions post messages, widgets handle them.
+Steps 1-3 are independent and can be built in parallel. Step 4 depends on 2 and 3. Step 5 depends on 1, 3, 4. Step 6 is parallel with 5.
 
 ---
 
-## Scaling Considerations
+## Data Flow Diagrams
 
-These features are UX-only; scaling considerations are about UX correctness under edge conditions.
+### Flow 1: Delegation Detection to Orchestrator Status Cell
 
-| Concern | Approach |
-|---------|----------|
-| Ctrl-G during active streaming | `action_open_editor` fires regardless. The stream continues in the background while vim is open. On return, the user's editor content is in the Input; they can submit when ready. No race condition — streaming posts messages via the bus; suspend pauses rendering but not the asyncio loop tasks. Note: streaming may complete while in vim — normal behaviour. |
-| Ctrl-G during replay session (input locked) | `CommandInput.disabled = True` during replay. Binding fires on App regardless, but the resulting `EditorContentReady` will set `Input.value` — the Input being disabled prevents submission. Consider guarding `action_open_editor` with `if self.query_one(CommandInput).disabled: return`. |
-| Large tempfile from editor | No limit enforced. If user pastes a massive document into vim, it will be posted as the input. The SDK handles large inputs — not a TUI concern. |
-| `EDITOR` not set or editor not found | `subprocess.run` returns non-zero or raises `FileNotFoundError`. Wrap in try/except; if editor fails, post nothing (Input unchanged). Log the error. |
-| Animation performance with many cells | Each `AssistantCell` has its own 15 fps shimmer timer while streaming. Only one cell streams at a time (`@work(exclusive=True)`). Fade-in animation on mount is a one-shot 250ms tween — no sustained timer after completion. No scaling concern. |
+```
+_stream_response (Textual @work, orchestrator SDK stream)
+    │
+    │ SDK recv: AssistantMessage
+    │   content: [ToolUseBlock(name="conductor_delegate", input={"task": "Build auth..."})]
+    │
+    ├── isinstance(block, ToolUseBlock) and block.name == "conductor_delegate"
+    │       → pane.add_orchestrator_status("Delegating: Build auth...")
+    │       → OrchestratorStatusCell mounted in TranscriptPane
+    │       → self._active_orchestrator_status = cell
+    │
+    │ SDK calls DelegationManager.handle_delegate({"task": "Build auth..."})
+    │   [synchronous from SDK's perspective — blocks receive_response() loop]
+    │   → Orchestrator.run() → sub-agents write state.json
+    │
+    │ SDK recv: ResultMessage → StreamDone
+    │       → cell.finalize() → "Delegation complete"
+    │       → self._active_orchestrator_status = None
+```
+
+### Flow 2: Agent Activation to Agent Cell in Transcript
+
+```
+Orchestrator.run() → writes state.json (agents transition to WORKING)
+        │
+        ▼ (watchfiles detects .conductor/ dir change — 200ms debounce)
+AgentMonitorPane._watch_state(@work)
+        │ reads new state via StateManager
+        └── self.post_message(AgentStateUpdated(new_state))
+                │
+                │ Textual message bus delivers to ALL subscribers
+                │
+                ├── AgentMonitorPane.on_agent_state_updated()  [EXISTING]
+                │       └── Mounts/updates/removes AgentPanel in right panel
+                │
+                └── TranscriptPane.on_agent_state_updated()   [NEW]
+                        │
+                        ├── agent "agent-001" (WORKING) not in _agent_cells:
+                        │       → mount AgentCell("agent-001", "Alice", "Frontend Dev", "Build login form")
+                        │       → _agent_cells["agent-001"] = cell
+                        │
+                        └── agent "agent-002" (WORKING) not in _agent_cells:
+                                → mount AgentCell("agent-002", "Bob", "Backend Dev", "Add JWT endpoints")
+                                → _agent_cells["agent-002"] = cell
+```
+
+### Flow 3: Agent Completion to Cell Finalization
+
+```
+Orchestrator marks agent DONE → writes state.json
+        │
+        ▼
+AgentStateUpdated fires (next watchfiles cycle)
+        │
+        └── TranscriptPane.on_agent_state_updated()
+                │
+                └── "agent-001" not in active (status DONE):
+                        → _agent_cells["agent-001"].finalize()
+                        → del _agent_cells["agent-001"]
+                        → AgentCell stays mounted in scroll history
+```
+
+---
+
+## Integration Points Table
+
+| Boundary | Communication Pattern | File | Risk |
+|----------|-----------------------|------|------|
+| `_stream_response` detects `conductor_delegate` | `isinstance(message, AssistantMessage)` + `isinstance(block, ToolUseBlock)` | `app.py` | LOW |
+| `app.py` creates `OrchestratorStatusCell` | `await pane.add_orchestrator_status(text)` — direct async call, same event loop | `app.py` + `transcript.py` | LOW |
+| `AgentMonitorPane._watch_state` → `TranscriptPane` | `AgentStateUpdated` message bus fan-out — no coupling between widgets | `agent_monitor.py` posts, `transcript.py` subscribes | LOW |
+| `app.py` finalizes `OrchestratorStatusCell` | `self._active_orchestrator_status.finalize()` in `_stream_response` finally block | `app.py` | LOW |
+| `TranscriptPane` updates/finalizes `AgentCell` | Direct method calls on cell references in `_agent_cells` dict | `transcript.py` | LOW |
 
 ---
 
 ## Sources
 
-- [Textual App Basics — inline vs application mode](https://textual.textualize.io/guide/app/) — alt-screen is default, `inline=True` for inline — HIGH confidence (official docs)
-- [Textual App API — AUTO_FOCUS, suspend(), run()](https://textual.textualize.io/api/app/) — class variable descriptions and defaults — HIGH confidence (official docs)
-- [Textual Animation Guide — styles.animate(), easing, opacity](https://textual.textualize.io/guide/animation/) — animatable properties and method signature — HIGH confidence (official docs)
-- [Textual GitHub Issue #1093 — Launching subprocesses like Vim](https://github.com/Textualize/textual/issues/1093) — `suspend()` + `subprocess.run` pattern, resolved in PR #4064 — HIGH confidence (maintainer response)
-- [Textual GitHub Discussion #4143 — Input and AUTO_FOCUS](https://github.com/Textualize/textual/discussions/4143) — AUTO_FOCUS = "Input" pins focus to Input widget — MEDIUM confidence (community-verified)
-- [Textual CSS Guide — specificity and DEFAULT_CSS](https://textual.textualize.io/guide/CSS/) — CSS_PATH overrides DEFAULT_CSS, CSS class var overrides both — HIGH confidence (official docs)
-- Existing codebase: `app.py`, `conductor.tcss`, `command_input.py`, `transcript.py`, `modals.py`, `messages.py` — direct code inspection — HIGH confidence (primary source)
+- Direct source inspection: `app.py`, `transcript.py`, `agent_monitor.py`, `messages.py`, `delegation.py`, `models.py` — HIGH confidence (primary source)
+- SDK type definitions: `.venv/lib/python3.13/site-packages/claude_agent_sdk/types.py` — HIGH confidence (installed SDK)
+- `AssistantMessage` + `ToolUseBlock` handling pattern: `cli/chat.py` lines 424-450 — HIGH confidence (existing codebase pattern)
+- `AgentStateUpdated` fan-out pattern: Textual message bus delivers to all `on_<message>` handlers in the widget tree — HIGH confidence (Textual documentation)
+- `watchfiles` parent-directory watch pattern: `agent_monitor.py` comment — HIGH confidence (already proven in production, see PROJECT.md key decisions)
 
 ---
 
-*Architecture research for: Conductor v2.1 — UX Polish feature integration*
-*Researched: 2026-03-11*
+*Architecture research for: Conductor v2.2 — Agent Visibility TUI Integration*
+*Researched: 2026-03-12*
