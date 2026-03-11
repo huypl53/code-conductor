@@ -210,3 +210,81 @@ async def test_escalation_escape():
         await pilot.pause()
         assert len(result_container) == 1
         assert result_container[0] == "proceed"
+
+
+# -- Integration: escalation queue -> modal -> reply -------------------------
+
+
+async def test_escalation_queue_shows_modal(tmp_path):
+    """Putting a HumanQuery on human_out triggers EscalationModal; reply reaches human_in."""
+    import asyncio
+    from conductor.tui.app import ConductorApp
+    from conductor.orchestrator.escalation import HumanQuery
+
+    app = ConductorApp(cwd=str(tmp_path))
+    async with app.run_test() as pilot:
+        human_out: asyncio.Queue = asyncio.Queue()
+        human_in: asyncio.Queue = asyncio.Queue()
+
+        # Start the watcher worker
+        app._watch_escalations(human_out, human_in)
+        await pilot.pause()
+
+        # Put a HumanQuery on the queue
+        await human_out.put(
+            HumanQuery(question="Delete prod DB?", context={"agent_id": "agent-42"})
+        )
+        await pilot.pause()
+        await pilot.pause()
+
+        # Modal should be on the screen stack
+        assert len(app.screen_stack) > 1
+
+        # Type a reply and submit
+        reply_input = app.screen.query_one("#reply-input", Input)
+        reply_input.value = "yes delete it"
+        await pilot.click("#submit")
+        await pilot.pause()
+        await pilot.pause()
+
+        # Reply should have reached human_in
+        reply = human_in.get_nowait()
+        assert reply == "yes delete it"
+
+
+async def test_modal_dismisses_and_input_refocuses(tmp_path):
+    """After modal dismissal, CommandInput's inner Input widget has focus."""
+    import asyncio
+    from conductor.tui.app import ConductorApp
+    from conductor.orchestrator.escalation import HumanQuery
+
+    app = ConductorApp(cwd=str(tmp_path))
+    async with app.run_test() as pilot:
+        human_out: asyncio.Queue = asyncio.Queue()
+        human_in: asyncio.Queue = asyncio.Queue()
+
+        # Start the watcher worker
+        app._watch_escalations(human_out, human_in)
+        await pilot.pause()
+
+        # Put a HumanQuery on the queue
+        await human_out.put(
+            HumanQuery(question="Should I proceed?", context={"agent_id": "agent-7"})
+        )
+        await pilot.pause()
+        await pilot.pause()
+
+        # Submit the modal
+        reply_input = app.screen.query_one("#reply-input", Input)
+        reply_input.value = "go ahead"
+        await pilot.click("#submit")
+        await pilot.pause()
+        await pilot.pause()
+
+        # Modal should be dismissed (back to single screen)
+        assert len(app.screen_stack) == 1
+
+        # CommandInput's inner Input should have focus
+        from conductor.tui.widgets.command_input import CommandInput
+        cmd_input = app.query_one(CommandInput).query_one(Input)
+        assert cmd_input.has_focus
