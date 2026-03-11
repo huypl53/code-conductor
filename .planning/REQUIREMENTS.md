@@ -9,9 +9,9 @@ Requirements for the Agent Visibility milestone. Each maps to roadmap phases.
 
 ### Agent Cells
 
-- [ ] **ACELL-01**: User sees a labeled AgentCell in the transcript when a sub-agent starts working, showing agent name, role, and task title
-- [ ] **ACELL-02**: AgentCell updates in real-time as state.json changes (status transitions: working → waiting → done)
-- [ ] **ACELL-03**: When an agent completes, its AgentCell shows a completion summary with final status
+- [x] **ACELL-01**: User sees a labeled AgentCell in the transcript when a sub-agent starts working, showing agent name, role, and task title
+- [x] **ACELL-02**: AgentCell updates in real-time as state.json changes (status transitions: working → waiting → done)
+- [x] **ACELL-03**: When an agent completes, its AgentCell shows a completion summary with final status
 - [x] **ACELL-04**: Multiple concurrent AgentCells render independently without interfering with each other
 
 ### Orchestrator Status
@@ -26,8 +26,8 @@ Requirements for the Agent Visibility milestone. Each maps to roadmap phases.
 
 ### State Bridge
 
-- [ ] **BRDG-01**: AgentStateUpdated messages from state.json watcher are forwarded to TranscriptPane (not just AgentMonitorPane)
-- [ ] **BRDG-02**: TranscriptPane maintains an _agent_cells registry mapping agent_id to AgentCell for lifecycle management
+- [x] **BRDG-01**: AgentStateUpdated messages from state.json watcher are forwarded to TranscriptPane (not just AgentMonitorPane)
+- [x] **BRDG-02**: TranscriptPane maintains an _agent_cells registry mapping agent_id to AgentCell for lifecycle management
 
 ## Future Requirements
 
@@ -60,16 +60,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ACELL-01 | Phase 44 | Pending |
-| ACELL-02 | Phase 44 | Pending |
-| ACELL-03 | Phase 44 | Pending |
+| ACELL-01 | Phase 44 | Complete |
+| ACELL-02 | Phase 44 | Complete |
+| ACELL-03 | Phase 44 | Complete |
 | ACELL-04 | Phase 43 | Complete |
 | ORCH-01 | Phase 45 | Pending |
 | ORCH-02 | Phase 45 | Pending |
 | STRM-01 | Phase 45 | Pending |
 | STRM-02 | Phase 45 | Pending |
-| BRDG-01 | Phase 44 | Pending |
-| BRDG-02 | Phase 44 | Pending |
+| BRDG-01 | Phase 44 | Complete |
+| BRDG-02 | Phase 44 | Complete |
 
 **Coverage:**
 - v2.2 requirements: 10 total

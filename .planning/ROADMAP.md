@@ -99,7 +99,7 @@ Full details: `.planning/milestones/v2.1-ROADMAP.md`
 **Milestone Goal:** Surface real-time agent activity in the TUI transcript — labeled per-agent cells with name, role, and status; orchestrator status during planning/delegation; tool-use event interception from SDK stream; and state.json agent updates feeding the transcript.
 
 - [x] **Phase 43: Agent Cell Widgets** - Create AgentCell and OrchestratorStatusCell widget classes with full lifecycle (completed 2026-03-11)
-- [ ] **Phase 44: TranscriptPane Extensions and State Bridge** - Extend TranscriptPane with agent_cells registry and state.json fan-out
+- [x] **Phase 44: TranscriptPane Extensions and State Bridge** - Extend TranscriptPane with agent_cells registry and state.json fan-out (completed 2026-03-11)
 - [ ] **Phase 45: SDK Stream Interception and Orchestrator Status** - Wire stream loop to detect conductor_delegate and show orchestrator phase labels
 - [ ] **Phase 46: Visual Polish and Verification** - CSS accent colors, inline delegation event cells, agent completion summaries, pitfall checklist
 
@@ -202,6 +202,6 @@ Plans:
 | 41. Smooth Cell Animations | v2.1 | 1/1 | Complete | 2026-03-11 |
 | 42. Ctrl-G External Editor | v2.1 | 1/1 | Complete | 2026-03-12 |
 | 43. Agent Cell Widgets | v2.2 | 1/1 | Complete | 2026-03-11 |
-| 44. TranscriptPane Extensions and State Bridge | v2.2 | 0/1 | Not started | - |
+| 44. TranscriptPane Extensions and State Bridge | 1/1 | Complete   | 2026-03-11 | - |
 | 45. SDK Stream Interception and Orchestrator Status | v2.2 | 0/? | Not started | - |
 | 46. Visual Polish and Verification | v2.2 | 0/? | Not started | - |
