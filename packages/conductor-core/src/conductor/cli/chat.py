@@ -73,7 +73,7 @@ def pick_session(cwd: str | None = None, console: Console | None = None) -> str 
 
     Returns the selected session_id, or None if no sessions or cancelled.
     """
-    _console = console or Console(force_terminal=True)
+    _console = console or Console(force_terminal=True, highlight=False)
     working_dir = cwd or os.getcwd()
     conductor_dir = Path(working_dir) / ".conductor"
 
@@ -148,7 +148,7 @@ class ChatSession:
         resume_session_id: str | None = None,
     ) -> None:
         # force_terminal=True so Rich ANSI output works inside patch_stdout()
-        self._console = console or Console(force_terminal=True)
+        self._console = console or Console(force_terminal=True, highlight=False)
         self._history = InMemoryHistory()
 
         # Vim mode + Ctrl+G to open $EDITOR (like Claude Code)

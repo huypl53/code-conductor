@@ -36,7 +36,7 @@ async def _dispatch_command(
     Returns True if the loop should exit (quit/exit), False otherwise.
     """
     if console is None:
-        console = Console(stderr=True)
+        console = Console(stderr=True, highlight=False)
 
     tokens = line.strip().split()
     if not tokens:
@@ -123,7 +123,7 @@ async def _input_loop(
     - The coroutine is cancelled (e.g. when asyncio.gather finishes).
     """
     if console is None:
-        console = Console(stderr=True)
+        console = Console(stderr=True, highlight=False)
 
     input_task: asyncio.Task[str] = asyncio.create_task(_ainput("> "))
     queue_task: asyncio.Task[HumanQuery] = asyncio.create_task(human_out.get())

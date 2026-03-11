@@ -18,7 +18,7 @@ from conductor.orchestrator.escalation import HumanQuery
 from conductor.orchestrator.orchestrator import Orchestrator
 from conductor.state.manager import StateManager
 
-_console = Console()
+_console = Console(highlight=False)
 
 
 def _load_conductor_config(conductor_dir: Path) -> dict:
@@ -94,7 +94,7 @@ async def _run_async(
     orch_task = asyncio.create_task(orch_coro)
 
     # Console for the input loop — stderr keeps it separate from Rich Live on stdout
-    input_console = Console(stderr=True)
+    input_console = Console(stderr=True, highlight=False)
 
     # Optional dashboard server
     gather_extras: list[object] = []
@@ -117,7 +117,7 @@ async def _run_async(
     try:
         is_tty = sys.stdin.isatty()
 
-        with Live(console=Console(stderr=False), refresh_per_second=4) as live:
+        with Live(console=Console(stderr=False, highlight=False), refresh_per_second=4) as live:
             coros: list[object] = [
                 _display_loop(live, state_manager, until=orch_task),
                 orch_task,

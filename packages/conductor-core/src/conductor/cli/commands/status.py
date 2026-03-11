@@ -15,7 +15,7 @@ def status(
     repo: str = typer.Option(".", "--repo", help="Path to repo root"),
 ) -> None:
     """Print a one-shot agent/task status table from state.json."""
-    console = Console()
+    console = Console(highlight=False)
     conductor_dir = Path(repo) / ".conductor"
     state_path = conductor_dir / "state.json"
 
