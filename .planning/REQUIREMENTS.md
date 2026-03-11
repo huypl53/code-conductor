@@ -151,7 +151,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COMM-03 | Phase 13: Wire Escalation Router + Pause Surface | Complete |
 | COMM-04 | Phase 13: Wire Escalation Router + Pause Surface | Complete |
 | COMM-07 | Phase 13: Wire Escalation Router + Pause Surface | Complete |
-| PKG-04 | Phase 14: Fix Getting-Started Guide .env Claim | Pending |
+| PKG-04 | Phase 14: Fix Getting-Started Guide .env Claim | Complete |
 
 **Coverage:**
 - v1 requirements: 30 total (note: DASH-04 split from other DASH requirements — backend vs. frontend boundary)

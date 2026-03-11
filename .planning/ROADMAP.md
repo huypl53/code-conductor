@@ -25,7 +25,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 11: Packaging and Distribution** - pip and npm packages with installation and getting-started guide (completed 2026-03-10)
 - [x] **Phase 12: Fix CLI Cancel/Redirect Signatures** - Fix cancel_agent() signature mismatch and redirect command parameter errors (gap closure) (completed 2026-03-11)
 - [x] **Phase 13: Wire Escalation Router + Pause Surface** - Connect EscalationRouter to ACPClient and add pause command to CLI/dashboard (gap closure) (completed 2026-03-11)
-- [ ] **Phase 14: Fix Getting-Started Guide .env Claim** - Remove or implement .env auto-loading claim in getting-started guide (gap closure)
+- [x] **Phase 14: Fix Getting-Started Guide .env Claim** - Remove or implement .env auto-loading claim in getting-started guide (gap closure) (completed 2026-03-11)
 
 ## Phase Details
 
@@ -227,7 +227,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Getting-started guide does not claim functionality that doesn't exist
   2. A developer following the guide encounters no incorrect instructions
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
 - [ ] 14-01-PLAN.md — Remove false .env claims, add shell profile persistence guidance
 
@@ -251,4 +251,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 11. Packaging and Distribution | 2/2 | Complete    | 2026-03-10 |
 | 12. Fix CLI Cancel/Redirect Signatures | 1/1 | Complete    | 2026-03-11 |
 | 13. Wire Escalation Router + Pause Surface | 2/2 | Complete    | 2026-03-11 |
-| 14. Fix Getting-Started Guide .env Claim | 0/1 | Pending | |
+| 14. Fix Getting-Started Guide .env Claim | 1/1 | Complete   | 2026-03-11 |

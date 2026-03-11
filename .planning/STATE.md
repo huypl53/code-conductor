@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 13-01-PLAN.md (wire EscalationRouter as PermissionHandler, add pause command)
-last_updated: "2026-03-11T02:15:49.456Z"
+stopped_at: Completed 14-01-PLAN.md (remove false .env claims from getting-started guide)
+last_updated: "2026-03-11T02:24:41.392Z"
 last_activity: "2026-03-10 — Phase 2 Plan 1 complete: Pydantic v2 state models, enums, and error hierarchy"
 progress:
   total_phases: 14
-  completed_phases: 13
-  total_plans: 28
-  completed_plans: 28
+  completed_phases: 14
+  total_plans: 29
+  completed_plans: 29
   percent: 10
 ---
 
@@ -78,6 +78,7 @@ Progress: [█░░░░░░░░░] 10%
 | Phase 12-fix-cli-cancel-redirect P01 | 10 | 2 tasks | 2 files |
 | Phase 13-wire-escalation-pause P02 | 7 | 1 tasks | 3 files |
 | Phase 13-wire-escalation-pause P01 | 12 | 2 tasks | 6 files |
+| Phase 14-fix-getting-started-env P01 | 1 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -168,6 +169,7 @@ Recent decisions affecting current work:
 - [Phase 13-wire-escalation-pause]: PermissionHandler timeout set to escalation_router._human_timeout + 30.0 (150s) to avoid cutting off human escalation window
 - [Phase 13-wire-escalation-pause]: Dashboard pause branch reads orchestrator._human_out/_human_in directly — avoids new parameters to handle_intervention
 - [Phase 13-wire-escalation-pause]: CLI pause requires both queues non-None — fails fast with clear error in auto/non-interactive modes
+- [Phase 14-fix-getting-started-env]: Chose documentation fix (Option A) over .env auto-loading (Option B) — phase goal is accuracy, not new features
 
 ### Pending Todos
 
@@ -180,6 +182,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T02:12:43.087Z
-Stopped at: Completed 13-01-PLAN.md (wire EscalationRouter as PermissionHandler, add pause command)
+Last session: 2026-03-11T02:24:41.389Z
+Stopped at: Completed 14-01-PLAN.md (remove false .env claims from getting-started guide)
 Resume file: None
