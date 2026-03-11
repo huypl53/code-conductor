@@ -26,6 +26,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 12: Fix CLI Cancel/Redirect Signatures** - Fix cancel_agent() signature mismatch and redirect command parameter errors (gap closure) (completed 2026-03-11)
 - [x] **Phase 13: Wire Escalation Router + Pause Surface** - Connect EscalationRouter to ACPClient and add pause command to CLI/dashboard (gap closure) (completed 2026-03-11)
 - [x] **Phase 14: Fix Getting-Started Guide .env Claim** - Remove or implement .env auto-loading claim in getting-started guide (gap closure) (completed 2026-03-11)
+- [ ] **Phase 15: Fix Dashboard Server Cancel Type Mismatch** - Fix server.py passing TaskSpec instead of str|None to cancel_agent (gap closure)
+- [ ] **Phase 16: Fix Agent Status Lifecycle** - Add DONE and WAITING status mutations to orchestrator (gap closure)
+- [ ] **Phase 17: Fix Production WebSocket URL** - Add runtime backend URL configuration for production deployment (gap closure)
 
 ## Phase Details
 
@@ -231,10 +234,40 @@ Plans:
 Plans:
 - [ ] 14-01-PLAN.md — Remove false .env claims, add shell profile persistence guidance
 
+### Phase 15: Fix Dashboard Server Cancel Type Mismatch
+**Goal:** Dashboard cancel and redirect commands execute correctly — server.py passes the right argument types to cancel_agent() and redirect
+**Depends on**: Phase 10, Phase 12
+**Requirements:** COMM-05, DASH-06
+**Gap Closure:** Closes dashboard cancel/redirect type mismatch from audit
+**Success Criteria** (what must be TRUE):
+  1. Dashboard cancel action calls `cancel_agent()` with `str|None` (not TaskSpec)
+  2. Dashboard redirect action constructs valid parameters for redirect
+  3. Test suite validates correct argument types (no longer masks wrong contract)
+
+### Phase 16: Fix Agent Status Lifecycle
+**Goal:** AgentRecord.status accurately reflects agent lifecycle — transitions to DONE on completion and WAITING on pause, enabling dashboard status display and intervention_needed notifications
+**Depends on**: Phase 5, Phase 6
+**Requirements:** DASH-01, DASH-04
+**Gap Closure:** Closes agent status stuck at WORKING and missing WAITING state
+**Success Criteria** (what must be TRUE):
+  1. AgentRecord.status transitions to DONE when task completes
+  2. AgentRecord.status transitions to WAITING when pause_for_human_decision is called
+  3. Dashboard intervention_needed notification fires when agent enters WAITING state
+
+### Phase 17: Fix Production WebSocket URL
+**Goal:** npm dashboard package connects to the correct FastAPI backend in production — not the sirv static file server port
+**Depends on**: Phase 11
+**Requirements:** PKG-02
+**Gap Closure:** Closes production WebSocket URL mismatch
+**Success Criteria** (what must be TRUE):
+  1. Dashboard supports runtime backend URL configuration (environment variable or config)
+  2. Production deployment connects WebSocket to FastAPI port, not sirv port
+  3. npm package documentation reflects production deployment configuration
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -252,3 +285,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 12. Fix CLI Cancel/Redirect Signatures | 1/1 | Complete    | 2026-03-11 |
 | 13. Wire Escalation Router + Pause Surface | 2/2 | Complete    | 2026-03-11 |
 | 14. Fix Getting-Started Guide .env Claim | 1/1 | Complete    | 2026-03-11 |
+| 15. Fix Dashboard Server Cancel Type Mismatch | 0/0 | Not Started |  |
+| 16. Fix Agent Status Lifecycle | 0/0 | Not Started |  |
+| 17. Fix Production WebSocket URL | 0/0 | Not Started |  |

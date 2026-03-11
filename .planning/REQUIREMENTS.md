@@ -31,7 +31,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **COMM-02**: Orchestrator answers sub-agent questions using project context and shared state knowledge
 - [x] **COMM-03**: In `--auto` mode, orchestrator uses best judgment to answer questions and logs decisions
 - [x] **COMM-04**: In interactive mode, orchestrator escalates questions it can't confidently answer to the human
-- [x] **COMM-05**: Orchestrator can cancel a sub-agent's work and reassign with corrected instructions
+- [ ] **COMM-05**: Orchestrator can cancel a sub-agent's work and reassign with corrected instructions
 - [x] **COMM-06**: Orchestrator can inject guidance to a sub-agent mid-stream without stopping their work
 - [x] **COMM-07**: Orchestrator can pause a sub-agent and escalate to human for a decision
 
@@ -52,17 +52,17 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### User Interface — Web Dashboard
 
-- [x] **DASH-01**: Web dashboard shows agent status summary (name, role, current task, progress)
+- [ ] **DASH-01**: Web dashboard shows agent status summary (name, role, current task, progress)
 - [x] **DASH-02**: Dashboard supports expandable detail view per agent (recent actions, files modified, current activity)
 - [x] **DASH-03**: Dashboard supports live stream view per agent (real-time tool calls, streaming output)
-- [x] **DASH-04**: Dashboard sends smart notifications for key events (errors, completions, intervention needed)
+- [ ] **DASH-04**: Dashboard sends smart notifications for key events (errors, completions, intervention needed)
 - [x] **DASH-05**: Dashboard handles conversation verbosity with layered visibility — collapsed by default, expand on demand
-- [x] **DASH-06**: User can intervene from dashboard (cancel, redirect, provide feedback to agents)
+- [ ] **DASH-06**: User can intervene from dashboard (cancel, redirect, provide feedback to agents)
 
 ### Packaging
 
 - [x] **PKG-01**: Python core distributed as pip package (orchestration, ACP communication, state management)
-- [x] **PKG-02**: Node.js dashboard distributed as npm package (web UI)
+- [ ] **PKG-02**: Node.js dashboard distributed as npm package (web UI)
 - [x] **PKG-03**: Monorepo structure with Python core + Node.js dashboard
 - [x] **PKG-04**: Installation instructions and getting-started guide
 
@@ -152,11 +152,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COMM-04 | Phase 13: Wire Escalation Router + Pause Surface | Complete |
 | COMM-07 | Phase 13: Wire Escalation Router + Pause Surface | Complete |
 | PKG-04 | Phase 14: Fix Getting-Started Guide .env Claim | Complete |
+| COMM-05 | Phase 15: Fix Dashboard Server Cancel Type Mismatch | Pending |
+| DASH-06 | Phase 15: Fix Dashboard Server Cancel Type Mismatch | Pending |
+| DASH-01 | Phase 16: Fix Agent Status Lifecycle | Pending |
+| DASH-04 | Phase 16: Fix Agent Status Lifecycle | Pending |
+| PKG-02 | Phase 17: Fix Production WebSocket URL | Pending |
 
 **Coverage:**
 - v1 requirements: 30 total (note: DASH-04 split from other DASH requirements — backend vs. frontend boundary)
-- Mapped to phases: 38 rows (30 unique requirements, all mapped)
+- Mapped to phases: 43 rows (30 unique requirements, all mapped)
 - Unmapped: 0
+- Pending (gap closure): 5 requirements across Phases 15-17
 
 ---
 *Requirements defined: 2026-03-10*
