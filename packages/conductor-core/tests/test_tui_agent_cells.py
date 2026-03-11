@@ -36,7 +36,7 @@ async def test_agent_cell_header_content():
 
         from textual.widgets import Static
         label = cell.query_one(".cell-label", Static)
-        label_text = str(label.renderable)
+        label_text = str(label.content)
         assert "Alice" in label_text
         assert "coder" in label_text
         assert "Add auth module" in label_text
@@ -64,12 +64,12 @@ async def test_agent_cell_update_status():
         # Transition to waiting
         cell.update_status("waiting")
         status_line = cell.query_one(".cell-status", Static)
-        assert str(status_line.renderable) == "waiting"
+        assert str(status_line.content) == "waiting"
 
         # Transition to done
         cell.update_status("done")
         status_line = cell.query_one(".cell-status", Static)
-        assert str(status_line.renderable) == "done"
+        assert str(status_line.content) == "done"
 
 
 async def test_agent_cell_finalize_defensive():
@@ -134,21 +134,21 @@ async def test_orchestrator_status_cell_lifecycle():
         label_widget = cell.query_one("#orch-label", Static)
         body_widget = cell.query_one("#orch-body", Static)
 
-        assert "Orchestrator" in str(label_widget.renderable)
-        assert "Planning tasks" in str(body_widget.renderable)
+        assert "Orchestrator" in str(label_widget.content)
+        assert "Planning tasks" in str(body_widget.content)
 
         # Update description
         cell.update(description="Spawning 3 agents...")
         body_widget = cell.query_one("#orch-body", Static)
-        assert "Spawning 3 agents" in str(body_widget.renderable)
+        assert "Spawning 3 agents" in str(body_widget.content)
 
         # Finalize and confirm update is locked out
         cell.finalize()
         cell.update(description="ignored")
         body_widget = cell.query_one("#orch-body", Static)
         # Body should still show the pre-finalize text
-        assert "Spawning 3 agents" in str(body_widget.renderable)
-        assert "ignored" not in str(body_widget.renderable)
+        assert "Spawning 3 agents" in str(body_widget.content)
+        assert "ignored" not in str(body_widget.content)
 
 
 async def test_multiple_agent_cells_no_id_collision():
