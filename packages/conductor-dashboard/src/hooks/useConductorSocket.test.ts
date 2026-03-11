@@ -200,7 +200,7 @@ describe("useConductorSocket", () => {
       MockWebSocket.lastInstance?.triggerMessage(delta);
     });
 
-    expect(result.current.conductorState?.agents[0].status).toBe("idle");
+    expect(result.current.conductorState!.agents[0]!.status).toBe("idle");
   });
 
   it("applies task_status_changed delta to conductorState", () => {
@@ -219,7 +219,7 @@ describe("useConductorSocket", () => {
       MockWebSocket.lastInstance?.triggerMessage(delta);
     });
 
-    expect(result.current.conductorState?.tasks[0].status).toBe("completed");
+    expect(result.current.conductorState!.tasks[0]!.status).toBe("completed");
   });
 
   it("applies agent_registered delta — adds new agent", () => {
@@ -249,14 +249,14 @@ describe("useConductorSocket", () => {
       MockWebSocket.lastInstance?.triggerMessage(delta);
     });
 
-    expect(result.current.conductorState?.agents).toHaveLength(2);
-    expect(result.current.conductorState?.agents[1].id).toBe("agent-2");
+    expect(result.current.conductorState!.agents).toHaveLength(2);
+    expect(result.current.conductorState!.agents[1]!.id).toBe("agent-2");
   });
 
   it("applies task_assigned delta — updates assigned_agent", () => {
     const stateWithUnassigned: ConductorState = {
       ...mockState,
-      tasks: [{ ...mockState.tasks[0], assigned_agent: null }],
+      tasks: [{ ...mockState.tasks[0]!, assigned_agent: null }],
     };
     const { result } = renderHook(() =>
       useConductorSocket("ws://localhost/ws"),
@@ -273,7 +273,7 @@ describe("useConductorSocket", () => {
       MockWebSocket.lastInstance?.triggerMessage(delta);
     });
 
-    expect(result.current.conductorState?.tasks[0].assigned_agent).toBe("agent-1");
+    expect(result.current.conductorState!.tasks[0]!.assigned_agent).toBe("agent-1");
   });
 
   it("caps events array at 500 entries (oldest evicted)", () => {
@@ -294,7 +294,8 @@ describe("useConductorSocket", () => {
 
     expect(result.current.events).toHaveLength(500);
     // The first event should be index 10 (oldest 10 evicted)
-    expect((result.current.events[0].payload as { index: number }).index).toBe(10);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    expect((result.current.events[0]!.payload as { index: number }).index).toBe(10);
   });
 
   it("sets connected=false on WebSocket close", () => {
@@ -332,7 +333,7 @@ describe("useConductorSocket", () => {
     });
 
     expect(MockWebSocket.lastInstance?.sentMessages).toHaveLength(1);
-    expect(JSON.parse(MockWebSocket.lastInstance!.sentMessages[0])).toEqual({
+    expect(JSON.parse(MockWebSocket.lastInstance!.sentMessages[0]!)).toEqual({
       action: "cancel",
       agent_id: "agent-1",
       message: "Stop",
