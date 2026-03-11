@@ -201,6 +201,9 @@ Plans:
   1. `cancel agent-1` from CLI executes without TypeError
   2. `redirect agent-1 "new instructions"` from CLI executes without TypeError
   3. Integration test confirms cancel/redirect round-trip through orchestrator
+**Plans:** 1 plan
+Plans:
+- [ ] 12-01-PLAN.md — Fix cancel_agent signature + integration tests for cancel/redirect
 
 ### Phase 13: Wire Escalation Router + Pause Surface
 **Goal:** EscalationRouter is connected to ACPClient so AskUserQuestion routing works, and pause_for_human_decision is reachable from CLI and dashboard
@@ -239,6 +242,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 9. Dashboard Backend | 1/2 | In Progress|  |
 | 10. Dashboard Frontend | 3/3 | Complete    | 2026-03-10 |
 | 11. Packaging and Distribution | 2/2 | Complete    | 2026-03-10 |
-| 12. Fix CLI Cancel/Redirect Signatures | 0/0 | Pending | |
+| 12. Fix CLI Cancel/Redirect Signatures | 0/1 | Pending | |
 | 13. Wire Escalation Router + Pause Surface | 0/0 | Pending | |
 | 14. Fix Getting-Started Guide .env Claim | 0/0 | Pending | |
