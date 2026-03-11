@@ -42,6 +42,28 @@ Requirements for the Textual TUI Redesign milestone. Each maps to roadmap phases
 - [x] **STAT-02**: In-progress cells show a shimmer/spinner animation
 - [x] **STAT-03**: Resumed sessions replay previous conversation history in the transcript before the input activates
 
+## v2.1 Requirements
+
+Requirements for the UX Polish milestone. Each maps to roadmap phases.
+
+### Focus & Input
+
+- [ ] **FOCUS-01**: Input widget is auto-focused when TUI starts
+- [ ] **FOCUS-02**: User can press Ctrl-G to open current input in external editor (vim/$EDITOR)
+- [ ] **FOCUS-03**: After editor closes, edited content replaces input widget text
+
+### Terminal Integration
+
+- [ ] **TERM-01**: TUI uses full alt-screen mode with clean entry/exit
+- [ ] **TERM-02**: SIGINT (Ctrl-C) routes through clean shutdown, restoring terminal state
+
+### Visual Design
+
+- [ ] **VIS-01**: Layout uses borderless/minimal chrome — no visible box borders on containers
+- [ ] **VIS-02**: Cell widgets use subtle accent lines instead of thick borders
+- [ ] **VIS-03**: New cells fade in with smooth opacity animation on mount
+- [ ] **VIS-04**: Animations can be disabled via `CONDUCTOR_NO_ANIMATIONS` env var
+
 ## Previous Milestone Requirements
 
 ### v1.3 Orchestrator Intelligence
