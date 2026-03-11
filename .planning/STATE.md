@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: UX Polish
 status: executing
-stopped_at: Completed 40-01-PLAN.md
-last_updated: "2026-03-11T16:38:16Z"
-last_activity: 2026-03-11 — Phase 40 Plan 01 borderless design complete
+stopped_at: Completed 41-01-PLAN.md
+last_updated: "2026-03-11T16:55:00Z"
+last_activity: 2026-03-11 — Phase 41 Plan 01 smooth cell animations complete
 progress:
   total_phases: 17
   completed_phases: 12
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** A product owner describes a feature, and a self-organizing team of AI coding agents delivers quality, reviewed, tested code — with the human staying in control when they want to be.
-**Current focus:** v2.1 UX Polish — Phase 40 (Borderless Design)
+**Current focus:** v2.1 UX Polish — Phase 41 (Smooth Cell Animations)
 
 ## Current Position
 
-Phase: 40 of 42 (Borderless Design)
+Phase: 41 of 42 (Smooth Cell Animations)
 Plan: 1 of 1 complete
-Status: Phase 40 complete
-Last activity: 2026-03-11 — Phase 40 Plan 01 borderless design complete
+Status: Phase 41 complete
+Last activity: 2026-03-11 — Phase 41 Plan 01 smooth cell animations complete
 
 Progress: [==........] 25%
 
@@ -45,6 +45,7 @@ Progress: [==........] 25%
 |-------|-------|-------|----------|
 | Phase 39 P01 | 2min | 2 tasks | 3 files |
 | Phase 40 P01 | 1min | 2 tasks | 3 files |
+| Phase 41 P01 | 8min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -57,6 +58,7 @@ Progress: [==........] 25%
 - [v2.0 Architecture]: Textual owns the event loop — ConductorApp.run() is sole entry point
 - [Phase 39]: AUTO_FOCUS = 'CommandInput Input' for immediate input focus on app launch
 - [Phase 40]: solid border-left at 40% opacity replaces thick for subtle accent lines; border-top removed entirely for cleanest approach
+- [Phase 41]: styles.animate("opacity", ...) instead of Widget.animate("opacity", ...) -- Widget.animate raises property-has-no-setter for CSS properties
 
 ### Pending Todos
 
@@ -70,6 +72,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T16:38:16Z
-Stopped at: Completed 40-01-PLAN.md
+Last session: 2026-03-11T16:55:00Z
+Stopped at: Completed 41-01-PLAN.md
 Resume file: None

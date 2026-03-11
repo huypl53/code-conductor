@@ -61,8 +61,8 @@ Requirements for the UX Polish milestone. Each maps to roadmap phases.
 
 - [x] **VIS-01**: Layout uses borderless/minimal chrome — no visible box borders on containers
 - [x] **VIS-02**: Cell widgets use subtle accent lines instead of thick borders
-- [ ] **VIS-03**: New cells fade in with smooth opacity animation on mount
-- [ ] **VIS-04**: Animations can be disabled via `CONDUCTOR_NO_ANIMATIONS` env var
+- [x] **VIS-03**: New cells fade in with smooth opacity animation on mount
+- [x] **VIS-04**: Animations can be disabled via `CONDUCTOR_NO_ANIMATIONS` env var
 
 ## Previous Milestone Requirements
 
@@ -159,8 +159,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TERM-02 | Phase 39 | Complete |
 | VIS-01 | Phase 40 | Complete |
 | VIS-02 | Phase 40 | Complete |
-| VIS-03 | Phase 41 | Pending |
-| VIS-04 | Phase 41 | Pending |
+| VIS-03 | Phase 41 | Complete |
+| VIS-04 | Phase 41 | Complete |
 | FOCUS-02 | Phase 42 | Pending |
 | FOCUS-03 | Phase 42 | Pending |
 
