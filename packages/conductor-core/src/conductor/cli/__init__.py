@@ -17,15 +17,27 @@ app = typer.Typer(
 @app.callback(invoke_without_command=True)
 def _default_callback(
     ctx: typer.Context,
-    resume: str = typer.Option(None, "--resume", help="Resume a previous chat session by session ID"),
+    resume: str = typer.Option(
+        None,
+        "--resume",
+        help="Resume a previous chat session by ID, or pass 'pick' to choose from recent sessions.",
+    ),
 ) -> None:
     """Launch interactive chat when no subcommand is given."""
     if ctx.invoked_subcommand is not None:
         return
 
-    from conductor.cli.chat import ChatSession
+    from conductor.cli.chat import ChatSession, pick_session
 
-    session = ChatSession(resume_session_id=resume)
+    resume_id = resume
+
+    # --resume pick  OR  --resume without a valid session ID triggers picker
+    if resume is not None and (resume == "pick" or resume == ""):
+        resume_id = pick_session()
+        if resume_id is None:
+            return
+
+    session = ChatSession(resume_session_id=resume_id)
     asyncio.run(session.run())
 
 

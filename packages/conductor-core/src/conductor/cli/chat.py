@@ -9,6 +9,13 @@ Phase 19 adds:
 - CHAT-07: Working indicator (spinner) before first token
 - CHAT-08: Context utilization warning with /summarize option
 - SESS-05: Crash-safe chat history persistence
+
+Phase 20 adds:
+- SESS-04: Session resumption with interactive session picker
+
+Phase 21 adds:
+- DELG-01..04: Smart delegation via Delegate MCP tool
+- SESS-03: /status shows active sub-agents
 """
 
 from __future__ import annotations
@@ -37,7 +44,7 @@ from conductor.cli.stream_display import (
 SLASH_COMMANDS: dict[str, str] = {
     "/help": "Show all available slash commands",
     "/exit": "Exit the chat session and restore terminal",
-    "/status": "Show current orchestrator status (placeholder)",
+    "/status": "Show active sub-agents (ID, task, elapsed time)",
     "/summarize": "Summarize conversation to free context space",
 }
 
@@ -52,6 +59,70 @@ class _CtrlCState(enum.Enum):
 
     IDLE = "idle"
     RUNNING = "running"
+
+
+# ---------------------------------------------------------------------------
+# Session picker (SESS-04)
+# ---------------------------------------------------------------------------
+
+
+def pick_session(cwd: str | None = None, console: Console | None = None) -> str | None:
+    """Show a numbered list of recent sessions and let the user pick one.
+
+    Returns the selected session_id, or None if no sessions or cancelled.
+    """
+    _console = console or Console()
+    working_dir = cwd or os.getcwd()
+    conductor_dir = Path(working_dir) / ".conductor"
+
+    sessions = ChatHistoryStore.load_sessions(conductor_dir)
+    if not sessions:
+        _console.print("[yellow]No previous sessions found.[/yellow]")
+        return None
+
+    # Show last 10 sessions
+    recent = sessions[:10]
+
+    _console.print("[bold]Recent sessions:[/bold]")
+    _console.print()
+
+    for i, s in enumerate(recent, 1):
+        ts = s["created_at"]
+        # Truncate ISO timestamp to readable form
+        if "T" in ts:
+            ts = ts.replace("T", " ")[:19]
+        first_prompt = s.get("first_prompt", "")
+        if len(first_prompt) > 60:
+            first_prompt = first_prompt[:57] + "..."
+        if not first_prompt:
+            first_prompt = "(empty session)"
+        turn_count = s.get("turn_count", 0)
+        _console.print(
+            f"  [cyan]{i:>2}.[/cyan] {ts}  "
+            f"[dim]({turn_count} turn{'s' if turn_count != 1 else ''})[/dim]  "
+            f"{first_prompt}"
+        )
+
+    _console.print()
+
+    try:
+        choice = input("Select session number (or Enter to cancel): ").strip()
+    except (KeyboardInterrupt, EOFError):
+        _console.print()
+        return None
+
+    if not choice:
+        return None
+
+    try:
+        idx = int(choice) - 1
+        if 0 <= idx < len(recent):
+            return recent[idx]["session_id"]
+        _console.print("[red]Invalid selection.[/red]")
+        return None
+    except ValueError:
+        _console.print("[red]Invalid selection.[/red]")
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -93,10 +164,21 @@ class ChatSession:
         # Context tracking (CHAT-08)
         self._context_tracker = ContextTracker()
 
-        # Chat history persistence (SESS-05)
-        conductor_dir = Path(self._cwd) / ".conductor"
-        conductor_dir.mkdir(parents=True, exist_ok=True)
-        self._history_store = ChatHistoryStore(conductor_dir)
+        # Delegation manager (Phase 21: DELG-01..04, SESS-03)
+        from conductor.cli.delegation import DelegationManager
+
+        self._delegation_manager = DelegationManager(
+            console=self._console,
+            repo_path=self._cwd,
+        )
+
+        # Chat history persistence (SESS-05 / SESS-04)
+        self._conductor_dir = Path(self._cwd) / ".conductor"
+        self._conductor_dir.mkdir(parents=True, exist_ok=True)
+        self._history_store = ChatHistoryStore(
+            self._conductor_dir,
+            resume_id=resume_session_id,
+        )
 
     # -- public API ---------------------------------------------------------
 
@@ -106,6 +188,10 @@ class ChatSession:
             "[bold cyan]Conductor[/bold cyan] interactive session. "
             "Type [bold]/help[/bold] for commands, [bold]/exit[/bold] to quit."
         )
+
+        # SESS-04: Replay prior conversation history when resuming
+        if self._resume_session_id is not None:
+            self._replay_history()
 
         try:
             with patch_stdout():
@@ -157,9 +243,7 @@ class ChatSession:
             return True
 
         if cmd == "/status":
-            self._console.print(
-                "[dim]Status: no agents running (placeholder)[/dim]"
-            )
+            self._delegation_manager.print_status()
             return False
 
         if cmd == "/summarize":
@@ -185,12 +269,29 @@ class ChatSession:
 
         from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 
+        from conductor.cli.delegation import (
+            DELEGATION_SYSTEM_PROMPT_ADDENDUM,
+            create_delegation_mcp_server,
+        )
+
+        # Phase 21: Create delegation MCP server with the Delegate tool
+        delegation_server = create_delegation_mcp_server(
+            self._delegation_manager
+        )
+
         options = ClaudeAgentOptions(
             cwd=self._cwd,
             permission_mode="bypassPermissions",
             include_partial_messages=True,
             resume=self._resume_session_id,
             setting_sources=["project"],
+            system_prompt={
+                "type": "preset",
+                "preset": "claude_code",
+                "append": DELEGATION_SYSTEM_PROMPT_ADDENDUM,
+            },
+            mcp_servers={"conductor-delegation": delegation_server},
+            allowed_tools=["conductor_delegate"],
         )
 
         self._sdk_client = ClaudeSDKClient(options=options)
@@ -413,6 +514,44 @@ class ChatSession:
 
         except Exception as exc:  # noqa: BLE001
             self._console.print(f"[red]Summarization failed: {exc}[/red]")
+
+    # -- session resumption (SESS-04) --------------------------------------
+
+    def _replay_history(self) -> None:
+        """Display all prior turns from a resumed session."""
+        session_data = ChatHistoryStore.load_session(
+            self._conductor_dir, self._resume_session_id
+        )
+        if session_data is None:
+            self._console.print(
+                f"[yellow]Session '{self._resume_session_id}' not found.[/yellow]"
+            )
+            return
+
+        turns = session_data.get("turns", [])
+        if not turns:
+            self._console.print("[dim]No conversation history to restore.[/dim]")
+            return
+
+        self._console.print(
+            f"[dim]Resuming session {self._resume_session_id} "
+            f"({len(turns)} turn{'s' if len(turns) != 1 else ''})...[/dim]"
+        )
+        self._console.print()
+
+        for turn in turns:
+            role = turn.get("role", "unknown")
+            content = turn.get("content", "")
+            if role == "user":
+                self._console.print(f"[bold green]You:[/bold green] {content}")
+            elif role == "assistant":
+                self._console.print(f"[bold cyan]Assistant:[/bold cyan] {content}")
+            else:
+                self._console.print(f"[dim]{role}: {content}[/dim]")
+
+        self._console.print()
+        self._console.print("[dim]--- End of history ---[/dim]")
+        self._console.print()
 
     # -- helpers ------------------------------------------------------------
 

@@ -35,9 +35,20 @@ class ChatHistoryStore:
         }
     """
 
-    def __init__(self, base_dir: Path | str) -> None:
+    def __init__(self, base_dir: Path | str, *, resume_id: str | None = None) -> None:
         self._base_dir = Path(base_dir) / "chat_sessions"
         self._base_dir.mkdir(parents=True, exist_ok=True)
+
+        if resume_id is not None:
+            # Attempt to load an existing session for resumption
+            path = self._base_dir / f"{resume_id}.json"
+            if path.exists():
+                data = json.loads(path.read_text(encoding="utf-8"))
+                self._session_id = data["session_id"]
+                self._created_at = data["created_at"]
+                self._turns = data.get("turns", [])
+                self._path = path
+                return
 
         self._session_id = uuid.uuid4().hex[:12]
         self._created_at = datetime.now(UTC).isoformat()
@@ -86,10 +97,17 @@ class ChatHistoryStore:
         for p in sessions_dir.glob("*.json"):
             try:
                 data = json.loads(p.read_text(encoding="utf-8"))
+                turns = data.get("turns", [])
+                first_prompt = ""
+                for t in turns:
+                    if t.get("role") == "user":
+                        first_prompt = t.get("content", "")
+                        break
                 sessions.append({
                     "session_id": data["session_id"],
                     "created_at": data["created_at"],
-                    "turn_count": len(data.get("turns", [])),
+                    "turn_count": len(turns),
+                    "first_prompt": first_prompt,
                 })
             except (json.JSONDecodeError, KeyError):
                 continue
