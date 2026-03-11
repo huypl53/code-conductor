@@ -8,7 +8,24 @@ import { useConductorSocket } from "./hooks/useConductorSocket";
 import { AgentGrid } from "./components/AgentGrid";
 import { NotificationProvider, useSmartNotifications } from "./components/NotificationProvider";
 
-const WS_URL = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
+/**
+ * Derive the WebSocket URL for the backend.
+ *
+ * Priority:
+ * 1. `window.__CONDUCTOR_BACKEND_URL__` — injected by the bin script when running in
+ *    production with a separate FastAPI backend (e.g. "http://127.0.0.1:8000").
+ *    The http/https scheme is replaced with ws/wss and "/ws" is appended.
+ * 2. Same-origin fallback — used in dev mode where Vite's proxy forwards /ws to FastAPI.
+ */
+function getWsUrl(): string {
+  const backendUrl = window.__CONDUCTOR_BACKEND_URL__;
+  if (backendUrl) {
+    const wsUrl = backendUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
+    return `${wsUrl}/ws`;
+  }
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}/ws`;
+}
 
 function ConnectionIndicator({ connected }: { connected: boolean }) {
   return (
@@ -24,7 +41,7 @@ function ConnectionIndicator({ connected }: { connected: boolean }) {
 
 function App() {
   const { conductorState, events, connected, sendIntervention } =
-    useConductorSocket(WS_URL);
+    useConductorSocket(getWsUrl());
 
   useSmartNotifications(events);
 
