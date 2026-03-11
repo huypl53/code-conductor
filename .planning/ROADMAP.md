@@ -279,7 +279,7 @@ Plans:
   2. The terminal switches to alt-screen on launch and restores the prior scrollback buffer completely on exit — no escape code artifacts remain in the scrollback
   3. Pressing Ctrl-C triggers a clean shutdown: the TUI exits, the terminal is restored, and the shell prompt appears normally
   4. Focus returns to the input widget automatically after a modal is dismissed — no manual re-focus step needed
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
 - [ ] 39-01-PLAN.md — AUTO_FOCUS class variable, SIGINT handler, terminal cleanup at CLI entry point
