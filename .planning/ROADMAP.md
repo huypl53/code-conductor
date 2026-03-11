@@ -161,7 +161,9 @@ Plans:
   2. No `prompt_toolkit` import appears in any code path executed during TUI lifetime — verified by grep and runtime audit
   3. All async subsystems (SDK client, uvicorn dashboard server, orchestrator delegation) launch as Textual workers or asyncio tasks inside `ConductorApp.on_mount` — no competing `asyncio.run()` calls exist in the TUI entry path
   4. A `pytest` test using Textual's `run_test()` pilot can launch `ConductorApp` in headless mode and assert the app starts without error
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 31-01-PLAN.md — ConductorApp entry point, delegation.py cleanup, headless test infrastructure
 
 ### Phase 32: Static TUI Shell
 **Goal**: The two-column TUI layout is verified with hard-coded content — TranscriptPane displays user message cells, CommandInput submits text, StatusFooter renders structural info, and AgentMonitorPane placeholder renders — before any live data is connected
