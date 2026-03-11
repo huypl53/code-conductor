@@ -208,10 +208,14 @@ class TestDelegateHandler:
         assert "required" in result["content"][0]["text"].lower()
 
     @pytest.mark.asyncio
-    async def test_delegation_announcement_printed(
-        self, tmp_path: Path
+    async def test_delegation_announcement_logged(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """DELG-02, DELG-04: Delegation announcement with dashboard URL."""
+        """DELG-02, DELG-04: Delegation announcement logged (Phase 31: console.print
+        removed from delegation lifecycle to prevent ANSI corruption in Textual TUI).
+        Delegation and completion are now logged via logger.info."""
+        import logging
+
         console = MagicMock()
         mgr = DelegationManager(
             console=console, repo_path=str(tmp_path)
@@ -225,22 +229,18 @@ class TestDelegateHandler:
             mock_orch_instance.run = AsyncMock()
             MockOrch.return_value = mock_orch_instance
 
-            result = await mgr.handle_delegate(
-                {"task": "Add OAuth login"}
-            )
+            with caplog.at_level(logging.INFO, logger="conductor.delegation"):
+                result = await mgr.handle_delegate(
+                    {"task": "Add OAuth login"}
+                )
 
-        calls = [str(c) for c in console.print.call_args_list]
-        # DELG-02: "Delegating to team..." announcement
-        assert any("Delegating to team" in p for p in calls), (
-            f"Expected 'Delegating to team' in output, got: {calls}"
+        # DELG-02: "Delegating task" logged
+        assert any("Delegating task" in msg for msg in caplog.messages), (
+            f"Expected 'Delegating task' in log output, got: {caplog.messages}"
         )
-        # DELG-04: Dashboard URL in announcement
-        assert any(DEFAULT_DASHBOARD_URL in p for p in calls), (
-            f"Expected dashboard URL in output, got: {calls}"
-        )
-        # Completion announcement
-        assert any("Delegation complete" in p for p in calls), (
-            f"Expected completion message, got: {calls}"
+        # Completion logged
+        assert any("Delegation complete" in msg for msg in caplog.messages), (
+            f"Expected 'Delegation complete' in log output, got: {caplog.messages}"
         )
         # Tool result is success
         assert "is_error" not in result or not result.get("is_error")

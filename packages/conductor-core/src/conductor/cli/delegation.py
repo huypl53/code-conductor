@@ -2,13 +2,15 @@
 
 Phase 21: DELG-01..04, SESS-03
 Phase 22: VISB-01 (live status display), VISB-02 (escalation bridge)
+Phase 31: Remove ANSI/Console pollution from delegation lifecycle —
+          _status_updater, _clear_status_lines, _print_live_status deleted.
+          DelegationManager.console is now optional (console=None default).
 
 Provides:
 - A ``Delegate`` MCP tool that tells Claude to hand off complex tasks
   to a fresh Orchestrator sub-agent team.
 - Delegation announcement formatting (dashboard URL, summary).
 - Active-orchestrator tracking for ``/status`` queries.
-- Live per-agent status lines during delegation (VISB-01).
 - Escalation bridge: sub-agent questions displayed in chat with agent ID
   prefix, user input collected and relayed back (VISB-02).
 """
@@ -37,7 +39,7 @@ logger = logging.getLogger("conductor.delegation")
 
 DEFAULT_DASHBOARD_URL = "http://localhost:4173"
 
-STATUS_UPDATE_INTERVAL = 2.0  # seconds between live status refreshes
+STATUS_UPDATE_INTERVAL = 2.0  # seconds between live status refreshes (kept for backward compat)
 
 DELEGATION_SYSTEM_PROMPT_ADDENDUM = """\
 
@@ -84,14 +86,17 @@ class DelegationManager:
     for ``/status``, and formats delegation announcements.
 
     Phase 22 adds:
-    - Live per-agent status display during delegation (VISB-01)
     - Escalation bridge for sub-agent questions (VISB-02)
+
+    Phase 31: console parameter is now optional (console=None). Console.print()
+    calls in delegation lifecycle are replaced by logger calls so the TUI
+    renderer is not corrupted by ANSI/Rich output.
     """
 
     def __init__(
         self,
-        console: Console,
-        repo_path: str,
+        console: Console | None = None,
+        repo_path: str = "",
         dashboard_url: str = DEFAULT_DASHBOARD_URL,
         input_fn: Callable[..., Any] | None = None,
         build_command: str | None = None,
@@ -107,7 +112,6 @@ class DelegationManager:
         self._human_in: asyncio.Queue | None = None
         self._status_task: asyncio.Task | None = None
         self._escalation_task: asyncio.Task | None = None
-        self._last_status_line_count = 0
         # Callable to collect user input for escalations (injected by ChatSession)
         self._input_fn = input_fn
 
@@ -116,7 +120,7 @@ class DelegationManager:
     async def handle_delegate(self, args: dict[str, Any]) -> dict[str, Any]:
         """Handle a ``conductor_delegate`` tool call from the SDK.
 
-        Creates a fresh Orchestrator, prints the delegation announcement,
+        Creates a fresh Orchestrator, logs the delegation announcement,
         runs the orchestration loop, and returns a summary as tool output.
         """
         task = args.get("task", "")
@@ -129,10 +133,7 @@ class DelegationManager:
         self._delegation_count += 1
 
         # Delegation announcement (DELG-02, DELG-04)
-        self._console.print(
-            f"\n[bold magenta]Delegating to team...[/bold magenta]  "
-            f"Dashboard: [link={self._dashboard_url}]{self._dashboard_url}[/link]"
-        )
+        logger.info("Delegating task to team: %s", task)
 
         # Phase 22: Create escalation queues
         self._human_out = asyncio.Queue()
@@ -159,10 +160,8 @@ class DelegationManager:
         )
         self._active_run = run
 
-        # Phase 22: Start background tasks for status display and escalation
-        self._status_task = asyncio.create_task(
-            self._status_updater(run)
-        )
+        # Phase 22: Start background escalation task
+        # (status display moved to Textual StateWatchWorker in Phase 35)
         self._escalation_task = asyncio.create_task(
             self._escalation_listener()
         )
@@ -174,17 +173,12 @@ class DelegationManager:
                 f"Delegation complete. Task: {task!r}. "
                 f"Elapsed: {elapsed:.1f}s."
             )
-            # Clear any remaining status lines
-            self._clear_status_lines()
-            self._console.print(
-                f"\n[bold green]Delegation complete[/bold green] ({elapsed:.1f}s)"
-            )
+            logger.info("Delegation complete in %.1fs", elapsed)
             return {"content": [{"type": "text", "text": summary}]}
         except Exception as exc:  # noqa: BLE001
             logger.exception("Delegation failed for task: %s", task)
             error_msg = f"Delegation failed: {exc}"
-            self._clear_status_lines()
-            self._console.print(f"\n[bold red]{error_msg}[/bold red]")
+            logger.error("Delegation failed: %s", exc)
             return {
                 "content": [{"type": "text", "text": error_msg}],
                 "is_error": True,
@@ -204,7 +198,7 @@ class DelegationManager:
         state_path = conductor_dir / "state.json"
 
         if not state_path.exists():
-            self._console.print("[yellow]No state file found — nothing to resume.[/yellow]")
+            logger.info("No state file found — nothing to resume.")
             return
 
         state_manager = StateManager(state_path)
@@ -212,14 +206,16 @@ class DelegationManager:
 
         incomplete = [t for t in state.tasks if t.status != "completed"]
         if not incomplete:
-            self._console.print("[green]All tasks already completed — nothing to resume.[/green]")
+            logger.info("All tasks already completed — nothing to resume.")
             return
 
         total = len(state.tasks)
         done = total - len(incomplete)
-        self._console.print(
-            f"\n[bold cyan]Resuming delegation...[/bold cyan] "
-            f"{done}/{total} tasks completed, {len(incomplete)} remaining."
+        logger.info(
+            "Resuming delegation: %d/%d tasks completed, %d remaining.",
+            done,
+            total,
+            len(incomplete),
         )
 
         # Create escalation queues
@@ -242,8 +238,7 @@ class DelegationManager:
         )
         self._active_run = run
 
-        # Start background status + escalation tasks
-        self._status_task = asyncio.create_task(self._status_updater(run))
+        # Start escalation task
         if self._input_fn is not None:
             self._escalation_task = asyncio.create_task(self._escalation_listener())
 
@@ -252,87 +247,17 @@ class DelegationManager:
 
             state = state_manager.read_state()
             done = sum(1 for t in state.tasks if t.status == "completed")
-            self._console.print(
-                f"\n[bold green]Delegation complete.[/bold green] "
-                f"{done}/{len(state.tasks)} tasks finished."
+            logger.info(
+                "Delegation complete: %d/%d tasks finished.",
+                done,
+                len(state.tasks),
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Resume failed")
-            self._console.print(f"\n[red]Resume failed: {exc}[/red]")
+            logger.error("Resume failed: %s", exc)
         finally:
             self._cancel_background_tasks()
             self._active_run = None
-
-    # -- Phase 22: Live status display (VISB-01) ----------------------------
-
-    async def _status_updater(self, run: _DelegationRun) -> None:
-        """Background task that periodically prints per-agent status lines.
-
-        Runs every STATUS_UPDATE_INTERVAL seconds while delegation is active.
-        Uses ANSI escape codes to overwrite previous status lines so the
-        display stays compact.
-        """
-        try:
-            while True:
-                await asyncio.sleep(STATUS_UPDATE_INTERVAL)
-                self._print_live_status(run)
-        except asyncio.CancelledError:
-            # Clean up status lines on cancellation
-            self._clear_status_lines()
-
-    def _print_live_status(self, run: _DelegationRun) -> None:
-        """Print per-agent status lines, overwriting previous output."""
-        try:
-            state = run.state_manager.read_state()
-        except Exception:  # noqa: BLE001
-            return
-
-        active_agents = [
-            a for a in state.agents
-            if a.status in (AgentStatus.WORKING, AgentStatus.WAITING)
-        ]
-
-        # Clear previous status lines
-        self._clear_status_lines()
-
-        if not active_agents:
-            self._last_status_line_count = 0
-            return
-
-        now = time.monotonic()
-        lines: list[str] = []
-
-        for agent in active_agents:
-            # Find the task assigned to this agent
-            task_desc = ""
-            for task in state.tasks:
-                if task.assigned_agent == agent.id:
-                    task_desc = task.title or task.description[:60]
-                    break
-
-            elapsed = now - run.started_at
-            status_icon = "..." if agent.status == AgentStatus.WORKING else "?"
-            agent_short = agent.id
-            # Shorten agent ID for display if it's very long
-            if len(agent_short) > 30:
-                agent_short = agent_short[:27] + "..."
-
-            lines.append(
-                f"  [{status_icon}] {agent_short}: {task_desc} ({elapsed:.0f}s)"
-            )
-
-        for line in lines:
-            self._console.print(f"[dim]{line}[/dim]")
-
-        self._last_status_line_count = len(lines)
-
-    def _clear_status_lines(self) -> None:
-        """Clear previously printed status lines using ANSI escape codes."""
-        if self._last_status_line_count > 0:
-            # Move cursor up and clear each line
-            for _ in range(self._last_status_line_count):
-                self._console.print("\033[A\033[2K", end="")
-            self._last_status_line_count = 0
 
     # -- Phase 22: Escalation bridge (VISB-02) ------------------------------
 
@@ -352,11 +277,8 @@ class DelegationManager:
                 human_query = await self._human_out.get()
                 question = human_query.question
 
-                # Display the escalation question prefixed with agent context
-                self._clear_status_lines()
-                self._console.print(
-                    f"\n[bold yellow]Agent escalation:[/bold yellow] {question}"
-                )
+                # Log the escalation question
+                logger.info("Agent escalation: %s", question)
 
                 # Collect user input
                 answer = await self._collect_escalation_input()
@@ -386,7 +308,7 @@ class DelegationManager:
     # -- Background task management -----------------------------------------
 
     def _cancel_background_tasks(self) -> None:
-        """Cancel the status updater and escalation listener tasks."""
+        """Cancel the escalation listener task."""
         if self._status_task is not None and not self._status_task.done():
             self._status_task.cancel()
         if self._escalation_task is not None and not self._escalation_task.done():
@@ -398,6 +320,10 @@ class DelegationManager:
 
     def print_status(self) -> None:
         """Print the status of active sub-agents, or 'No active agents'."""
+        if self._console is None:
+            logger.info("print_status called but no console attached")
+            return
+
         if self._active_run is None:
             self._console.print("[dim]No active agents[/dim]")
             return
