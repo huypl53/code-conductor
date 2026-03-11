@@ -4,15 +4,15 @@
 
 Conductor is an open-source multi-agent coding orchestration framework. You describe what to build, and Conductor's orchestrator — itself a Claude Code agent with orchestration skills — breaks the work down, spins up a dynamic team of ACP-compatible coding agents, manages their work in real-time, reviews output, and delivers coherent code. It ships with both a CLI and a web dashboard for full visibility into agent activity.
 
-## Current Milestone: v1.1 Interactive Chat TUI
+## Current Milestone: v1.2 Task Verification & Build Safety
 
-**Goal:** Add an interactive conversational TUI so users can chat with the orchestrator like a coding agent CLI (similar to Claude Code / Codex CLI).
+**Goal:** Ensure Conductor validates task output before marking tasks complete, with structured review cycles and hardened resume support.
 
 **Target features:**
-- Interactive chat TUI via `conductor` command (no args)
-- Orchestrator as conversational brain with direct tool use (file read/edit, shell commands)
-- Smart delegation — handles simple tasks directly, spawns sub-agent teams for complex work
-- Existing `conductor run "..."` stays as non-interactive batch mode
+- Per-task file existence gate — verify target file exists on disk before marking COMPLETED
+- Post-run build command — optional build verification (e.g. `npx tsc --noEmit`) after all tasks finish
+- Quality review loops — structured revise → re-review → approve feedback cycles
+- Resume support hardening — fixes from real-world integration testing (calendar-app)
 
 ## Core Value
 
@@ -42,11 +42,11 @@ A product owner describes a feature, and a self-organizing team of AI coding age
 
 ### Active
 
-- [ ] Interactive chat TUI — conversational coding agent interface via `conductor` command
-- [ ] Direct tool use — orchestrator reads/edits files, runs shell commands in chat mode
-- [ ] Smart delegation — orchestrator decides when to handle directly vs. spawn sub-agents
-- [ ] Per-task GSD scope flexibility — orchestrator decides whether sub-agent runs full planning or just executes
+- [ ] Per-task file existence gate — verify target file on disk before marking task COMPLETED
+- [ ] Post-run build command — optional build verification after all tasks complete
 - [ ] Quality review loops with structured feedback cycles (revise → re-review → approve)
+- [ ] Resume support hardening — robust error handling and edge cases from real-world testing
+- [ ] Per-task GSD scope flexibility — orchestrator decides whether sub-agent runs full planning or just executes
 - [ ] Git worktree isolation per agent for large parallel workloads
 - [ ] CI integration — auto-fix failing builds by spawning agents
 
@@ -60,7 +60,7 @@ A product owner describes a feature, and a self-organizing team of AI coding age
 
 ## Context
 
-Shipped v1.0 with 10,946 LOC (8,604 Python + 2,342 TypeScript).
+Shipped v1.0 with 10,946 LOC (8,604 Python + 2,342 TypeScript). v1.1 delivered Interactive Chat TUI (19 requirements, 5 phases).
 Tech stack: Python core (uv, Pydantic v2, asyncio, filelock) + Node.js dashboard (React, Vite, Tailwind, Vitest).
 Distribution: `pip install conductor-ai` + `npm install -g conductor-dashboard`.
 17 phases completed across 32 plans in 2 days.
@@ -92,4 +92,4 @@ Known tech debt:
 | Watch parent directory for state changes | watchfiles misses atomic os.replace inode swaps on direct file watch | ✓ Good — solved production bug |
 
 ---
-*Last updated: 2026-03-11 after v1.1 milestone started*
+*Last updated: 2026-03-11 after v1.2 milestone started*
