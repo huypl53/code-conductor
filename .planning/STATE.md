@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Agent Visibility
 status: planning
-stopped_at: Completed 45-01-PLAN.md
-last_updated: "2026-03-11T19:39:54.164Z"
+stopped_at: Completed 46-01-PLAN.md
+last_updated: "2026-03-11T19:54:17.985Z"
 last_activity: 2026-03-12 — v2.2 roadmap created (phases 43-46)
 progress:
   total_phases: 4
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
+  completed_phases: 4
+  total_plans: 4
+  completed_plans: 4
   percent: 0
 ---
 
@@ -58,6 +58,8 @@ Prior milestones: 42 phases shipped across v1.0–v2.1 (6 milestones, 2 days)
 - [Phase 45]: input_json_delta accumulated per content_block_index using dict[int, list[str]] — prevents collisions when multiple tool uses appear in same stream
 - [Phase 45]: Label mutation happens on content_block_start (not content_block_stop) for immediate user feedback before JSON parse
 - [Phase 45]: DelegationStarted posted via post_message not await mount in _stream_response — avoids blocking SDK async generator
+- [Phase 46]: AgentCell.finalize(summary='') shows 'done — {summary}' with em-dash when summary is non-empty
+- [Phase 46]: TranscriptPane extracts task.outputs.get('summary','') on DONE — empty fallback is zero-regression
 
 ### Pending Todos
 
@@ -71,6 +73,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T19:32:59.435Z
-Stopped at: Completed 45-01-PLAN.md
+Last session: 2026-03-11T19:54:17.983Z
+Stopped at: Completed 46-01-PLAN.md
 Resume file: None
