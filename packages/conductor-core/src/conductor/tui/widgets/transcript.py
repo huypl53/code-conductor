@@ -82,7 +82,7 @@ class AssistantCell(Widget):
         self._shimmer_phase: float = 0.0
 
     def compose(self) -> ComposeResult:
-        yield Static("Conductor", classes="cell-label")
+        yield Static("Assistant", classes="cell-label")
         if self._text is not None:
             # Static mode — render text immediately
             yield Static(self._text)
@@ -182,22 +182,32 @@ class TranscriptPane(VerticalScroll):
                 )
             )
 
+    @property
+    def _is_at_bottom(self) -> bool:
+        """Check if the user is scrolled to (or near) the bottom."""
+        return self.scroll_offset.y >= self.max_scroll_y - 2
+
+    def _maybe_scroll_end(self) -> None:
+        """Scroll to bottom only if the user hasn't scrolled up."""
+        if self._is_at_bottom:
+            self.scroll_end(animate=False)
+
     async def add_user_message(self, text: str) -> None:
         """Mount a UserCell and scroll to bottom."""
         cell = UserCell(text)
         await self.mount(cell)
-        self.scroll_end(animate=False)
+        self.scroll_end(animate=False)  # always scroll on user's own message
 
     async def add_assistant_message(self, text: str) -> AssistantCell:
         """Mount a static AssistantCell with pre-set text content."""
         cell = AssistantCell(text)
         await self.mount(cell)
-        self.scroll_end(animate=False)
+        self._maybe_scroll_end()
         return cell
 
     async def add_assistant_streaming(self) -> AssistantCell:
         """Mount a streaming AssistantCell (thinking state) and return it."""
         cell = AssistantCell()
         await self.mount(cell)
-        self.scroll_end(animate=False)
+        self.scroll_end(animate=False)  # always scroll when stream starts
         return cell

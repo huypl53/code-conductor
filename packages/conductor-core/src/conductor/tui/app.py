@@ -128,7 +128,7 @@ class ConductorApp(App):
             await pane.add_assistant_message(help_text)
 
         elif cmd == "/exit":
-            await self.action_quit()
+            await self._force_quit()
 
         elif cmd == "/status":
             if self._delegation_manager is not None:
@@ -498,7 +498,17 @@ class ConductorApp(App):
             cmd_widget.post_message(EditorContentReady(stripped))
 
     async def action_quit(self) -> None:
-        """Clean exit -- cancels background tasks, disconnects SDK, then exits."""
+        """Ctrl-C / quit: cancel active stream first, exit on second press."""
+        # If actively streaming, cancel the stream instead of exiting
+        if self._active_cell is not None and self._active_cell._is_streaming:
+            # Cancel the streaming worker
+            self.workers.cancel_group(self, "default")
+            return
+
+        await self._force_quit()
+
+    async def _force_quit(self) -> None:
+        """Unconditional clean exit — disconnects SDK, cancels tasks, exits."""
         await self._disconnect_sdk()
         for task in list(self._background_tasks):
             if not task.done():

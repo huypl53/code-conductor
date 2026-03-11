@@ -108,12 +108,12 @@ async def test_slash_help_shows_in_transcript():
 
 
 async def test_slash_exit_quits():
-    """Submitting '/exit' calls action_quit."""
+    """Submitting '/exit' calls _force_quit."""
     from conductor.tui.app import ConductorApp
 
     app = ConductorApp()
     async with app.run_test() as pilot:
-        with patch.object(app, "action_quit", new_callable=AsyncMock) as mock_quit:
+        with patch.object(app, "_force_quit", new_callable=AsyncMock) as mock_quit:
             await app._handle_slash_command("/exit")
             mock_quit.assert_called_once()
 
