@@ -3,42 +3,36 @@
 **Defined:** 2026-03-11
 **Core Value:** A product owner describes a feature, and a self-organizing team of AI coding agents delivers quality, reviewed, tested code — with the human staying in control when they want to be.
 
-## v1.1 Requirements
+## v1.2 Requirements
 
-Requirements for the Interactive Chat TUI milestone. Each maps to roadmap phases.
+Requirements for the Task Verification & Build Safety milestone. Each maps to roadmap phases.
 
-### Chat Interface
+### Task Verification
 
-- [ ] **CHAT-01**: User can start interactive chat session via `conductor` (no args)
-- [ ] **CHAT-02**: As the orchestrator responds, tokens stream into the chat incrementally (not buffered until complete)
-- [ ] **CHAT-03**: First Ctrl+C stops the running agent and returns to the input prompt with a cancellation notice; second Ctrl+C exits the TUI
-- [ ] **CHAT-04**: User can recall previous prompts with Up/Down arrow keys within the current session
-- [ ] **CHAT-05**: User can paste multi-line text into the input without premature submission
-- [ ] **CHAT-06**: Each direct tool invocation (file read, file edit, shell command) shows a human-readable status line in the chat (e.g. "Reading src/auth.py...")
-- [ ] **CHAT-07**: A spinner or working indicator is visible from prompt submission until the first response token appears
-- [ ] **CHAT-08**: User receives a warning when conversation context is running low, with an option to summarize and continue
+- [ ] **VRFY-01**: When a task has `target_file` set and the file does not exist on disk after review, the orchestrator retries via the revision loop instead of marking COMPLETED
+- [ ] **VRFY-02**: After all tasks complete, if `build_command` is configured, the orchestrator runs it and reports pass/fail with stderr output
+- [ ] **VRFY-03**: User can set `build_command` via `--build-command` CLI flag or `.conductor/config.json`
 
-### Smart Delegation
+### Quality Assurance
 
-- [ ] **DELG-01**: Simple requests (e.g. "rename variable X to Y") complete directly without a delegation announcement or sub-agent overhead
-- [ ] **DELG-02**: Complex requests (e.g. "add OAuth login") trigger a delegation announcement and spawn a sub-agent team
-- [ ] **DELG-03**: Every request produces a visible delegation decision — either "Handling directly" or "Delegating to team" — before work begins
-- [ ] **DELG-04**: When sub-agents are spawned, the delegation announcement includes a dashboard URL
+- [ ] **QUAL-01**: Reviewer returns structured feedback; agent receives revision instructions and resubmits within a configurable maximum number of rounds
+- [ ] **QUAL-02**: When revision attempts are exhausted, the task is marked NEEDS_REVISION with the reason, not silently completed
 
-### Session Management
+### Resume Robustness
 
-- [ ] **SESS-01**: `/help` displays all supported slash commands with one-line descriptions
-- [ ] **SESS-02**: `/exit` terminates the TUI, restores the terminal to its pre-launch state, and stops any running sub-agents
-- [ ] **SESS-03**: `/status` shows a table of active sub-agents (ID, task, elapsed time); displays "No active agents" if none running
-- [ ] **SESS-04**: `conductor --resume` lists recent sessions by timestamp and first prompt; selecting one restores conversation history before the input prompt activates
-- [ ] **SESS-05**: Chat history is persisted to disk so it survives crashes and process kills
+- [ ] **RESM-01**: When `review_only` review fails with an exception, the orchestrator falls back to best-effort approval instead of crashing
+- [ ] **RESM-02**: The resume spawn loop correctly handles completed tasks from `get_ready()`, retrieves task exceptions, and uses `marked_done` flag to avoid premature loop exit
 
-### Sub-Agent Visibility
+## v1.1 Requirements (Completed)
 
-- [ ] **VISB-01**: While sub-agents are active, the chat shows a per-agent status line that updates as agents progress, removed when all agents complete
-- [ ] **VISB-02**: When a sub-agent escalates a question, it appears in the chat prefixed with the agent ID, and the input field activates for the user to reply
+All 19 requirements delivered. See `.planning/milestones/v1.1-REQUIREMENTS.md` for details.
 
-## v1.2+ Requirements
+### Chat Interface — CHAT-01 through CHAT-08 (8 requirements)
+### Smart Delegation — DELG-01 through DELG-04 (4 requirements)
+### Session Management — SESS-01 through SESS-05 (5 requirements)
+### Sub-Agent Visibility — VISB-01, VISB-02 (2 requirements)
+
+## v1.3+ Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
 
@@ -55,16 +49,19 @@ Deferred to future release. Tracked but not in current roadmap.
 
 - **INPT-01**: Voice input support
 
+### Infrastructure
+
+- **INFR-01**: Git worktree isolation per agent for large parallel workloads
+- **INFR-02**: CI integration — auto-fix failing builds by spawning agents
+
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Full-screen curses TUI | Loses terminal scrollback buffer; anti-feature per research |
-| Built-in to-do/plan display in chat | Confuses model context; plans belong in files |
-| MCP server integration surface | Inherits from `.claude/` naturally; no new TUI surface needed |
-| Real-time token/cost tracking | Use provider console; accurate billing-grade tracking is non-trivial |
-| Raw log streaming as primary view | Information overload; web dashboard covers full logs |
-| Multiple chat modes (code/architect/ask) | Single conversational mode with implicit delegation is simpler |
+| Automatic error remediation from build output | Future enhancement — v1.2 reports errors, does not auto-fix |
+| Per-file syntax checking | Language-specific, complex; build command covers this |
+| Integration/runtime testing | Beyond scope of file existence + build verification |
+| Parsing build output to map errors to tasks | Future enhancement for targeted remediation |
 
 ## Traceability
 
@@ -72,31 +69,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CHAT-01 | Phase 18 | Complete |
-| CHAT-02 | Phase 19 | Complete |
-| CHAT-03 | Phase 18 | Complete |
-| CHAT-04 | Phase 18 | Complete |
-| CHAT-05 | Phase 18 | Complete |
-| CHAT-06 | Phase 19 | Complete |
-| CHAT-07 | Phase 19 | Complete |
-| CHAT-08 | Phase 19 | Complete |
-| DELG-01 | Phase 21 | Complete |
-| DELG-02 | Phase 21 | Complete |
-| DELG-03 | Phase 21 | Complete |
-| DELG-04 | Phase 21 | Complete |
-| SESS-01 | Phase 18 | Complete |
-| SESS-02 | Phase 18 | Complete |
-| SESS-03 | Phase 21 | Complete |
-| SESS-04 | Phase 20 | Complete |
-| SESS-05 | Phase 19 | Complete |
-| VISB-01 | Phase 22 | Complete |
-| VISB-02 | Phase 22 | Complete |
+| VRFY-01 | TBD | Pending |
+| VRFY-02 | TBD | Pending |
+| VRFY-03 | TBD | Pending |
+| QUAL-01 | TBD | Pending |
+| QUAL-02 | TBD | Pending |
+| RESM-01 | TBD | Pending |
+| RESM-02 | TBD | Pending |
 
 **Coverage:**
-- v1.1 requirements: 19 total
-- Mapped to phases: 19
-- Unmapped: 0 ✓
+- v1.2 requirements: 7 total
+- Mapped to phases: 0
+- Unmapped: 7
 
 ---
 *Requirements defined: 2026-03-11*
-*Last updated: 2026-03-11 after v1.1 milestone completion*
