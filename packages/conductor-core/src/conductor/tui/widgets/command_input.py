@@ -62,7 +62,6 @@ class CommandInput(Widget):
         height: 3;
         padding: 0 1;
         background: $panel;
-        border-top: solid $primary 30%;
     }
     CommandInput Input {
         background: $panel;

@@ -21,7 +21,7 @@ class UserCell(Widget):
     DEFAULT_CSS = """
     UserCell {
         background: $primary 10%;
-        border-left: thick $primary;
+        border-left: solid $primary 40%;
         padding: 0 1;
         margin: 0 0 1 0;
     }
@@ -52,7 +52,7 @@ class AssistantCell(Widget):
     DEFAULT_CSS = """
     AssistantCell {
         background: $surface;
-        border-left: thick $accent;
+        border-left: solid $accent 40%;
         padding: 0 1;
         margin: 0 0 1 0;
     }
