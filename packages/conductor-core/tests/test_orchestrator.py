@@ -2010,11 +2010,14 @@ class TestResumeScheduler:
         from conductor.orchestrator.orchestrator import Orchestrator
         from conductor.state.models import ConductorState, Task, TaskStatus
 
+        # Create target file for completed task so it's recognized as truly done
+        (tmp_path / "f1.txt").write_text("done")
+
         state = ConductorState(tasks=[
             Task(id="t1", title="Done", description="d", status=TaskStatus.COMPLETED,
-                 target_file="/tmp/f1.txt"),
+                 target_file=str(tmp_path / "f1.txt")),
             Task(id="t2", title="Pending", description="d", status=TaskStatus.PENDING,
-                 target_file="/tmp/f2.txt", requires=["t1"]),
+                 target_file=str(tmp_path / "f2.txt"), requires=["t1"]),
         ])
 
         mgr = _make_state_manager()
@@ -2115,9 +2118,12 @@ class TestResumeScheduler:
         from conductor.orchestrator.orchestrator import Orchestrator
         from conductor.state.models import ConductorState, Task, TaskStatus
 
+        # Create target file so completed task is recognized
+        (tmp_path / "f1.txt").write_text("done")
+
         state = ConductorState(tasks=[
             Task(id="t1", title="Done", description="d",
-                 status=TaskStatus.COMPLETED, target_file="/tmp/f1.txt"),
+                 status=TaskStatus.COMPLETED, target_file=str(tmp_path / "f1.txt")),
         ])
 
         mgr = _make_state_manager()
@@ -2128,6 +2134,31 @@ class TestResumeScheduler:
             await orch.resume()
 
         mock_loop.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_resume_demotes_completed_with_missing_file(self, tmp_path):
+        """Completed task with missing target file should be re-run, not skipped."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import ConductorState, Task, TaskStatus
+
+        # Do NOT create the target file — simulates the EventChip bug
+        state = ConductorState(tasks=[
+            Task(id="t1", title="Done but missing", description="d",
+                 status=TaskStatus.COMPLETED,
+                 target_file=str(tmp_path / "missing.tsx")),
+        ])
+
+        mgr = _make_state_manager()
+        mgr.read_state = MagicMock(return_value=state)
+        orch = Orchestrator(state_manager=mgr, repo_path=str(tmp_path))
+
+        with patch.object(orch, '_run_agent_loop', new_callable=AsyncMock) as mock_loop:
+            await orch.resume()
+
+        # Task should be re-run since file is missing
+        assert mock_loop.call_count == 1
+        called_spec = mock_loop.call_args_list[0][0][0]
+        assert called_spec.id == "t1"
 
     @pytest.mark.asyncio
     async def test_resume_no_state_file(self, tmp_path):
@@ -2254,6 +2285,9 @@ class TestResumeSpawnLoop:
 
         state_mgr = _make_state_manager()
 
+        # Create target file so completed task is recognized
+        (tmp_path / "done.py").write_text("# done")
+
         completed_task = Task(
             id="task-done",
             title="Completed Task",
@@ -2301,6 +2335,10 @@ class TestResumeSpawnLoop:
         zero times and returns cleanly."""
         from conductor.orchestrator.orchestrator import Orchestrator
         from conductor.state.models import ConductorState, Task, TaskStatus
+
+        # Create target files so completed tasks are recognized
+        (tmp_path / "a.py").write_text("# done")
+        (tmp_path / "b.py").write_text("# done")
 
         state_mgr = _make_state_manager()
 

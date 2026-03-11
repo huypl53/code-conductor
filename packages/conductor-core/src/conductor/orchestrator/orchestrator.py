@@ -333,10 +333,23 @@ class Orchestrator:
         scheduler = DependencyScheduler(dep_graph)
 
         # Identify completed tasks (handled as immediate done() in spawn loop)
-        completed_ids = {
-            t.id for t in state.tasks
-            if t.status == TaskStatus.COMPLETED
-        }
+        # But verify target files exist — demote to re-run if missing.
+        completed_ids: set[str] = set()
+        for t in state.tasks:
+            if t.status != TaskStatus.COMPLETED:
+                continue
+            if t.target_file:
+                target = Path(t.target_file)
+                if not target.is_absolute():
+                    target = Path(self._repo_path) / target
+                if not target.exists():
+                    logger.warning(
+                        "Task %s marked completed but target file %s missing — will re-run",
+                        t.id,
+                        t.target_file,
+                    )
+                    continue  # don't add to completed_ids → will be re-run
+            completed_ids.add(t.id)
 
         # Determine how to handle each non-completed task
         task_mode: dict[str, bool] = {}  # task_id -> review_only
