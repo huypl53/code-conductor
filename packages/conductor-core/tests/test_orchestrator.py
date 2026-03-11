@@ -681,9 +681,35 @@ class TestComm05CancelReassign:
     @pytest.mark.asyncio
     async def test_cancel_agent_cancels_running_task(self):
         """cancel_agent cancels the asyncio.Task for agent_id and removes from _active_tasks."""
+        from conductor.state.models import (
+            AgentRecord,
+            AgentStatus,
+            ConductorState,
+            Task,
+            TaskStatus,
+        )
         from conductor.orchestrator.orchestrator import Orchestrator
 
+        # Set up state so cancel_agent can reconstruct the spec
+        task = Task(
+            id="t1",
+            title="Corrected T1",
+            description="Do X",
+            status=TaskStatus.IN_PROGRESS,
+            target_file="src/a.py",
+            assigned_agent="agent-t1-abc",
+        )
+        agent = AgentRecord(
+            id="agent-t1-abc",
+            name="agent-t1-abc",
+            role="developer",
+            status=AgentStatus.WORKING,
+            current_task_id="t1",
+        )
+        state = ConductorState(tasks=[task], agents=[agent])
+
         state_mgr = _make_state_manager()
+        state_mgr.read_state = MagicMock(return_value=state)
         orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
         orch._semaphore = asyncio.Semaphore(2)
 
@@ -692,10 +718,8 @@ class TestComm05CancelReassign:
         mock_task.cancel = MagicMock()
         orch._active_tasks["agent-t1-abc"] = mock_task
 
-        corrected_spec = _make_task_spec("t1", "src/a.py", title="Corrected T1")
-
         with patch(f"{_ORCH}.ACPClient", side_effect=lambda **kw: _make_mock_acp_client()):
-            await orch.cancel_agent("agent-t1-abc", corrected_spec)
+            await orch.cancel_agent("agent-t1-abc")
 
         # Task was cancelled
         mock_task.cancel.assert_called_once()
@@ -703,15 +727,40 @@ class TestComm05CancelReassign:
         assert "agent-t1-abc" not in orch._active_tasks
 
     @pytest.mark.asyncio
-    async def test_cancel_agent_spawns_new_loop_with_corrected_spec(self):
-        """cancel_agent spawns a new _run_agent_loop with the corrected TaskSpec."""
+    async def test_cancel_agent_spawns_new_loop_with_new_instructions(self):
+        """cancel_agent(agent_id, new_instructions=...) spawns a new _run_agent_loop."""
+        from conductor.state.models import (
+            AgentRecord,
+            AgentStatus,
+            ConductorState,
+            Task,
+            TaskStatus,
+        )
         from conductor.orchestrator.orchestrator import Orchestrator
 
+        # Set up state with a known agent and task
+        task = Task(
+            id="t1",
+            title="Task t1",
+            description="Original description",
+            status=TaskStatus.IN_PROGRESS,
+            target_file="src/a.py",
+            assigned_agent="agent-t1-xyz",
+        )
+        agent = AgentRecord(
+            id="agent-t1-xyz",
+            name="agent-t1-xyz",
+            role="developer",
+            status=AgentStatus.WORKING,
+            current_task_id="t1",
+        )
+        state = ConductorState(tasks=[task], agents=[agent])
+
         state_mgr = _make_state_manager()
+        state_mgr.read_state = MagicMock(return_value=state)
         orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
         orch._semaphore = asyncio.Semaphore(2)
 
-        corrected_spec = _make_task_spec("t1", "src/corrected.py", title="Corrected")
         spawned_specs: list[TaskSpec] = []
 
         async def _capture_loop(task_spec, sem, **kwargs):
@@ -719,31 +768,31 @@ class TestComm05CancelReassign:
 
         orch._run_agent_loop = _capture_loop
 
-        await orch.cancel_agent("agent-unknown-id", corrected_spec)
+        await orch.cancel_agent("agent-t1-xyz", new_instructions="Do Y instead")
         # Yield to event loop to allow the spawned asyncio.Task to execute
         await asyncio.sleep(0)
 
         assert len(spawned_specs) == 1
-        assert spawned_specs[0].target_file == "src/corrected.py"
+        assert spawned_specs[0].description == "Do Y instead"
 
     @pytest.mark.asyncio
-    async def test_cancel_agent_unknown_id_is_idempotent(self):
-        """cancel_agent on unknown agent_id does not raise — just spawns new task."""
+    async def test_cancel_agent_unknown_id_is_noop(self):
+        """cancel_agent on unknown agent_id (not in state) is a safe no-op."""
+        from conductor.state.models import ConductorState
         from conductor.orchestrator.orchestrator import Orchestrator
 
         state_mgr = _make_state_manager()
+        state_mgr.read_state = MagicMock(return_value=ConductorState())
         orch = Orchestrator(state_manager=state_mgr, repo_path="/repo")
         orch._semaphore = asyncio.Semaphore(2)
-
-        corrected_spec = _make_task_spec("t1", "src/a.py")
 
         async def _noop_loop(task_spec, sem, **kwargs):
             pass
 
         orch._run_agent_loop = _noop_loop
 
-        # Should not raise even though agent_id is not in _active_tasks
-        await orch.cancel_agent("nonexistent-agent", corrected_spec)
+        # Should not raise even though agent_id is not in state
+        await orch.cancel_agent("nonexistent-agent")
         # Yield to allow any spawned task to complete cleanly
         await asyncio.sleep(0)
 

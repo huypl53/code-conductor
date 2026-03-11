@@ -373,18 +373,22 @@ class Orchestrator:
     # ------------------------------------------------------------------
 
     async def cancel_agent(
-        self, agent_id: str, corrected_spec: TaskSpec
+        self, agent_id: str, new_instructions: str | None = None
     ) -> None:
-        """Cancel a running agent session and reassign with corrected instructions.
+        """Cancel a running agent session and re-spawn with original or updated instructions.
 
         COMM-05: Cancels the asyncio.Task for *agent_id* (if running), awaits
-        cancellation, then spawns a new ``_run_agent_loop`` with *corrected_spec*
-        in a fresh session.  If *agent_id* is not in ``_active_tasks``, the cancel
-        is a no-op and a new session is still spawned (idempotent).
+        cancellation, then reconstructs the TaskSpec from state and spawns a new
+        ``_run_agent_loop``.  If *new_instructions* is provided the re-spawned
+        agent receives the new description; otherwise the original task description
+        is used.  If *agent_id* is not in state (unknown agent), returns early
+        without raising (safe no-op).
 
         Args:
             agent_id: ID of the running agent to cancel.
-            corrected_spec: TaskSpec with corrected instructions for the new session.
+            new_instructions: Optional replacement description for the re-spawned
+                agent.  If None, the original task description is preserved.
+                Corresponds to the CLI ``redirect`` command's new-instructions arg.
         """
         existing_task = self._active_tasks.pop(agent_id, None)
         if existing_task is not None:
@@ -393,6 +397,27 @@ class Orchestrator:
                 await existing_task
             except (asyncio.CancelledError, Exception):
                 pass
+
+        # Reconstruct TaskSpec from state so the caller need not supply it
+        state = await asyncio.to_thread(self._state.read_state)
+        agent_rec = next((a for a in state.agents if a.id == agent_id), None)
+        task_id = agent_rec.current_task_id if agent_rec else None
+        task = next((t for t in state.tasks if t.id == task_id), None)
+
+        if task is None:
+            # Unknown agent or no task assigned — safe no-op, nothing to re-spawn
+            return
+
+        corrected_spec = TaskSpec(
+            id=task.id,
+            title=task.title,
+            description=new_instructions if new_instructions else task.description,
+            role=agent_rec.role if agent_rec else "developer",
+            target_file=task.target_file or "",
+            material_files=task.material_files,
+            requires=task.requires,
+            produces=task.produces,
+        )
 
         sem = self._semaphore or asyncio.Semaphore(self._max_agents)
         new_task = asyncio.create_task(
