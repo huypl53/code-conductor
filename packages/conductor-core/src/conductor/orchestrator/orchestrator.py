@@ -484,6 +484,12 @@ class Orchestrator:
         async for _ in client.stream_response():
             pass
 
+        # Set agent status to WAITING before escalating to human
+        await asyncio.to_thread(
+            self._state.mutate,
+            self._make_set_agent_status_fn(agent_id, AgentStatus.WAITING),
+        )
+
         # Push question to human
         query = HumanQuery(question=question, context={})
         await human_out.put(query)
@@ -496,6 +502,12 @@ class Orchestrator:
 
         await client.send(
             f"Human decision: {decision}. Continue your work with this guidance."
+        )
+
+        # Restore agent status to WORKING after human response received
+        await asyncio.to_thread(
+            self._state.mutate,
+            self._make_set_agent_status_fn(agent_id, AgentStatus.WORKING),
         )
 
     # ------------------------------------------------------------------
@@ -722,3 +734,18 @@ class Orchestrator:
                     break
 
         return _complete
+
+    @staticmethod
+    def _make_set_agent_status_fn(
+        agent_id: str,
+        status: AgentStatus,
+    ) -> Callable[[ConductorState], None]:
+        """Return a mutate fn that sets an agent's status."""
+
+        def _set_status(state: ConductorState) -> None:
+            for agent in state.agents:
+                if agent.id == agent_id:
+                    agent.status = status
+                    break
+
+        return _set_status
