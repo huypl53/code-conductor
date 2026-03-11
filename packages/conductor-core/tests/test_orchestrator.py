@@ -447,6 +447,10 @@ class TestOrch04CompleteGate:
 
         approved_verdict = ReviewVerdict(approved=True)
 
+        # Pre-create the target file so the file existence gate does not intercept
+        (tmp_path / "src").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "src" / "a.py").write_text("# done")
+
         def _acp_factory(**kwargs):
             return _make_mock_acp_client_with_result("All done")
 
@@ -529,6 +533,10 @@ class TestOrch05RevisionSend:
 
         mock_decomposer = AsyncMock()
         mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        # Pre-create target file so file existence gate does not add extra revisions
+        (tmp_path / "src").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "src" / "a.py").write_text("# done")
 
         # First call: fail. Second call: pass.
         verdicts = [
@@ -2456,9 +2464,13 @@ class TestFileExistenceGate:
     async def test_missing_file_exhausts_revisions(self, tmp_path):
         """File never appears after max_revisions=1 — task ends with NEEDS_REVISION."""
         from conductor.orchestrator.orchestrator import Orchestrator
-        from conductor.state.models import ConductorState, ReviewStatus
+        from conductor.state.models import ConductorState, ReviewStatus, Task, TaskStatus
 
-        state = ConductorState()
+        # Pre-populate state with the task so _make_complete_task_fn can find it
+        state = ConductorState(tasks=[
+            Task(id="t1", title="Task t1", description="Description for t1",
+                 status=TaskStatus.PENDING)
+        ])
         mgr = _make_state_manager()
         completed_statuses = []
 

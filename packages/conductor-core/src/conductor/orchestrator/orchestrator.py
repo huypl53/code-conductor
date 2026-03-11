@@ -685,6 +685,27 @@ class Orchestrator:
                             )
                             final_verdict = verdict
 
+                            # File existence gate (VRFY-01): if the reviewer
+                            # approves but the target file is absent, override
+                            # to non-approved so the revision loop retries.
+                            if verdict.approved and task_spec.target_file:
+                                target_path = (
+                                    Path(self._repo_path) / task_spec.target_file
+                                )
+                                if not target_path.exists():
+                                    verdict = ReviewVerdict(
+                                        approved=False,
+                                        quality_issues=[
+                                            "Target file was not created on disk"
+                                        ],
+                                        revision_instructions=(
+                                            f"The target file "
+                                            f"{task_spec.target_file} was not "
+                                            "created. Please create it."
+                                        ),
+                                    )
+                                    final_verdict = verdict
+
                             if verdict.approved:
                                 break
 
