@@ -263,7 +263,7 @@ Plans:
   3. The TUI passes a full end-to-end smoke test: launch, send a prompt, see streaming response, open agent monitor, approve a modal, use slash command, resume a session — all without error
 **Plans**: 1 plan
 Plans:
-- [ ] 35-01-PLAN.md — AgentPanel, AgentMonitorPane StateWatchWorker, and tests
+- [ ] 38-01-PLAN.md — Shimmer animation on streaming cells, session history replay on resume
 
 ## Progress
 
@@ -310,4 +310,4 @@ Phases execute in numeric order: 31 → 32 → 33 → 34 → 35 → 36 → 37 �
 | 35. Agent Monitoring | v2.0 | 0/1 | In Progress | - |
 | 36. Approval Modals | v2.0 | 0/2 | Not started | - |
 | 37. Slash Commands & Dashboard Coexistence | v2.0 | 0/1 | Not started | - |
-| 38. Session Persistence & Polish | v2.0 | 0/TBD | Not started | - |
+| 38. Session Persistence & Polish | v2.0 | 0/1 | Not started | - |
