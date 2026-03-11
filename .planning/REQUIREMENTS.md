@@ -9,10 +9,10 @@ Requirements for the Textual TUI Redesign milestone. Each maps to roadmap phases
 
 ### TUI Foundation
 
-- [ ] **TUIF-01**: User can launch `conductor` and see a full-screen Textual TUI instead of the current prompt_toolkit REPL
-- [ ] **TUIF-02**: All async subsystems (SDK streaming, uvicorn dashboard, orchestrator delegation) run as workers inside Textual's event loop
-- [ ] **TUIF-03**: prompt_toolkit is fully removed from the active code path — no terminal raw mode conflicts
-- [ ] **TUIF-04**: Textual app can be tested with `pytest` using pilot/headless fixtures
+- [x] **TUIF-01**: User can launch `conductor` and see a full-screen Textual TUI instead of the current prompt_toolkit REPL
+- [x] **TUIF-02**: All async subsystems (SDK streaming, uvicorn dashboard, orchestrator delegation) run as workers inside Textual's event loop
+- [x] **TUIF-03**: prompt_toolkit is fully removed from the active code path — no terminal raw mode conflicts
+- [x] **TUIF-04**: Textual app can be tested with `pytest` using pilot/headless fixtures
 
 ### Transcript & Streaming
 
@@ -112,10 +112,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TUIF-01 | Phase 31 | Pending |
-| TUIF-02 | Phase 31 | Pending |
-| TUIF-03 | Phase 31 | Pending |
-| TUIF-04 | Phase 31 | Pending |
+| TUIF-01 | Phase 31 | Complete |
+| TUIF-02 | Phase 31 | Complete |
+| TUIF-03 | Phase 31 | Complete |
+| TUIF-04 | Phase 31 | Complete |
 | TRNS-01 | Phase 32 | Pending |
 | TRNS-02 | Phase 33 | Pending |
 | STAT-01 | Phase 33 | Pending |

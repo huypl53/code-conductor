@@ -70,7 +70,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
 **Milestone Goal:** Replace prompt_toolkit + Rich with a full Textual-based TUI — cell-based transcript, streaming responses, modal approval overlays, inline agent monitoring, syntax-highlighted output, and a polished terminal experience that matches the quality of OpenAI's Codex CLI.
 
-- [ ] **Phase 31: TUI Foundation** - Establish Textual event loop ownership, remove prompt_toolkit, wire ConductorApp as entry point, set up test infrastructure
+- [x] **Phase 31: TUI Foundation** - Establish Textual event loop ownership, remove prompt_toolkit, wire ConductorApp as entry point, set up test infrastructure — completed 2026-03-11 (1/1 plans)
 - [ ] **Phase 32: Static TUI Shell** - Two-column layout with TranscriptPane, CommandInput, StatusFooter, and AgentMonitorPane placeholder — verified with hard-coded content before live data
 - [ ] **Phase 33: SDK Streaming** - Real Claude responses streaming token-by-token into MarkdownStream-backed cells, thinking indicator, live token counter in status footer
 - [ ] **Phase 34: Rich Output** - Syntax-highlighted code blocks, rendered markdown (headings/bold/links/lists), and syntax-highlighted file diffs in transcript cells

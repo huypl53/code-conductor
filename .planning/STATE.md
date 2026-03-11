@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Textual TUI Redesign
-status: ready_to_plan
-stopped_at: null
+status: in_progress
+stopped_at: "Completed 31-01-PLAN.md"
 last_updated: "2026-03-11"
-last_activity: "2026-03-11 — Roadmap created, 8 phases defined (31-38)"
+last_activity: "2026-03-11 — Phase 31 TUI Foundation complete"
 progress:
   total_phases: 8
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 13
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** A product owner describes a feature, and a self-organizing team of AI coding agents delivers quality, reviewed, tested code — with the human staying in control when they want to be.
-**Current focus:** v2.0 Textual TUI Redesign — Phase 31: TUI Foundation
+**Current focus:** v2.0 Textual TUI Redesign — Phase 32: Layout Widgets
 
 ## Current Position
 
-Phase: 31 of 38 (TUI Foundation)
-Plan: — (not yet planned)
-Status: Ready to plan
-Last activity: 2026-03-11 — Roadmap created for v2.0, phases 31-38 defined
+Phase: 31 of 38 (TUI Foundation) — COMPLETE
+Plan: 1 of 1
+Status: In progress (Phase 31 complete, Phase 32 next)
+Last activity: 2026-03-11 — Phase 31 TUI Foundation complete (7 tests passing, 585 total)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 13%
 
 ## Accumulated Context
 
@@ -44,6 +44,9 @@ Progress: [░░░░░░░░░░] 0%
 - [v2.0 Architecture]: prompt_toolkit fully removed — both frameworks claim terminal raw mode, cannot coexist
 - [v2.0 Architecture]: uvicorn runs as asyncio.create_task(server.serve()) inside on_mount, not uvicorn.run()
 - [v2.0 Architecture]: Token buffering at 20fps via set_interval — never call widget.update() per-token
+- [Phase 31]: console=None kept as default in DelegationManager for backward compat with existing tests
+- [Phase 31]: STATUS_UPDATE_INTERVAL constant kept exported; _status_updater/_clear_status_lines/_print_live_status methods deleted
+- [Phase 31]: cli/__init__.py uses ConductorApp(...).run() — asyncio.run() fully removed from TUI path
 
 ### Pending Todos
 
@@ -53,7 +56,7 @@ None.
 
 - [Phase 33 research flag]: MarkdownStream API (Textual v4) needs verification against actual release notes before coding — `Markdown.get_stream()` / `await stream.append(chunk)` may differ
 - [Phase 36 research flag]: asyncio.Queue bridge from DelegationManager._escalation_listener to push_screen_wait() has no direct Textual docs precedent — prototype before building full modal stack
-- [Phase 31]: Claude Agent SDK subprocess may write to inherited terminal stdout, bypassing Textual renderer — must audit in Phase 1 with a test delegation run
+- [Phase 31 audit item]: Claude Agent SDK subprocess may write to inherited terminal stdout, bypassing Textual renderer — audit with test delegation run in Phase 35
 
 ### Quick Tasks Completed
 
@@ -64,5 +67,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: v2.0 roadmap created — ready to plan Phase 31
+Stopped at: Completed 31-01-PLAN.md
 Resume file: None
