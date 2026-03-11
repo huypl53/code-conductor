@@ -88,7 +88,9 @@ Plans:
   3. The orchestrator passes the active ModelProfile's role-specific model to each ACPClient instance
   4. Agent system prompts contain file paths to read, not file content — keeping prompts under 500 tokens
   5. All existing tests still pass; new tests cover wave execution and model routing
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 27-01-PLAN.md — Wave-based spawn loop, ACPClient model routing, lean system prompts
 
 ### Phase 28: Agent Communication Protocol
 **Goal**: Agents report structured status (DONE/BLOCKED/NEEDS_CONTEXT) that the orchestrator parses and routes programmatically, with deviation rules preventing unplanned scope creep
@@ -252,7 +254,7 @@ Phases execute in numeric order: 26 → 27 → 28 → 29 → 30 (Phase 30 can ru
 | 24. Task Verification and Quality Loops | 1/1 | Complete   | 2026-03-11 | - |
 | 25. Post-Run Build Verification | v1.2 | 1/1 | Complete | 2026-03-11 |
 | 26. Models & Scheduler Infrastructure | v1.3 | 0/1 | In Progress | - |
-| 27. Execution & Routing Pipeline | v1.3 | 0/0 | Pending | - |
+| 27. Execution & Routing Pipeline | v1.3 | 0/1 | Pending | - |
 | 28. Agent Communication Protocol | v1.3 | 0/0 | Pending | - |
 | 29. Verification & Review Pipeline | v1.3 | 0/0 | Pending | - |
 | 30. Smart Decomposition | v1.3 | 0/0 | Pending | - |
