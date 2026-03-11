@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Agent Visibility
 status: planning
-stopped_at: Completed 44-01-PLAN.md
-last_updated: "2026-03-11T19:13:56.570Z"
+stopped_at: Completed 45-01-PLAN.md
+last_updated: "2026-03-11T19:32:59.439Z"
 last_activity: 2026-03-12 — v2.2 roadmap created (phases 43-46)
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
   percent: 0
 ---
 
@@ -55,6 +55,9 @@ Prior milestones: 42 phases shipped across v1.0–v2.1 (6 milestones, 2 days)
 - [Phase 43]: Static.content is the Textual 8.x API for reading widget text (not .renderable)
 - [Phase 44]: Register cell in _agent_cells BEFORE await mount() to prevent duplicates on rapid state updates
 - [Phase 44]: ConductorApp fan-out uses post_message without event.stop() so AgentMonitorPane still receives AgentStateUpdated
+- [Phase 45]: input_json_delta accumulated per content_block_index using dict[int, list[str]] — prevents collisions when multiple tool uses appear in same stream
+- [Phase 45]: Label mutation happens on content_block_start (not content_block_stop) for immediate user feedback before JSON parse
+- [Phase 45]: DelegationStarted posted via post_message not await mount in _stream_response — avoids blocking SDK async generator
 
 ### Pending Todos
 
@@ -68,6 +71,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T19:10:48.794Z
-Stopped at: Completed 44-01-PLAN.md
+Last session: 2026-03-11T19:32:59.435Z
+Stopped at: Completed 45-01-PLAN.md
 Resume file: None

@@ -16,13 +16,13 @@ Requirements for the Agent Visibility milestone. Each maps to roadmap phases.
 
 ### Orchestrator Status
 
-- [ ] **ORCH-01**: User sees orchestrator status in the transcript when it transitions to planning/delegating (label changes from "Assistant" to "Orchestrator — delegating")
-- [ ] **ORCH-02**: When delegation starts, the transcript shows which agents were spawned and what tasks they received
+- [x] **ORCH-01**: User sees orchestrator status in the transcript when it transitions to planning/delegating (label changes from "Assistant" to "Orchestrator — delegating")
+- [x] **ORCH-02**: When delegation starts, the transcript shows which agents were spawned and what tasks they received
 
 ### Stream Interception
 
-- [ ] **STRM-01**: SDK stream tool_use events for conductor_delegate are intercepted and trigger agent visibility updates in the transcript
-- [ ] **STRM-02**: Tool-use input (task description, agent config) is accumulated from input_json_delta events before being used to create AgentCells
+- [x] **STRM-01**: SDK stream tool_use events for conductor_delegate are intercepted and trigger agent visibility updates in the transcript
+- [x] **STRM-02**: Tool-use input (task description, agent config) is accumulated from input_json_delta events before being used to create AgentCells
 
 ### State Bridge
 
@@ -64,10 +64,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ACELL-02 | Phase 44 | Complete |
 | ACELL-03 | Phase 44 | Complete |
 | ACELL-04 | Phase 43 | Complete |
-| ORCH-01 | Phase 45 | Pending |
-| ORCH-02 | Phase 45 | Pending |
-| STRM-01 | Phase 45 | Pending |
-| STRM-02 | Phase 45 | Pending |
+| ORCH-01 | Phase 45 | Complete |
+| ORCH-02 | Phase 45 | Complete |
+| STRM-01 | Phase 45 | Complete |
+| STRM-02 | Phase 45 | Complete |
 | BRDG-01 | Phase 44 | Complete |
 | BRDG-02 | Phase 44 | Complete |
 
