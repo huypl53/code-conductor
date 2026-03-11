@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-11)
 Phase: 25 of 25 (all complete)
 Plan: All plans executed
 Status: Complete
-Last activity: 2026-03-11 — All 3 phases delivered, 448 tests passing
+Last activity: 2026-03-11 - Completed quick task 1: Fix ANSI escape code rendering in TUI
 
 Progress: [██████████] 100%
 
@@ -54,6 +54,12 @@ None.
 ### Blockers/Concerns
 
 None.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Fix ANSI escape code rendering in TUI | 2026-03-11 | 7f66551 | [1-fix-ansi-escape-code-rendering-in-tui](./quick/1-fix-ansi-escape-code-rendering-in-tui/) |
 
 ## Session Continuity
 
