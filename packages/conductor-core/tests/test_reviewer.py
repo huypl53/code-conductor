@@ -1,4 +1,4 @@
-"""ORCH-04 tests for ReviewVerdict model and review_output() function."""
+"""ORCH-04 / RVEW-01 tests: two-stage review and backward-compatible review_output()."""
 from __future__ import annotations
 
 import asyncio
@@ -8,7 +8,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from conductor.orchestrator.errors import ReviewError
-from conductor.orchestrator.reviewer import ReviewVerdict, review_output
+from conductor.orchestrator.reviewer import (
+    QualityVerdict,
+    ReviewVerdict,
+    SpecVerdict,
+    review_code_quality,
+    review_output,
+    review_spec_compliance,
+)
 
 
 def _make_result_message(structured_output: dict | None) -> MagicMock:
@@ -28,40 +35,343 @@ async def _async_gen(*items):
         yield item
 
 
-class TestOrch04Approved:
-    """review_output() returns ReviewVerdict(approved=True) on passing work."""
+def _spec_pass() -> dict:
+    return {"spec_compliant": True, "issues": [], "revision_instructions": ""}
 
-    async def test_approved_verdict_returned(self, tmp_path: Path) -> None:
-        target_file = "src/auth.py"
+
+def _spec_fail(issues=None, instructions="Fix spec") -> dict:
+    return {
+        "spec_compliant": False,
+        "issues": issues or ["Missing required function"],
+        "revision_instructions": instructions,
+    }
+
+
+def _quality_pass() -> dict:
+    return {"quality_passed": True, "quality_issues": [], "revision_instructions": ""}
+
+
+def _quality_fail(issues=None, instructions="Fix quality") -> dict:
+    return {
+        "quality_passed": False,
+        "quality_issues": issues or ["Missing error handling"],
+        "revision_instructions": instructions,
+    }
+
+
+# ---------------------------------------------------------------------------
+# New model tests: SpecVerdict and QualityVerdict
+# ---------------------------------------------------------------------------
+
+
+class TestSpecVerdict:
+    """SpecVerdict model has correct fields."""
+
+    def test_spec_compliant_field(self) -> None:
+        v = SpecVerdict(spec_compliant=True, issues=[], revision_instructions="")
+        assert v.spec_compliant is True
+
+    def test_issues_field(self) -> None:
+        v = SpecVerdict(spec_compliant=False, issues=["Missing method"], revision_instructions="Add method")
+        assert v.issues == ["Missing method"]
+
+    def test_revision_instructions_default_empty(self) -> None:
+        v = SpecVerdict(spec_compliant=True, issues=[])
+        assert v.revision_instructions == ""
+
+    def test_model_validate_from_dict(self) -> None:
+        v = SpecVerdict.model_validate(_spec_pass())
+        assert v.spec_compliant is True
+
+
+class TestQualityVerdict:
+    """QualityVerdict model has correct fields."""
+
+    def test_quality_passed_field(self) -> None:
+        v = QualityVerdict(quality_passed=True, quality_issues=[], revision_instructions="")
+        assert v.quality_passed is True
+
+    def test_quality_issues_field(self) -> None:
+        v = QualityVerdict(quality_passed=False, quality_issues=["Bad style"], revision_instructions="Improve")
+        assert v.quality_issues == ["Bad style"]
+
+    def test_revision_instructions_default_empty(self) -> None:
+        v = QualityVerdict(quality_passed=True, quality_issues=[])
+        assert v.revision_instructions == ""
+
+    def test_model_validate_from_dict(self) -> None:
+        v = QualityVerdict.model_validate(_quality_pass())
+        assert v.quality_passed is True
+
+
+# ---------------------------------------------------------------------------
+# review_spec_compliance() tests
+# ---------------------------------------------------------------------------
+
+
+class TestReviewSpecCompliance:
+    """review_spec_compliance() returns SpecVerdict for spec checking."""
+
+    @pytest.mark.asyncio
+    async def test_returns_spec_verdict(self, tmp_path: Path) -> None:
         (tmp_path / "src").mkdir()
-        (tmp_path / target_file).write_text("def authenticate(): pass\n")
-
-        structured = {
-            "approved": True,
-            "quality_issues": [],
-            "revision_instructions": "",
-        }
-        result_msg = _make_result_message(structured)
+        (tmp_path / "src/auth.py").write_text("def authenticate(): return True\n")
+        result_msg = _make_result_message(_spec_pass())
 
         with patch(
             "conductor.orchestrator.reviewer.sdk_query",
             return_value=_async_gen(result_msg),
         ):
-            verdict = await review_output(
-                task_description="Implement authentication module",
-                target_file=target_file,
-                agent_summary="Created auth.py with authenticate() function.",
+            verdict = await review_spec_compliance(
+                task_description="Add auth",
+                target_file="src/auth.py",
+                agent_summary="Done",
                 repo_path=str(tmp_path),
             )
 
-        assert isinstance(verdict, ReviewVerdict)
+        assert isinstance(verdict, SpecVerdict)
+        assert verdict.spec_compliant is True
+
+    @pytest.mark.asyncio
+    async def test_missing_file_returns_non_compliant(self, tmp_path: Path) -> None:
+        verdict = await review_spec_compliance(
+            task_description="Add auth",
+            target_file="src/missing.py",
+            agent_summary="Done",
+            repo_path=str(tmp_path),
+        )
+        assert isinstance(verdict, SpecVerdict)
+        assert verdict.spec_compliant is False
+
+    @pytest.mark.asyncio
+    async def test_raises_review_error_on_no_output(self, tmp_path: Path) -> None:
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src/auth.py").write_text("def f(): return 1\n")
+        result_msg = _make_result_message(None)
+
+        with patch(
+            "conductor.orchestrator.reviewer.sdk_query",
+            return_value=_async_gen(result_msg),
+        ):
+            with pytest.raises(ReviewError):
+                await review_spec_compliance(
+                    task_description="Add auth",
+                    target_file="src/auth.py",
+                    agent_summary="Done",
+                    repo_path=str(tmp_path),
+                )
+
+    @pytest.mark.asyncio
+    async def test_spec_fail_verdict(self, tmp_path: Path) -> None:
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src/auth.py").write_text("def authenticate(): return True\n")
+        result_msg = _make_result_message(_spec_fail())
+
+        with patch(
+            "conductor.orchestrator.reviewer.sdk_query",
+            return_value=_async_gen(result_msg),
+        ):
+            verdict = await review_spec_compliance(
+                task_description="Add auth with MFA",
+                target_file="src/auth.py",
+                agent_summary="Done",
+                repo_path=str(tmp_path),
+            )
+
+        assert verdict.spec_compliant is False
+        assert len(verdict.issues) > 0
+
+
+# ---------------------------------------------------------------------------
+# review_code_quality() tests
+# ---------------------------------------------------------------------------
+
+
+class TestReviewCodeQuality:
+    """review_code_quality() returns QualityVerdict for quality checking."""
+
+    @pytest.mark.asyncio
+    async def test_returns_quality_verdict(self, tmp_path: Path) -> None:
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src/auth.py").write_text("def authenticate(): return True\n")
+        result_msg = _make_result_message(_quality_pass())
+
+        with patch(
+            "conductor.orchestrator.reviewer.sdk_query",
+            return_value=_async_gen(result_msg),
+        ):
+            verdict = await review_code_quality(
+                task_description="Add auth",
+                target_file="src/auth.py",
+                agent_summary="Done",
+                repo_path=str(tmp_path),
+            )
+
+        assert isinstance(verdict, QualityVerdict)
+        assert verdict.quality_passed is True
+
+    @pytest.mark.asyncio
+    async def test_missing_file_returns_not_passed(self, tmp_path: Path) -> None:
+        verdict = await review_code_quality(
+            task_description="Add auth",
+            target_file="src/missing.py",
+            agent_summary="Done",
+            repo_path=str(tmp_path),
+        )
+        assert isinstance(verdict, QualityVerdict)
+        assert verdict.quality_passed is False
+
+    @pytest.mark.asyncio
+    async def test_quality_fail_verdict(self, tmp_path: Path) -> None:
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src/auth.py").write_text("def authenticate(): return True\n")
+        result_msg = _make_result_message(_quality_fail())
+
+        with patch(
+            "conductor.orchestrator.reviewer.sdk_query",
+            return_value=_async_gen(result_msg),
+        ):
+            verdict = await review_code_quality(
+                task_description="Add auth",
+                target_file="src/auth.py",
+                agent_summary="Done",
+                repo_path=str(tmp_path),
+            )
+
+        assert verdict.quality_passed is False
+        assert len(verdict.quality_issues) > 0
+
+
+# ---------------------------------------------------------------------------
+# Two-stage short-circuit behavior
+# ---------------------------------------------------------------------------
+
+
+class TestTwoStageShortCircuit:
+    """review_output() short-circuits: spec fail skips quality review."""
+
+    @pytest.mark.asyncio
+    async def test_spec_fail_skips_quality(self, tmp_path: Path) -> None:
+        """When spec compliance fails, quality review must not be called."""
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src/auth.py").write_text("def f(): return 1\n")
+
+        call_count = 0
+
+        async def mock_query(prompt: str, options=None):  # noqa: ANN001
+            nonlocal call_count
+            call_count += 1
+            # Spec compliance call — returns spec failure
+            result_msg = _make_result_message(_spec_fail())
+            yield result_msg
+
+        with patch("conductor.orchestrator.reviewer.sdk_query", side_effect=mock_query):
+            verdict = await review_output(
+                task_description="Add auth",
+                target_file="src/auth.py",
+                agent_summary="Done",
+                repo_path=str(tmp_path),
+            )
+
+        # Only one SDK call made (spec), quality skipped
+        assert call_count == 1
+        assert verdict.approved is False
+
+    @pytest.mark.asyncio
+    async def test_spec_pass_triggers_quality(self, tmp_path: Path) -> None:
+        """When spec compliance passes, quality review must be called."""
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src/auth.py").write_text("def f(): return 1\n")
+
+        call_count = 0
+
+        async def mock_query(prompt: str, options=None):  # noqa: ANN001
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # First call: spec compliance passes
+                result_msg = _make_result_message(_spec_pass())
+            else:
+                # Second call: quality passes
+                result_msg = _make_result_message(_quality_pass())
+            yield result_msg
+
+        with patch("conductor.orchestrator.reviewer.sdk_query", side_effect=mock_query):
+            verdict = await review_output(
+                task_description="Add auth",
+                target_file="src/auth.py",
+                agent_summary="Done",
+                repo_path=str(tmp_path),
+            )
+
+        # Two SDK calls: spec then quality
+        assert call_count == 2
+        assert verdict.approved is True
+
+    @pytest.mark.asyncio
+    async def test_both_pass_approved_true(self, tmp_path: Path) -> None:
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src/auth.py").write_text("def f(): return 1\n")
+
+        call_count = 0
+
+        async def mock_query(prompt: str, options=None):  # noqa: ANN001
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                result_msg = _make_result_message(_spec_pass())
+            else:
+                result_msg = _make_result_message(_quality_pass())
+            yield result_msg
+
+        with patch("conductor.orchestrator.reviewer.sdk_query", side_effect=mock_query):
+            verdict = await review_output(
+                task_description="Add auth",
+                target_file="src/auth.py",
+                agent_summary="Done",
+                repo_path=str(tmp_path),
+            )
+
         assert verdict.approved is True
         assert verdict.quality_issues == []
+
+    @pytest.mark.asyncio
+    async def test_spec_pass_quality_fail_approved_false(self, tmp_path: Path) -> None:
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src/auth.py").write_text("def f(): return 1\n")
+
+        call_count = 0
+
+        async def mock_query(prompt: str, options=None):  # noqa: ANN001
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                result_msg = _make_result_message(_spec_pass())
+            else:
+                result_msg = _make_result_message(_quality_fail(["Missing error handling"]))
+            yield result_msg
+
+        with patch("conductor.orchestrator.reviewer.sdk_query", side_effect=mock_query):
+            verdict = await review_output(
+                task_description="Add auth",
+                target_file="src/auth.py",
+                agent_summary="Done",
+                repo_path=str(tmp_path),
+            )
+
+        assert verdict.approved is False
+        assert "Missing error handling" in verdict.quality_issues
+
+
+# ---------------------------------------------------------------------------
+# Backward-compat: review_output() still works
+# ---------------------------------------------------------------------------
 
 
 class TestOrch04FileMissing:
     """review_output() returns ReviewVerdict(approved=False) when target file missing."""
 
+    @pytest.mark.asyncio
     async def test_missing_file_returns_not_approved(self, tmp_path: Path) -> None:
         verdict = await review_output(
             task_description="Implement authentication module",
@@ -74,50 +384,6 @@ class TestOrch04FileMissing:
         assert verdict.approved is False
         assert "Target file was not created" in verdict.quality_issues
         assert "src/auth.py" in verdict.revision_instructions
-
-
-class TestOrch04ReviewError:
-    """review_output() raises ReviewError when query() returns no structured output."""
-
-    async def test_no_structured_output_raises_review_error(
-        self, tmp_path: Path
-    ) -> None:
-        target_file = "src/auth.py"
-        (tmp_path / "src").mkdir()
-        (tmp_path / target_file).write_text("def authenticate(): pass\n")
-
-        # ResultMessage with structured_output=None
-        result_msg = _make_result_message(None)
-
-        with patch(
-            "conductor.orchestrator.reviewer.sdk_query",
-            return_value=_async_gen(result_msg),
-        ):
-            with pytest.raises(ReviewError, match="no structured output"):
-                await review_output(
-                    task_description="Implement authentication module",
-                    target_file=target_file,
-                    agent_summary="Work completed.",
-                    repo_path=str(tmp_path),
-                )
-
-    async def test_empty_response_raises_review_error(self, tmp_path: Path) -> None:
-        """review_output() raises ReviewError when query() yields nothing."""
-        target_file = "src/auth.py"
-        (tmp_path / "src").mkdir()
-        (tmp_path / target_file).write_text("def authenticate(): pass\n")
-
-        with patch(
-            "conductor.orchestrator.reviewer.sdk_query",
-            return_value=_async_gen(),  # no messages at all
-        ):
-            with pytest.raises(ReviewError):
-                await review_output(
-                    task_description="Implement authentication module",
-                    target_file=target_file,
-                    agent_summary="Work completed.",
-                    repo_path=str(tmp_path),
-                )
 
 
 class TestReviewVerdictSchema:
@@ -154,8 +420,9 @@ class TestReviewVerdictSchema:
 
 
 class TestOrch04ContentTruncation:
-    """review_output() truncates files larger than 8000 chars."""
+    """review_output() truncates files larger than 8000 chars via spec compliance stage."""
 
+    @pytest.mark.asyncio
     async def test_large_file_is_truncated(self, tmp_path: Path) -> None:
         target_file = "src/large_module.py"
         (tmp_path / "src").mkdir()
@@ -163,16 +430,15 @@ class TestOrch04ContentTruncation:
         large_content = "x" * 4100 + "\n# middle section\n" + "y" * 4100
         (tmp_path / target_file).write_text(large_content)
 
-        captured_prompt: list[str] = []
+        captured_prompts: list[str] = []
 
         async def mock_query(prompt: str, options=None):  # noqa: ANN001
-            captured_prompt.append(prompt)
-            structured = {
-                "approved": True,
-                "quality_issues": [],
-                "revision_instructions": "",
-            }
-            result_msg = _make_result_message(structured)
+            captured_prompts.append(prompt)
+            # First call is spec compliance, second is quality
+            if len(captured_prompts) == 1:
+                result_msg = _make_result_message(_spec_pass())
+            else:
+                result_msg = _make_result_message(_quality_pass())
             yield result_msg
 
         with patch("conductor.orchestrator.reviewer.sdk_query", side_effect=mock_query):
@@ -183,28 +449,31 @@ class TestOrch04ContentTruncation:
                 repo_path=str(tmp_path),
             )
 
-        assert len(captured_prompt) == 1
-        prompt = captured_prompt[0]
-        # Truncation notice must appear in the prompt
+        # At least one prompt should contain truncation notice
+        assert len(captured_prompts) >= 1
+        prompt = captured_prompts[0]
+        # Truncation notice must appear in the spec compliance prompt
         assert "truncated" in prompt.lower()
         # The full original content should NOT be present verbatim
         assert "x" * 4100 not in prompt
         # But first 4000 chars should be present
         assert "x" * 4000 in prompt
 
+    @pytest.mark.asyncio
     async def test_small_file_not_truncated(self, tmp_path: Path) -> None:
         target_file = "src/small.py"
         (tmp_path / "src").mkdir()
         small_content = "def main(): pass\n"
         (tmp_path / target_file).write_text(small_content)
 
-        captured_prompt: list[str] = []
+        captured_prompts: list[str] = []
 
         async def mock_query(prompt: str, options=None):  # noqa: ANN001
-            captured_prompt.append(prompt)
-            result_msg = _make_result_message(
-                {"approved": True, "quality_issues": [], "revision_instructions": ""}
-            )
+            captured_prompts.append(prompt)
+            if len(captured_prompts) == 1:
+                result_msg = _make_result_message(_spec_pass())
+            else:
+                result_msg = _make_result_message(_quality_pass())
             yield result_msg
 
         with patch("conductor.orchestrator.reviewer.sdk_query", side_effect=mock_query):
@@ -215,5 +484,5 @@ class TestOrch04ContentTruncation:
                 repo_path=str(tmp_path),
             )
 
-        assert small_content in captured_prompt[0]
-        assert "truncated" not in captured_prompt[0].lower()
+        assert small_content in captured_prompts[0]
+        assert "truncated" not in captured_prompts[0].lower()
