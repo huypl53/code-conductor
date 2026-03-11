@@ -322,7 +322,7 @@ Plans:
   3. The TUI resumes cleanly after editor exit — terminal state is fully restored and input is focused with the edited content
   4. Pressing Ctrl-G during session replay (when input is locked) does nothing — no crash, no broken terminal state
   5. In environments where suspend is not supported (CI, non-Unix), Ctrl-G fails gracefully with a status message rather than an exception
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
 - [ ] 42-01-PLAN.md — action_open_editor (sync def), EditorContentReady message, CommandInput handler, tests
@@ -376,4 +376,4 @@ Phases execute in numeric order: 39 → 40 → 41 → 42
 | 39. Auto-Focus & Alt-Screen | 1/1 | Complete   | 2026-03-11 | - |
 | 40. Borderless Design | 1/1 | Complete   | 2026-03-11 | - |
 | 41. Smooth Cell Animations | v2.1 | 1/1 | Complete | 2026-03-11 |
-| 42. Ctrl-G External Editor | v2.1 | 0/TBD | Not started | - |
+| 42. Ctrl-G External Editor | v2.1 | 0/1 | Not started | - |
