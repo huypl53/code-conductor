@@ -1967,6 +1967,26 @@ class TestSemaphoreScope:
         # Semaphore should be released after completion (value back to 1)
         assert sem._value == 1
 
+    @pytest.mark.asyncio
+    async def test_review_only_approves_on_review_error(self, tmp_path):
+        """review_only=True should approve best-effort if review_output raises."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.orchestrator.errors import ReviewError
+
+        mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=mgr, repo_path=str(tmp_path))
+
+        sem = asyncio.Semaphore(1)
+        spec = _make_task_spec("t1", str(tmp_path / "file.txt"))
+
+        failing_review = AsyncMock(side_effect=ReviewError("no structured output"))
+        with patch(f"{_ORCH}.review_output", failing_review):
+            # Should not raise — best-effort approval
+            await orch._run_agent_loop(spec, sem, review_only=True)
+
+        # State should have been updated (mutate called for add_agent + complete_task)
+        assert mgr.mutate.call_count >= 2
+
 
 # ---------------------------------------------------------------------------
 # Tests: Orchestrator.resume() with full scheduler reconstruction

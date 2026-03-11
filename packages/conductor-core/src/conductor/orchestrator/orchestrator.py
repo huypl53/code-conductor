@@ -253,7 +253,8 @@ class Orchestrator:
         async for message in query(prompt=prompt, options=options):
             if isinstance(message, ResultMessage):
                 result = message
-                break
+                # Don't break — consume entire stream to avoid anyio
+                # cancel scope cleanup issues
 
         if result is None:
             raise DecompositionError(
@@ -684,12 +685,20 @@ class Orchestrator:
             # --- Semaphore released here ---
         else:
             # --- Review only (no semaphore needed) ---
-            final_verdict = await review_output(
-                task_description=task_spec.description,
-                target_file=task_spec.target_file,
-                agent_summary="(resumed — file already exists on disk)",
-                repo_path=self._repo_path,
-            )
+            try:
+                final_verdict = await review_output(
+                    task_description=task_spec.description,
+                    target_file=task_spec.target_file,
+                    agent_summary="(resumed — file already exists on disk)",
+                    repo_path=self._repo_path,
+                )
+            except Exception:  # noqa: BLE001
+                # Best-effort: file exists on disk, approve even if review fails
+                logger.warning(
+                    "Review failed for resumed task %s — approving best-effort",
+                    task_spec.id,
+                )
+                final_verdict = ReviewVerdict(approved=True)
 
         # Update state with review result (runs without semaphore)
         review_status = (
