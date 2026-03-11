@@ -23,6 +23,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 9: Dashboard Backend** - State watcher, WebSocket broadcast server, and server-side event filtering
 - [x] **Phase 10: Dashboard Frontend** - React dashboard with layered visibility, live stream, and intervention controls (completed 2026-03-10)
 - [x] **Phase 11: Packaging and Distribution** - pip and npm packages with installation and getting-started guide (completed 2026-03-10)
+- [ ] **Phase 12: Fix CLI Cancel/Redirect Signatures** - Fix cancel_agent() signature mismatch and redirect command parameter errors (gap closure)
+- [ ] **Phase 13: Wire Escalation Router + Pause Surface** - Connect EscalationRouter to ACPClient and add pause command to CLI/dashboard (gap closure)
+- [ ] **Phase 14: Fix Getting-Started Guide .env Claim** - Remove or implement .env auto-loading claim in getting-started guide (gap closure)
 
 ## Phase Details
 
@@ -189,10 +192,39 @@ Plans:
 - [ ] 11-01-PLAN.md — Python PyPI metadata + npm distribution config + LICENSE + READMEs
 - [ ] 11-02-PLAN.md — Getting-started guide + human verification of builds
 
+### Phase 12: Fix CLI Cancel/Redirect Signatures
+**Goal:** CLI cancel and redirect commands execute without TypeError — cancel_agent() accepts the arguments the CLI actually passes, and redirect constructs valid parameters
+**Depends on**: Phase 8, Phase 6
+**Requirements:** CLI-01, CLI-03, COMM-05
+**Gap Closure:** Closes CLI-CANCEL-SIGNATURE, CLI-REDIRECT-SIGNATURE, "CLI cancel command" flow
+**Success Criteria** (what must be TRUE):
+  1. `cancel agent-1` from CLI executes without TypeError
+  2. `redirect agent-1 "new instructions"` from CLI executes without TypeError
+  3. Integration test confirms cancel/redirect round-trip through orchestrator
+
+### Phase 13: Wire Escalation Router + Pause Surface
+**Goal:** EscalationRouter is connected to ACPClient so AskUserQuestion routing works, and pause_for_human_decision is reachable from CLI and dashboard
+**Depends on**: Phase 6, Phase 3, Phase 8
+**Requirements:** COMM-03, COMM-04, COMM-07
+**Gap Closure:** Closes ESCALATION-ROUTER-UNWIRED, PAUSE-UNREACHABLE
+**Success Criteria** (what must be TRUE):
+  1. ACPClient sessions use EscalationRouter as their permission_handler
+  2. CLI `pause` command invokes pause_for_human_decision on the orchestrator
+  3. Dashboard InterventionPanel has a "Pause" action that triggers pause_for_human_decision
+
+### Phase 14: Fix Getting-Started Guide .env Claim
+**Goal:** Getting-started guide is accurate — either .env auto-loading works or the claim is removed
+**Depends on**: Phase 11
+**Requirements:** PKG-04
+**Gap Closure:** Closes "Getting-started guide .env path" flow
+**Success Criteria** (what must be TRUE):
+  1. Getting-started guide does not claim functionality that doesn't exist
+  2. A developer following the guide encounters no incorrect instructions
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -207,3 +239,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 9. Dashboard Backend | 1/2 | In Progress|  |
 | 10. Dashboard Frontend | 3/3 | Complete    | 2026-03-10 |
 | 11. Packaging and Distribution | 2/2 | Complete    | 2026-03-10 |
+| 12. Fix CLI Cancel/Redirect Signatures | 0/0 | Pending | |
+| 13. Wire Escalation Router + Pause Surface | 0/0 | Pending | |
+| 14. Fix Getting-Started Guide .env Claim | 0/0 | Pending | |

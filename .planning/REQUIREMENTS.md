@@ -145,6 +145,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PKG-01 | Phase 11: Packaging and Distribution | Complete |
 | PKG-02 | Phase 11: Packaging and Distribution | Complete |
 | PKG-04 | Phase 11: Packaging and Distribution | Complete |
+| CLI-01 | Phase 12: Fix CLI Cancel/Redirect Signatures | Pending |
+| CLI-03 | Phase 12: Fix CLI Cancel/Redirect Signatures | Pending |
+| COMM-05 | Phase 12: Fix CLI Cancel/Redirect Signatures | Pending |
+| COMM-03 | Phase 13: Wire Escalation Router + Pause Surface | Pending |
+| COMM-04 | Phase 13: Wire Escalation Router + Pause Surface | Pending |
+| COMM-07 | Phase 13: Wire Escalation Router + Pause Surface | Pending |
+| PKG-04 | Phase 14: Fix Getting-Started Guide .env Claim | Pending |
 
 **Coverage:**
 - v1 requirements: 30 total (note: DASH-04 split from other DASH requirements — backend vs. frontend boundary)
