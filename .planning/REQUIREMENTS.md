@@ -20,8 +20,8 @@ Requirements for the Task Verification & Build Safety milestone. Each maps to ro
 
 ### Resume Robustness
 
-- [ ] **RESM-01**: When `review_only` review fails with an exception, the orchestrator falls back to best-effort approval instead of crashing
-- [ ] **RESM-02**: The resume spawn loop correctly handles completed tasks from `get_ready()`, retrieves task exceptions, and uses `marked_done` flag to avoid premature loop exit
+- [x] **RESM-01**: When `review_only` review fails with an exception, the orchestrator falls back to best-effort approval instead of crashing
+- [x] **RESM-02**: The resume spawn loop correctly handles completed tasks from `get_ready()`, retrieves task exceptions, and uses `marked_done` flag to avoid premature loop exit
 
 ## v1.1 Requirements (Completed)
 
@@ -74,8 +74,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VRFY-03 | Phase 25 | Pending |
 | QUAL-01 | Phase 24 | Pending |
 | QUAL-02 | Phase 24 | Pending |
-| RESM-01 | Phase 23 | Pending |
-| RESM-02 | Phase 23 | Pending |
+| RESM-01 | Phase 23 | Complete |
+| RESM-02 | Phase 23 | Complete |
 
 **Coverage:**
 - v1.2 requirements: 7 total

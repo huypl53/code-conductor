@@ -48,7 +48,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
 **Milestone Goal:** Ensure Conductor validates task output before marking tasks complete, with structured review cycles and hardened resume support.
 
-- [ ] **Phase 23: Resume Robustness** — Harden resume path so exceptions in review_only mode and spawn loop edge cases never crash the orchestrator
+- [x] **Phase 23: Resume Robustness** — Harden resume path so exceptions in review_only mode and spawn loop edge cases never crash the orchestrator (completed 2026-03-11)
 - [ ] **Phase 24: Task Verification and Quality Loops** — File existence gate forces re-runs when target files are missing; structured review cycles with configurable max rounds and explicit NEEDS_REVISION on exhaustion
 - [ ] **Phase 25: Post-Run Build Verification** — Orchestrator runs a user-configured build command after all tasks complete and reports pass/fail with stderr output
 
@@ -173,6 +173,6 @@ Phases execute in numeric order: 23 → 24 → 25
 | 20. Session Resumption | v1.1 | 1/1 | Complete | 2026-03-11 |
 | 21. Smart Delegation and Orchestrator Integration | v1.1 | 1/1 | Complete | 2026-03-11 |
 | 22. Sub-Agent Visibility and Escalation Bridge | v1.1 | 1/1 | Complete | 2026-03-11 |
-| 23. Resume Robustness | v1.2 | 0/? | Not started | - |
+| 23. Resume Robustness | 1/1 | Complete   | 2026-03-11 | - |
 | 24. Task Verification and Quality Loops | v1.2 | 0/? | Not started | - |
 | 25. Post-Run Build Verification | v1.2 | 0/? | Not started | - |

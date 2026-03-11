@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Task Verification & Build Safety
-status: ready_to_plan
-stopped_at: null
-last_updated: "2026-03-11"
-last_activity: "2026-03-11 — Roadmap created, 3 phases mapped (23-25)"
+status: planning
+stopped_at: Completed 23-resume-robustness-01-PLAN.md
+last_updated: "2026-03-11T10:23:02.422Z"
+last_activity: 2026-03-11 — Roadmap created for v1.2
 progress:
-  total_phases: 3
+  total_phases: 8
   completed_phases: 0
   total_plans: 0
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -44,6 +44,8 @@ Recent decisions affecting v1.2:
 - Post-run build command is a final report, not a gate — does not block task completion
 - Build command configurable via `--build-command` CLI flag and `.conductor/config.json`
 - RESM-01/RESM-02 code partially exists in orchestrator.py — Phase 23 adds tests and hardens edge cases
+- [Phase 23-resume-robustness]: Used _track_mutate pattern to verify APPROVED state mutations in review_only exception fallback
+- [Phase 23-resume-robustness]: Used _failing_loop coroutine wholesale replacement for testing asyncio.Task exception retrieval in resume loop
 
 ### Pending Todos
 
@@ -55,6 +57,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11
-Stopped at: Roadmap created — ready to plan Phase 23
+Last session: 2026-03-11T10:23:02.419Z
+Stopped at: Completed 23-resume-robustness-01-PLAN.md
 Resume file: None
