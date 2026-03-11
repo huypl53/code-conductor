@@ -66,7 +66,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
 </details>
 
-### 🚧 v2.0 Textual TUI Redesign (In Progress)
+### v2.0 Textual TUI Redesign (In Progress)
 
 **Milestone Goal:** Replace prompt_toolkit + Rich with a full Textual-based TUI — cell-based transcript, streaming responses, modal approval overlays, inline agent monitoring, syntax-highlighted output, and a polished terminal experience that matches the quality of OpenAI's Codex CLI.
 
@@ -202,7 +202,9 @@ Plans:
   1. Code blocks in responses render with language-appropriate syntax highlighting (e.g. Python keywords colored, strings colored)
   2. Markdown headings render larger/bolder, bold text renders bold, bullet lists render with proper indentation, blockquotes render with visual offset
   3. File diffs render with green-highlighted addition lines and red-highlighted deletion lines — diff syntax is visually distinct from prose
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 34-01-PLAN.md — RichMarkdown widget with diff-aware highlighting, wired into AssistantCell
 
 ### Phase 35: Agent Monitoring
 **Goal**: Users see live per-agent status panels in the TUI without switching to the web dashboard — panels appear when delegation starts, update reactively as state.json changes, and collapse when agents complete
@@ -289,7 +291,7 @@ Phases execute in numeric order: 31 → 32 → 33 → 34 → 35 → 36 → 37 �
 | 31. TUI Foundation | v2.0 | 0/TBD | Not started | - |
 | 32. Static TUI Shell | v2.0 | 0/TBD | Not started | - |
 | 33. SDK Streaming | 1/2 | In Progress|  | - |
-| 34. Rich Output | v2.0 | 0/TBD | Not started | - |
+| 34. Rich Output | v2.0 | 0/1 | Not started | - |
 | 35. Agent Monitoring | v2.0 | 0/TBD | Not started | - |
 | 36. Approval Modals | v2.0 | 0/TBD | Not started | - |
 | 37. Slash Commands & Dashboard Coexistence | v2.0 | 0/TBD | Not started | - |
