@@ -52,10 +52,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### User Interface — Web Dashboard
 
-- [ ] **DASH-01**: Web dashboard shows agent status summary (name, role, current task, progress)
+- [x] **DASH-01**: Web dashboard shows agent status summary (name, role, current task, progress)
 - [x] **DASH-02**: Dashboard supports expandable detail view per agent (recent actions, files modified, current activity)
 - [x] **DASH-03**: Dashboard supports live stream view per agent (real-time tool calls, streaming output)
-- [ ] **DASH-04**: Dashboard sends smart notifications for key events (errors, completions, intervention needed)
+- [x] **DASH-04**: Dashboard sends smart notifications for key events (errors, completions, intervention needed)
 - [x] **DASH-05**: Dashboard handles conversation verbosity with layered visibility — collapsed by default, expand on demand
 - [x] **DASH-06**: User can intervene from dashboard (cancel, redirect, provide feedback to agents)
 
@@ -154,8 +154,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PKG-04 | Phase 14: Fix Getting-Started Guide .env Claim | Complete |
 | COMM-05 | Phase 15: Fix Dashboard Server Cancel Type Mismatch | Complete |
 | DASH-06 | Phase 15: Fix Dashboard Server Cancel Type Mismatch | Complete |
-| DASH-01 | Phase 16: Fix Agent Status Lifecycle | Pending |
-| DASH-04 | Phase 16: Fix Agent Status Lifecycle | Pending |
+| DASH-01 | Phase 16: Fix Agent Status Lifecycle | Complete |
+| DASH-04 | Phase 16: Fix Agent Status Lifecycle | Complete |
 | PKG-02 | Phase 17: Fix Production WebSocket URL | Pending |
 
 **Coverage:**

@@ -27,7 +27,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 13: Wire Escalation Router + Pause Surface** - Connect EscalationRouter to ACPClient and add pause command to CLI/dashboard (gap closure) (completed 2026-03-11)
 - [x] **Phase 14: Fix Getting-Started Guide .env Claim** - Remove or implement .env auto-loading claim in getting-started guide (gap closure) (completed 2026-03-11)
 - [x] **Phase 15: Fix Dashboard Server Cancel Type Mismatch** - Fix server.py passing TaskSpec instead of str|None to cancel_agent (gap closure) (completed 2026-03-11)
-- [ ] **Phase 16: Fix Agent Status Lifecycle** - Add DONE and WAITING status mutations to orchestrator (gap closure)
+- [x] **Phase 16: Fix Agent Status Lifecycle** - Add DONE and WAITING status mutations to orchestrator (gap closure) (completed 2026-03-11)
 - [ ] **Phase 17: Fix Production WebSocket URL** - Add runtime backend URL configuration for production deployment (gap closure)
 
 ## Phase Details
@@ -289,5 +289,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 13. Wire Escalation Router + Pause Surface | 2/2 | Complete    | 2026-03-11 |
 | 14. Fix Getting-Started Guide .env Claim | 1/1 | Complete    | 2026-03-11 |
 | 15. Fix Dashboard Server Cancel Type Mismatch | 1/1 | Complete    | 2026-03-11 |
-| 16. Fix Agent Status Lifecycle | 0/0 | Not Started |  |
+| 16. Fix Agent Status Lifecycle | 1/1 | Complete   | 2026-03-11 |
 | 17. Fix Production WebSocket URL | 0/0 | Not Started |  |

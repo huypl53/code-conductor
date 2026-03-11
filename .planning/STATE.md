@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 15-01-PLAN.md (fix dashboard cancel/redirect type mismatch)
-last_updated: "2026-03-11T03:48:02.827Z"
+stopped_at: Completed 16-01-PLAN.md (fix agent status lifecycle mutations)
+last_updated: "2026-03-11T03:51:25.504Z"
 last_activity: "2026-03-10 — Phase 2 Plan 1 complete: Pydantic v2 state models, enums, and error hierarchy"
 progress:
   total_phases: 17
-  completed_phases: 15
+  completed_phases: 16
   total_plans: 32
-  completed_plans: 30
+  completed_plans: 31
   percent: 10
 ---
 
@@ -80,6 +80,7 @@ Progress: [█░░░░░░░░░] 10%
 | Phase 13-wire-escalation-pause P01 | 12 | 2 tasks | 6 files |
 | Phase 14-fix-getting-started-env P01 | 1 | 1 tasks | 1 files |
 | Phase 15-fix-dashboard-cancel-type P01 | 55 | 2 tasks | 2 files |
+| Phase 16-fix-agent-status-lifecycle P01 | 8 | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -172,6 +173,8 @@ Recent decisions affecting current work:
 - [Phase 13-wire-escalation-pause]: CLI pause requires both queues non-None — fails fast with clear error in auto/non-interactive modes
 - [Phase 14-fix-getting-started-env]: Chose documentation fix (Option A) over .env auto-loading (Option B) — phase goal is accuracy, not new features
 - [Phase 15-fix-dashboard-cancel-type]: dashboard cancel branch calls cancel_agent(agent_id) with no second argument; redirect branch passes string via new_instructions= keyword
+- [Phase 16-fix-agent-status-lifecycle]: _make_complete_task_fn takes agent_id as positional parameter for natural call site
+- [Phase 16-fix-agent-status-lifecycle]: _make_set_agent_status_fn added as reusable static helper consistent with existing _make_*_fn patterns
 
 ### Pending Todos
 
@@ -184,6 +187,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T03:45:57.113Z
-Stopped at: Completed 15-01-PLAN.md (fix dashboard cancel/redirect type mismatch)
+Last session: 2026-03-11T03:51:25.501Z
+Stopped at: Completed 16-01-PLAN.md (fix agent status lifecycle mutations)
 Resume file: None
