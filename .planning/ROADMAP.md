@@ -6,7 +6,8 @@
 - ✅ **v1.1 Interactive Chat TUI** — Phases 18-22 (completed 2026-03-11)
 - ✅ **v1.2 Task Verification & Build Safety** — Phases 23-25 (completed 2026-03-11)
 - ✅ **v1.3 Orchestrator Intelligence** — Phases 26-30 (completed 2026-03-11)
-- 🚧 **v2.0 Textual TUI Redesign** — Phases 31-38 (in progress)
+- ✅ **v2.0 Textual TUI Redesign** — Phases 31-38 (completed 2026-03-11)
+- 🚧 **v2.1 UX Polish** — Phases 39-42 (in progress)
 
 ## Phases
 
@@ -66,18 +67,28 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
 </details>
 
-### v2.0 Textual TUI Redesign (In Progress)
+<details>
+<summary>✅ v2.0 Textual TUI Redesign (Phases 31-38) — COMPLETED 2026-03-11</summary>
 
-**Milestone Goal:** Replace prompt_toolkit + Rich with a full Textual-based TUI — cell-based transcript, streaming responses, modal approval overlays, inline agent monitoring, syntax-highlighted output, and a polished terminal experience that matches the quality of OpenAI's Codex CLI.
+- [x] **Phase 31: TUI Foundation** — completed 2026-03-11
+- [x] **Phase 32: Static TUI Shell** — completed 2026-03-11
+- [x] **Phase 33: SDK Streaming** — completed 2026-03-11
+- [x] **Phase 34: Rich Output** — completed 2026-03-11
+- [x] **Phase 35: Agent Monitoring** — completed 2026-03-11
+- [x] **Phase 36: Approval Modals** — completed 2026-03-11
+- [x] **Phase 37: Slash Commands & Dashboard Coexistence** — completed 2026-03-11
+- [x] **Phase 38: Session Persistence & Polish** — completed 2026-03-11
 
-- [x] **Phase 31: TUI Foundation** - Establish Textual event loop ownership, remove prompt_toolkit, wire ConductorApp as entry point, set up test infrastructure — completed 2026-03-11 (1/1 plans)
-- [ ] **Phase 32: Static TUI Shell** - Two-column layout with TranscriptPane, CommandInput, StatusFooter, and AgentMonitorPane placeholder — verified with hard-coded content before live data
-- [ ] **Phase 33: SDK Streaming** - Real Claude responses streaming token-by-token into MarkdownStream-backed cells, thinking indicator, live token counter in status footer
-- [x] **Phase 34: Rich Output** - Syntax-highlighted code blocks, rendered markdown (headings/bold/links/lists), and syntax-highlighted file diffs in transcript cells (completed 2026-03-11)
-- [ ] **Phase 35: Agent Monitoring** - Live collapsible per-agent panels wired to state.json file watcher, showing task/status/tool activity with reactive updates
-- [ ] **Phase 36: Approval Modals** - ModalScreen overlays for file change approvals, command execution approvals, and escalation questions from sub-agents
-- [ ] **Phase 37: Slash Commands & Dashboard Coexistence** - Slash command autocomplete popup, all existing slash commands routed, uvicorn dashboard running alongside TUI in one process
-- [x] **Phase 38: Session Persistence & Polish** - Session history replayed on resume, shimmer animation on active cells, final v2.0 polish pass (completed 2026-03-11)
+</details>
+
+### v2.1 UX Polish (In Progress)
+
+**Milestone Goal:** Refine the Textual TUI to feel native and polished in the terminal — auto-focus, full alt-screen mode, borderless design, smooth animations, and external editor support — bringing the TUI to parity with OpenAI Codex CLI's terminal integration quality.
+
+- [ ] **Phase 39: Auto-Focus & Alt-Screen** — Input auto-focuses on start; TUI fully owns the terminal with clean entry/exit on all exit paths
+- [ ] **Phase 40: Borderless Design** — CSS-only redesign removes visible box borders on layout containers and replaces thick cell borders with subtle accent lines
+- [ ] **Phase 41: Smooth Cell Animations** — New cells fade in via opacity animation on mount; env var toggle disables animations for CI/SSH
+- [ ] **Phase 42: Ctrl-G External Editor** — Ctrl-G suspends TUI, opens $VISUAL/$EDITOR with current input pre-populated, reads result back into CommandInput
 
 ## Phase Details
 
@@ -163,7 +174,7 @@ Plans:
   4. A `pytest` test using Textual's `run_test()` pilot can launch `ConductorApp` in headless mode and assert the app starts without error
 **Plans**: 1 plan
 Plans:
-- [ ] 31-01-PLAN.md — ConductorApp entry point, delegation.py cleanup, headless test infrastructure
+- [x] 31-01-PLAN.md — ConductorApp entry point, delegation.py cleanup, headless test infrastructure
 
 ### Phase 32: Static TUI Shell
 **Goal**: The two-column TUI layout is verified with hard-coded content — TranscriptPane displays user message cells, CommandInput submits text, StatusFooter renders structural info, and AgentMonitorPane placeholder renders — before any live data is connected
@@ -177,7 +188,7 @@ Plans:
   5. An agent monitor panel area is visible on the right side (placeholder, not yet reactive)
 **Plans**: 1 plan
 Plans:
-- [ ] 32-01-PLAN.md — TranscriptPane, UserCell/AssistantCell, CommandInput, StatusFooter, AgentMonitorPane placeholder
+- [x] 32-01-PLAN.md — TranscriptPane, UserCell/AssistantCell, CommandInput, StatusFooter, AgentMonitorPane placeholder
 
 ### Phase 33: SDK Streaming
 **Goal**: Users see real Claude responses streaming token-by-token into the active transcript cell with a thinking indicator before the first token arrives, and the status footer displays live token counts
@@ -191,8 +202,8 @@ Plans:
   5. When streaming completes, the active cell becomes immutable and the input widget reactivates
 **Plans**: 2 plans
 Plans:
-- [ ] 33-01-PLAN.md — Streaming widget upgrades (AssistantCell lifecycle, StatusFooter reactives, tests)
-- [ ] 33-02-PLAN.md — SDK @work streaming coroutine wiring in ConductorApp
+- [x] 33-01-PLAN.md — Streaming widget upgrades (AssistantCell lifecycle, StatusFooter reactives, tests)
+- [x] 33-02-PLAN.md — SDK @work streaming coroutine wiring in ConductorApp
 
 ### Phase 34: Rich Output
 **Goal**: Code, markdown, and diffs in assistant responses render with full visual formatting — syntax-highlighted code blocks, proper markdown structure, and color-coded diff additions/deletions — making output readable without leaving the terminal
@@ -204,7 +215,7 @@ Plans:
   3. File diffs render with green-highlighted addition lines and red-highlighted deletion lines — diff syntax is visually distinct from prose
 **Plans**: 1 plan
 Plans:
-- [ ] 34-01-PLAN.md — RichMarkdown widget with diff-aware highlighting, wired into AssistantCell
+- [x] 34-01-PLAN.md — RichMarkdown widget with diff-aware highlighting, wired into AssistantCell
 
 ### Phase 35: Agent Monitoring
 **Goal**: Users see live per-agent status panels in the TUI without switching to the web dashboard — panels appear when delegation starts, update reactively as state.json changes, and collapse when agents complete
@@ -217,7 +228,7 @@ Plans:
   4. When an agent completes its task, its panel collapses or moves to an archived state — the panel does not remain as an active item
 **Plans**: 1 plan
 Plans:
-- [ ] 35-01-PLAN.md — AgentPanel, AgentMonitorPane StateWatchWorker, and tests
+- [x] 35-01-PLAN.md — AgentPanel, AgentMonitorPane StateWatchWorker, and tests
 
 ### Phase 36: Approval Modals
 **Goal**: Agent approval requests and escalation questions surface as modal overlays in the TUI — the user can approve or deny file changes and command execution, and reply to sub-agent questions, all without leaving the terminal
@@ -230,11 +241,8 @@ Plans:
   4. Approving or denying in the modal dismisses it and the background TUI immediately reactivates
 **Plans**: 2 plans
 Plans:
-- [ ] 36-01-PLAN.md — Modal widgets (FileApprovalModal, CommandApprovalModal, EscalationModal) + EscalationRequest message + tests
-- [ ] 36-02-PLAN.md — Wire _watch_escalations worker in ConductorApp, expose delegation queues, integration tests
-
-
-
+- [x] 36-01-PLAN.md — Modal widgets (FileApprovalModal, CommandApprovalModal, EscalationModal) + EscalationRequest message + tests
+- [x] 36-02-PLAN.md — Wire _watch_escalations worker in ConductorApp, expose delegation queues, integration tests
 
 ### Phase 37: Slash Commands & Dashboard Coexistence
 **Goal**: Users can type `/` to trigger a fuzzy autocomplete popup for slash commands, all existing slash commands work correctly, and the web dashboard runs simultaneously in the same process so both TUI and browser views are live at once
@@ -248,10 +256,7 @@ Plans:
   5. `conductor run "..."` batch mode still works without launching the TUI
 **Plans**: 1 plan
 Plans:
-- [ ] 37-01-PLAN.md — SlashAutocomplete widget, slash command dispatch, dashboard coexistence wiring
-
-
-
+- [x] 37-01-PLAN.md — SlashAutocomplete widget, slash command dispatch, dashboard coexistence wiring
 
 ### Phase 38: Session Persistence & Polish
 **Goal**: Resumed sessions replay conversation history before input activates, in-progress cells show shimmer animation, and all v2.0 polish is complete — the TUI delivers a terminal experience credibly better than the prompt_toolkit baseline
@@ -263,13 +268,70 @@ Plans:
   3. The TUI passes a full end-to-end smoke test: launch, send a prompt, see streaming response, open agent monitor, approve a modal, use slash command, resume a session — all without error
 **Plans**: 1 plan
 Plans:
-- [ ] 38-01-PLAN.md — Shimmer animation on streaming cells, session history replay on resume
+- [x] 38-01-PLAN.md — Shimmer animation on streaming cells, session history replay on resume
+
+### Phase 39: Auto-Focus & Alt-Screen
+**Goal**: Input is immediately active when the TUI starts — no Tab or click required — and the TUI fully owns the terminal with clean entry and exit on all exit paths including SIGINT and crash
+**Depends on**: Phase 38 (v2.0 complete)
+**Requirements**: FOCUS-01, TERM-01, TERM-02
+**Success Criteria** (what must be TRUE):
+  1. User launches `conductor` and can begin typing immediately — no Tab press or click is needed to activate the input widget
+  2. The terminal switches to alt-screen on launch and restores the prior scrollback buffer completely on exit — no escape code artifacts remain in the scrollback
+  3. Pressing Ctrl-C triggers a clean shutdown: the TUI exits, the terminal is restored, and the shell prompt appears normally
+  4. Focus returns to the input widget automatically after a modal is dismissed — no manual re-focus step needed
+**Plans**: TBD
+
+Plans:
+- [ ] 39-01-PLAN.md — AUTO_FOCUS class variable, SIGINT handler, terminal cleanup at CLI entry point
+
+### Phase 40: Borderless Design
+**Goal**: The TUI layout uses no visible box borders on structural containers — content flows naturally with minimal chrome — and cell widgets use subtle accent lines instead of thick borders, matching Codex CLI's content-first aesthetic
+**Depends on**: Phase 39
+**Requirements**: VIS-01, VIS-02
+**Success Criteria** (what must be TRUE):
+  1. The Screen, app-body container, and CommandInput area have no visible box borders — no lines frame the layout structure itself
+  2. UserCell and AssistantCell widgets have a subtle left accent line indicating role rather than a thick box border surrounding the content
+  3. AgentMonitorPane retains its column separator (border-left) as a functional divider — only pure chrome borders are removed
+  4. All modal overlays retain their borders unchanged — borderless design applies only to main layout containers and transcript cells
+**Plans**: TBD
+
+Plans:
+- [ ] 40-01-PLAN.md — conductor.tcss borderless rules, cell accent line styling, specificity audit
+
+### Phase 41: Smooth Cell Animations
+**Goal**: New conversation cells fade in on mount rather than appearing abruptly, making the TUI feel alive, with a complete disable path for CI and SSH environments
+**Depends on**: Phase 40
+**Requirements**: VIS-03, VIS-04
+**Success Criteria** (what must be TRUE):
+  1. When a new UserCell or AssistantCell mounts, it smoothly fades from invisible to fully visible over approximately 0.25 seconds
+  2. The fade-in uses opacity animation, not tint or tween hacks — existing shimmer behavior on streaming cells is unchanged
+  3. Setting `CONDUCTOR_NO_ANIMATIONS=1` in the environment disables all fade-in calls — cells appear instantly without any animation
+  4. The animation disable path works without code changes or restarts — environment variable is read at startup and respected throughout the session
+**Plans**: TBD
+
+Plans:
+- [ ] 41-01-PLAN.md — on_mount opacity fade-in in UserCell/AssistantCell, CONDUCTOR_NO_ANIMATIONS guard
+
+### Phase 42: Ctrl-G External Editor
+**Goal**: Power users can press Ctrl-G to open the current input text in their preferred editor, compose or edit multi-line content there, and have the result automatically fill the CommandInput on editor close
+**Depends on**: Phase 39
+**Requirements**: FOCUS-02, FOCUS-03
+**Success Criteria** (what must be TRUE):
+  1. Pressing Ctrl-G suspends the TUI, opens the user's `$VISUAL` or `$EDITOR` (vim as fallback) with the current input text pre-populated in a temp file
+  2. After the editor closes, the temp file content replaces the CommandInput text exactly — including multi-line content
+  3. The TUI resumes cleanly after editor exit — terminal state is fully restored and input is focused with the edited content
+  4. Pressing Ctrl-G during session replay (when input is locked) does nothing — no crash, no broken terminal state
+  5. In environments where suspend is not supported (CI, non-Unix), Ctrl-G fails gracefully with a status message rather than an exception
+**Plans**: TBD
+
+Plans:
+- [ ] 42-01-PLAN.md — action_open_editor (sync def), EditorContentReady message, CommandInput handler, tests
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38
-(Phase 34 and Phase 35 can run in parallel after Phase 33)
+Phases execute in numeric order: 39 → 40 → 41 → 42
+(Phase 42 depends only on Phase 39 for stable terminal lifecycle; can run after Phase 41 or in parallel with it)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -303,11 +365,15 @@ Phases execute in numeric order: 31 → 32 → 33 → 34 → 35 → 36 → 37 �
 | 28. Agent Communication Protocol | v1.3 | 1/1 | Complete | 2026-03-11 |
 | 29. Verification & Review Pipeline | v1.3 | 2/2 | Complete | 2026-03-11 |
 | 30. Smart Decomposition | v1.3 | 1/1 | Complete | 2026-03-11 |
-| 31. TUI Foundation | v2.0 | 0/TBD | Not started | - |
-| 32. Static TUI Shell | v2.0 | 0/TBD | Not started | - |
-| 33. SDK Streaming | 1/2 | In Progress|  | - |
-| 34. Rich Output | 1/1 | Complete   | 2026-03-11 | - |
-| 35. Agent Monitoring | v2.0 | 0/1 | In Progress | - |
-| 36. Approval Modals | v2.0 | 0/2 | Not started | - |
-| 37. Slash Commands & Dashboard Coexistence | v2.0 | 0/1 | Not started | - |
-| 38. Session Persistence & Polish | 1/1 | Complete   | 2026-03-11 | - |
+| 31. TUI Foundation | v2.0 | 1/1 | Complete | 2026-03-11 |
+| 32. Static TUI Shell | v2.0 | 1/1 | Complete | 2026-03-11 |
+| 33. SDK Streaming | v2.0 | 2/2 | Complete | 2026-03-11 |
+| 34. Rich Output | v2.0 | 1/1 | Complete | 2026-03-11 |
+| 35. Agent Monitoring | v2.0 | 1/1 | Complete | 2026-03-11 |
+| 36. Approval Modals | v2.0 | 2/2 | Complete | 2026-03-11 |
+| 37. Slash Commands & Dashboard Coexistence | v2.0 | 1/1 | Complete | 2026-03-11 |
+| 38. Session Persistence & Polish | v2.0 | 1/1 | Complete | 2026-03-11 |
+| 39. Auto-Focus & Alt-Screen | v2.1 | 0/TBD | Not started | - |
+| 40. Borderless Design | v2.1 | 0/TBD | Not started | - |
+| 41. Smooth Cell Animations | v2.1 | 0/TBD | Not started | - |
+| 42. Ctrl-G External Editor | v2.1 | 0/TBD | Not started | - |

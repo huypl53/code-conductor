@@ -5,9 +5,9 @@ milestone_name: UX Polish
 status: active
 stopped_at: null
 last_updated: "2026-03-11"
-last_activity: 2026-03-11 — Milestone v2.1 started
+last_activity: 2026-03-11 — Roadmap created for v2.1 UX Polish (4 phases, 9 requirements)
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,48 +21,41 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** A product owner describes a feature, and a self-organizing team of AI coding agents delivers quality, reviewed, tested code — with the human staying in control when they want to be.
-**Current focus:** v2.1 UX Polish
+**Current focus:** v2.1 UX Polish — Phase 39 (Auto-Focus & Alt-Screen)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 39 of 42 (Auto-Focus & Alt-Screen)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-03-11 — Milestone v2.1 started
+Status: Ready to plan
+Last activity: 2026-03-11 — Roadmap created for v2.1 UX Polish
 
 Progress: [░░░░░░░░░░] 0%
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 0
+- Average duration: —
+- Total execution time: —
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| - | - | - | - |
+
+*Updated after each plan completion*
 
 ## Accumulated Context
 
 ### Decisions
 
-- [v1.3/Phase 26]: compute_waves() uses scratch TopologicalSorter to avoid consuming active sorter
-- [v1.3/Phase 27]: run() uses wave-based execution with asyncio.gather; resume() keeps FIRST_COMPLETED
-- [v1.3/Phase 29]: Wiring check uses file stem (no extension) for grep to catch import patterns
-- [v1.3/Phase 30]: Three-phase decomposition pipeline with graceful fallback on any failure
-- [v2.0 Architecture]: Textual owns the event loop — ConductorApp.run() is sole entry point, no asyncio.run() cohabitation
-- [v2.0 Architecture]: prompt_toolkit fully removed — both frameworks claim terminal raw mode, cannot coexist
-- [v2.0 Architecture]: uvicorn runs as asyncio.create_task(server.serve()) inside on_mount, not uvicorn.run()
+- [v2.0/Phase 38]: set_interval + sine wave for shimmer — Widget.animate dot-path (styles.tint) raises AttributeError at runtime
+- [v2.0/Phase 37]: textual-autocomplete v4.0.6 with TargetState API for slash autocomplete
+- [v2.0/Phase 36]: All escalation types routed through EscalationModal; context-based routing deferred
 - [v2.0 Architecture]: Token buffering at 20fps via set_interval — never call widget.update() per-token
-- [Phase 31]: console=None kept as default in DelegationManager for backward compat with existing tests
-- [Phase 31]: STATUS_UPDATE_INTERVAL constant kept exported; _status_updater/_clear_status_lines/_print_live_status methods deleted
-- [Phase 31]: cli/__init__.py uses ConductorApp(...).run() — asyncio.run() fully removed from TUI path
-- [Phase 32]: Textual routes messages by Message class name (on_user_submitted), not widget namespace (on_command_input_user_submitted)
-- [Phase 32]: Lazy imports inside compose() and handlers to avoid circular dependencies and keep tui.app import lightweight
-- [Phase 32]: Each widget owns its styling via DEFAULT_CSS class variable — conductor.tcss only handles Screen and container layout
-- [Phase 33]: MarkdownStream.write() is correct API (not append()); resolves research flag concern
-- [Phase 33]: StatusFooter uses reactive attributes + on_tokens_updated handler (hybrid: bus-consistent + auto-repaint)
-- [Phase 33]: Textual messages bubble UP not DOWN; post_message to specific widget for targeted delivery
-- [Phase 33]: SDK connected lazily on first message (not on_mount) to avoid blocking app startup
-- [Phase 33]: @work(exclusive=True, exit_on_error=False) for streaming -- prevents double-submit and crash on SDK error
-- [Phase 33]: Session ID from uuid4.hex[:8] on mount, overridable by resume or SDK ResultMessage
-- [Phase 34]: bold green/bold red raw colors for diff spans; DiffHighlightTheme applied only for diff/udiff fences
-- [Phase 36]: push_screen with callback for modal tests (push_screen_wait requires worker context)
-- [Phase 36]: app.screen.query_one() to query widgets on active modal screen in tests
-- [Phase 36]: Escalation listener only starts for non-TUI (input_fn) paths; TUI uses ConductorApp._watch_escalations @work coroutine
-- [Phase 36]: All escalation types routed through EscalationModal; context-based routing to FileApprovalModal/CommandApprovalModal deferred
-- [Phase 37]: Used textual-autocomplete v4.0.6 with TargetState API for slash command autocomplete
-- [Phase 38]: set_interval + sine wave for shimmer (Widget.animate dot-path unsupported)
+- [v2.0 Architecture]: Textual owns the event loop — ConductorApp.run() is sole entry point
 
 ### Pending Todos
 
@@ -70,18 +63,12 @@ None.
 
 ### Blockers/Concerns
 
-- [Phase 33 research flag]: RESOLVED — MarkdownStream API confirmed: `Markdown.get_stream()` + `stream.write()` (not `append()`). Verified in Textual 8.1.1 and passing tests.
-- [Phase 36 research flag]: asyncio.Queue bridge from DelegationManager._escalation_listener to push_screen_wait() has no direct Textual docs precedent — prototype before building full modal stack
-- [Phase 31 audit item]: Claude Agent SDK subprocess may write to inherited terminal stdout, bypassing Textual renderer — audit with test delegation run in Phase 35
-
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 1 | Fix ANSI escape code rendering in TUI | 2026-03-11 | 7f66551 | [1-fix-ansi-escape-code-rendering-in-tui](./quick/1-fix-ansi-escape-code-rendering-in-tui/) |
+- [v2.1/Phase 42 pre-work]: action_open_editor must be synchronous def (not async) calling suspend() directly, or wrapped in @work(thread=True) — async + asyncio.create_subprocess_exec leaves terminal broken
+- [v2.1/Phase 42 pre-work]: $VISUAL must be checked before $EDITOR (POSIX convention) — research notes a discrepancy between STACK.md and ARCHITECTURE.md samples; reconcile before coding
+- [v2.1/Phase 40 pre-work]: CSS specificity — compound selectors required to override DEFAULT_CSS widget rules; verify each widget's DEFAULT_CSS before writing conductor.tcss overrides
 
 ## Session Continuity
 
-Last session: 2026-03-11T15:29:55.467Z
-Stopped at: Completed 38-01-PLAN.md
+Last session: 2026-03-11
+Stopped at: Roadmap created — ready to plan Phase 39
 Resume file: None

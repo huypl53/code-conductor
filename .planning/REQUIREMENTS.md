@@ -154,12 +154,23 @@ Which phases cover which requirements. Updated during roadmap creation.
 | APRV-04 | Phase 37 | Pending |
 | STAT-02 | Phase 38 | Complete |
 | STAT-03 | Phase 38 | Complete |
+| FOCUS-01 | Phase 39 | Pending |
+| TERM-01 | Phase 39 | Pending |
+| TERM-02 | Phase 39 | Pending |
+| VIS-01 | Phase 40 | Pending |
+| VIS-02 | Phase 40 | Pending |
+| VIS-03 | Phase 41 | Pending |
+| VIS-04 | Phase 41 | Pending |
+| FOCUS-02 | Phase 42 | Pending |
+| FOCUS-03 | Phase 42 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 20 total
 - Mapped to phases: 20
+- v2.1 requirements: 9 total
+- Mapped to phases: 9
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-11*
-*Last updated: 2026-03-11 after roadmap creation — all 20 requirements mapped*
+*Last updated: 2026-03-11 after v2.1 roadmap creation — all 9 v2.1 requirements mapped*
