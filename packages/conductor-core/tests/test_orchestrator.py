@@ -2925,3 +2925,401 @@ class TestWaveExecution:
             # model should NOT be passed to ClaudeAgentOptions when None
             call_kwargs = mock_options_cls.call_args[1]
             assert "model" not in call_kwargs
+
+
+# ---------------------------------------------------------------------------
+# Tests: Agent report status routing (Phase 28)
+# ---------------------------------------------------------------------------
+
+
+def _make_json_result_text(status: str, summary: str = "ok") -> str:
+    """Build agent result text containing a JSON status block."""
+    return (
+        f"I completed the work.\n\n"
+        f"```json\n"
+        f'{{"status": "{status}", "summary": "{summary}", '
+        f'"files_changed": ["src/foo.py"], "concerns": []}}\n'
+        f"```\n"
+    )
+
+
+def _make_blocked_result_text(concern: str = "Need new DB table") -> str:
+    """Build agent result text with BLOCKED status."""
+    return (
+        "I cannot proceed.\n\n"
+        "```json\n"
+        f'{{"status": "BLOCKED", "summary": "Cannot proceed", '
+        f'"files_changed": [], "concerns": ["{concern}"]}}\n'
+        "```\n"
+    )
+
+
+def _make_needs_context_result_text() -> str:
+    """Build agent result text with NEEDS_CONTEXT status."""
+    return (
+        "I need more information.\n\n"
+        "```json\n"
+        '{"status": "NEEDS_CONTEXT", "summary": "Need material files"}\n'
+        "```\n"
+    )
+
+
+def _make_real_result_message(result_text: str):
+    """Create a real ResultMessage instance (so isinstance check passes in StreamMonitor)."""
+    from claude_agent_sdk import ResultMessage
+
+    return ResultMessage(
+        subtype="result",
+        duration_ms=100,
+        duration_api_ms=100,
+        is_error=False,
+        num_turns=1,
+        session_id="test-session",
+        stop_reason="end_turn",
+        result=result_text,
+    )
+
+
+def _make_mock_acp_client_with_real_result(result_text: str):
+    """Return an ACP client whose stream yields a real ResultMessage instance."""
+    client = AsyncMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    client.send = AsyncMock()
+
+    real_msg = _make_real_result_message(result_text)
+
+    async def _result_stream():
+        yield real_msg
+
+    client.stream_response = MagicMock(side_effect=_result_stream)
+    return client
+
+
+class TestAgentReportRouting:
+    """Phase 28: Agent report status routing in orchestrator _run_agent_loop."""
+
+    @pytest.mark.asyncio
+    async def test_done_proceeds_to_review(self, tmp_path):
+        """DONE status: orchestrator proceeds to review_output as normal."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        # Create target file so the file existence gate doesn't override approved
+        target = tmp_path / "src" / "a.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("# placeholder")
+
+        tasks = [_make_task_spec("t1", str(target))]
+        plan = _make_plan(tasks)
+        state_mgr = _make_state_manager()
+
+        mock_decomposer = AsyncMock()
+        mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        result_text = _make_json_result_text("DONE")
+        client = _make_mock_acp_client_with_real_result(result_text)
+
+        review_calls = []
+
+        async def _track_review(*args, **kwargs):
+            review_calls.append(True)
+            return ReviewVerdict(approved=True)
+
+        with (
+            patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer),
+            patch(f"{_ORCH}.ACPClient", return_value=client),
+            patch(f"{_ORCH}.review_output", side_effect=_track_review),
+        ):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            await orch.run("Build feature")
+
+        assert len(review_calls) == 1, "review_output should be called once for DONE"
+
+    @pytest.mark.asyncio
+    async def test_freeform_proceeds_to_review_unchanged(self, tmp_path):
+        """No JSON block: orchestrator falls through to review_output (backward compat)."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        # Create target file so the file existence gate doesn't override approved
+        target = tmp_path / "src" / "a.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("# placeholder")
+
+        tasks = [_make_task_spec("t1", str(target))]
+        plan = _make_plan(tasks)
+        state_mgr = _make_state_manager()
+
+        mock_decomposer = AsyncMock()
+        mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        # Freeform text — no JSON block
+        client = _make_mock_acp_client_with_real_result("I implemented the feature. All done.")
+
+        review_calls = []
+
+        async def _track_review(*args, **kwargs):
+            review_calls.append(True)
+            return ReviewVerdict(approved=True)
+
+        with (
+            patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer),
+            patch(f"{_ORCH}.ACPClient", return_value=client),
+            patch(f"{_ORCH}.review_output", side_effect=_track_review),
+        ):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            await orch.run("Build feature")
+
+        assert len(review_calls) == 1, "review_output should be called for freeform output"
+
+    @pytest.mark.asyncio
+    async def test_done_with_concerns_proceeds_to_review(self, tmp_path):
+        """DONE_WITH_CONCERNS: proceeds to review but logs concerns."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        # Create target file so the file existence gate doesn't override approved
+        target = tmp_path / "src" / "a.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("# placeholder")
+
+        tasks = [_make_task_spec("t1", str(target))]
+        plan = _make_plan(tasks)
+        state_mgr = _make_state_manager()
+
+        mock_decomposer = AsyncMock()
+        mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        result_text = _make_json_result_text("DONE_WITH_CONCERNS", "Done but edge case")
+        client = _make_mock_acp_client_with_real_result(result_text)
+
+        review_calls = []
+
+        async def _track_review(*args, **kwargs):
+            review_calls.append(True)
+            return ReviewVerdict(approved=True)
+
+        with (
+            patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer),
+            patch(f"{_ORCH}.ACPClient", return_value=client),
+            patch(f"{_ORCH}.review_output", side_effect=_track_review),
+        ):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            await orch.run("Build feature")
+
+        assert len(review_calls) >= 1, "review_output should be called for DONE_WITH_CONCERNS"
+
+    @pytest.mark.asyncio
+    async def test_blocked_in_auto_mode_sends_proceed_message(self, tmp_path):
+        """BLOCKED in auto mode: orchestrator sends best-judgment message and re-enters loop."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        # Create target file so the file existence gate doesn't override approved
+        target = tmp_path / "src" / "a.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("# placeholder")
+
+        tasks = [_make_task_spec("t1", str(target))]
+        plan = _make_plan(tasks)
+        state_mgr = _make_state_manager()
+
+        mock_decomposer = AsyncMock()
+        mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        # First stream: BLOCKED. Second stream: DONE (after retry).
+        stream_count = 0
+
+        def _make_stream_client():
+            """Client that returns BLOCKED first, then DONE."""
+            client = AsyncMock()
+            client.__aenter__ = AsyncMock(return_value=client)
+            client.__aexit__ = AsyncMock(return_value=False)
+            client.send = AsyncMock()
+
+            nonlocal stream_count
+
+            def _stream_factory():
+                nonlocal stream_count
+                stream_count += 1
+
+                if stream_count == 1:
+                    result_text = _make_blocked_result_text("Need new DB table")
+                else:
+                    result_text = _make_json_result_text("DONE")
+
+                real_msg = _make_real_result_message(result_text)
+
+                async def _gen():
+                    yield real_msg
+
+                return _gen()
+
+            client.stream_response = MagicMock(side_effect=_stream_factory)
+            return client
+
+        client = _make_stream_client()
+        send_calls: list[str] = []
+
+        original_send = client.send
+
+        async def _track_send(msg: str):
+            send_calls.append(msg)
+            await original_send(msg)
+
+        client.send = _track_send
+
+        with (
+            patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer),
+            patch(f"{_ORCH}.ACPClient", return_value=client),
+            patch(f"{_ORCH}.review_output", _approved_review_mock()),
+        ):
+            orch = Orchestrator(
+                state_manager=state_mgr, repo_path=str(tmp_path), mode="auto"
+            )
+            await orch.run("Build feature")
+
+        # Should have sent the "best judgment" message
+        proceed_msgs = [m for m in send_calls if "best judgment" in m.lower() or "proceed" in m.lower()]
+        assert len(proceed_msgs) >= 1, f"Expected best-judgment message, got: {send_calls}"
+
+    @pytest.mark.asyncio
+    async def test_blocked_in_interactive_mode_pushes_human_query(self, tmp_path):
+        """BLOCKED in interactive mode: pushes HumanQuery, awaits answer, sends it."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        # Create target file so the file existence gate doesn't override approved
+        target = tmp_path / "src" / "a.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("# placeholder")
+
+        tasks = [_make_task_spec("t1", str(target))]
+        plan = _make_plan(tasks)
+        state_mgr = _make_state_manager()
+
+        mock_decomposer = AsyncMock()
+        mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        human_out: asyncio.Queue = asyncio.Queue()
+        human_in: asyncio.Queue = asyncio.Queue()
+
+        # Pre-populate human_in with an answer so the test doesn't hang
+        await human_in.put("proceed with the implementation")
+
+        stream_count = 0
+
+        def _make_interactive_client():
+            client = AsyncMock()
+            client.__aenter__ = AsyncMock(return_value=client)
+            client.__aexit__ = AsyncMock(return_value=False)
+            client.send = AsyncMock()
+
+            nonlocal stream_count
+
+            def _stream_factory():
+                nonlocal stream_count
+                stream_count += 1
+
+                if stream_count == 1:
+                    result_text = _make_blocked_result_text("Need architectural decision")
+                else:
+                    result_text = _make_json_result_text("DONE")
+
+                real_msg = _make_real_result_message(result_text)
+
+                async def _gen():
+                    yield real_msg
+
+                return _gen()
+
+            client.stream_response = MagicMock(side_effect=_stream_factory)
+            return client
+
+        client = _make_interactive_client()
+
+        with (
+            patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer),
+            patch(f"{_ORCH}.ACPClient", return_value=client),
+            patch(f"{_ORCH}.review_output", _approved_review_mock()),
+        ):
+            orch = Orchestrator(
+                state_manager=state_mgr,
+                repo_path=str(tmp_path),
+                mode="interactive",
+                human_out=human_out,
+                human_in=human_in,
+            )
+            await orch.run("Build feature")
+
+        # human_out should have received a HumanQuery
+        assert not human_out.empty(), "Expected HumanQuery to be pushed to human_out"
+        from conductor.orchestrator.escalation import HumanQuery
+        query_obj = human_out.get_nowait()
+        assert isinstance(query_obj, HumanQuery)
+
+    @pytest.mark.asyncio
+    async def test_needs_context_sends_context_message_and_retries(self, tmp_path):
+        """NEEDS_CONTEXT: orchestrator sends context message and re-enters loop."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        # Create target file so the file existence gate doesn't override approved
+        target = tmp_path / "src" / "a.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("# placeholder")
+
+        tasks = [_make_task_spec("t1", str(target))]
+        plan = _make_plan(tasks)
+        state_mgr = _make_state_manager()
+
+        mock_decomposer = AsyncMock()
+        mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        stream_count = 0
+
+        def _make_context_client():
+            client = AsyncMock()
+            client.__aenter__ = AsyncMock(return_value=client)
+            client.__aexit__ = AsyncMock(return_value=False)
+            client.send = AsyncMock()
+
+            nonlocal stream_count
+
+            def _stream_factory():
+                nonlocal stream_count
+                stream_count += 1
+
+                if stream_count == 1:
+                    result_text = _make_needs_context_result_text()
+                else:
+                    result_text = _make_json_result_text("DONE")
+
+                real_msg = _make_real_result_message(result_text)
+
+                async def _gen():
+                    yield real_msg
+
+                return _gen()
+
+            client.stream_response = MagicMock(side_effect=_stream_factory)
+            return client
+
+        client = _make_context_client()
+        send_calls: list[str] = []
+        original_send = client.send
+
+        async def _track_send(msg: str):
+            send_calls.append(msg)
+            await original_send(msg)
+
+        client.send = _track_send
+
+        with (
+            patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer),
+            patch(f"{_ORCH}.ACPClient", return_value=client),
+            patch(f"{_ORCH}.review_output", _approved_review_mock()),
+        ):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            await orch.run("Build feature")
+
+        # Should have sent a context message
+        context_msgs = [m for m in send_calls if "context" in m.lower() or "material" in m.lower()]
+        assert len(context_msgs) >= 1, f"Expected context message, got: {send_calls}"
+        # Should have streamed twice (NEEDS_CONTEXT + retry)
+        assert stream_count >= 2, f"Expected at least 2 stream iterations, got {stream_count}"

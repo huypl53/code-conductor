@@ -22,8 +22,8 @@ from conductor.orchestrator.decomposer import TaskDecomposer
 from conductor.orchestrator.errors import DecompositionError, EscalationError
 from conductor.orchestrator.escalation import EscalationRouter, HumanQuery
 from conductor.orchestrator.identity import AgentIdentity, build_system_prompt
-from conductor.orchestrator.models import AgentRole, ModelProfile, OrchestratorConfig, TaskSpec
-from conductor.orchestrator.monitor import StreamMonitor
+from conductor.orchestrator.models import AgentReport, AgentReportStatus, AgentRole, ModelProfile, OrchestratorConfig, TaskSpec
+from conductor.orchestrator.monitor import StreamMonitor, parse_agent_report
 from conductor.orchestrator.ownership import validate_file_ownership
 from conductor.orchestrator.reviewer import ReviewVerdict, review_output
 from conductor.orchestrator.scheduler import DependencyScheduler
@@ -709,6 +709,73 @@ class Orchestrator:
                             monitor = StreamMonitor(task_spec.id)
                             async for message in client.stream_response():
                                 monitor.process(message)
+
+                            # Parse agent status report (best-effort; None = freeform)
+                            report = parse_agent_report(monitor.result_text or "")
+
+                            # Status-based routing (Phase 28)
+                            if report is not None:
+                                if report.status == AgentReportStatus.DONE_WITH_CONCERNS:
+                                    logger.warning(
+                                        "Agent %s completed with concerns: %s",
+                                        agent_id,
+                                        report.concerns,
+                                    )
+                                    # Fall through to review_output below
+
+                                elif report.status == AgentReportStatus.BLOCKED:
+                                    logger.warning(
+                                        "Agent %s is BLOCKED: %s",
+                                        agent_id,
+                                        report.concerns,
+                                    )
+                                    concern_text = (
+                                        report.concerns[0]
+                                        if report.concerns
+                                        else report.summary
+                                    )
+                                    if (
+                                        self._mode == "interactive"
+                                        and self._human_out is not None
+                                        and self._human_in is not None
+                                    ):
+                                        # Escalate to human
+                                        query_obj = HumanQuery(
+                                            question=f"Agent is blocked: {concern_text}",
+                                            context={},
+                                        )
+                                        await self._human_out.put(query_obj)
+                                        try:
+                                            human_answer = await asyncio.wait_for(
+                                                self._human_in.get(),
+                                                timeout=self._escalation_router._human_timeout,
+                                            )
+                                        except TimeoutError:
+                                            human_answer = "proceed with best judgment"
+                                        await client.send(
+                                            f"Human guidance: {human_answer}. Please continue."
+                                        )
+                                    else:
+                                        # Auto mode: proceed with best judgment
+                                        await client.send(
+                                            "The orchestrator acknowledges your concern. "
+                                            "Proceed with your best judgment on the blocked issue."
+                                        )
+                                    continue  # Re-enter loop for retry
+
+                                elif report.status == AgentReportStatus.NEEDS_CONTEXT:
+                                    logger.info(
+                                        "Agent %s needs context — providing material file guidance",
+                                        agent_id,
+                                    )
+                                    await client.send(
+                                        "Additional context: Please read the material files "
+                                        "listed in your system prompt. If you need specific "
+                                        "information, describe what you need in your next "
+                                        "status report with status BLOCKED."
+                                    )
+                                    continue  # Re-enter loop for retry
+                                # DONE and DONE_WITH_CONCERNS fall through to review_output
 
                             verdict = await review_output(
                                 task_description=task_spec.description,
