@@ -114,6 +114,7 @@ class Orchestrator:
         human_in: asyncio.Queue | None = None,
         max_agents: int = 10,
         max_revisions: int = 2,
+        build_command: str | None = None,
     ) -> None:
         self._state = state_manager
         self._repo_path = repo_path
@@ -122,6 +123,7 @@ class Orchestrator:
         self._human_in = human_in
         self._max_agents = max_agents
         self._max_revisions = max_revisions
+        self._build_command = build_command
         self._decomposer = TaskDecomposer()
         self._escalation_router = EscalationRouter(
             mode=mode,
@@ -224,6 +226,8 @@ class Orchestrator:
         # Wait for any stragglers (shouldn't normally happen)
         if pending:
             await asyncio.gather(*pending.values(), return_exceptions=True)
+
+        await self._post_run_build_check()
 
     async def pre_run_review(self, feature_description: str) -> str:
         """Analyse *feature_description* before execution and return confirmed spec.
@@ -369,6 +373,7 @@ class Orchestrator:
             )
 
         if not task_specs:
+            await self._post_run_build_check()
             return
 
         # Effective concurrency cap
@@ -429,6 +434,8 @@ class Orchestrator:
 
         if pending:
             await asyncio.gather(*pending.values(), return_exceptions=True)
+
+        await self._post_run_build_check()
 
     # ------------------------------------------------------------------
     # Intervention methods (COMM-05/06/07)
@@ -750,6 +757,35 @@ class Orchestrator:
                 revision_count=revision_num,
             ),
         )
+
+    async def _post_run_build_check(self) -> bool:
+        """Run the optional build_command and log results (never raises).
+
+        Returns:
+            True if build passed or no command is configured, False on failure.
+        """
+        if not self._build_command:
+            return True
+
+        logger.info("Running post-run build check: %s", self._build_command)
+        proc = await asyncio.create_subprocess_shell(
+            self._build_command,
+            cwd=self._repo_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+
+        if proc.returncode == 0:
+            logger.info("Build check passed")
+            return True
+
+        logger.error(
+            "Build check failed (exit %d):\n%s",
+            proc.returncode,
+            stderr.decode(errors="replace"),
+        )
+        return False
 
     @staticmethod
     def _make_add_tasks_fn(
