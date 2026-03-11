@@ -189,7 +189,10 @@ Plans:
   3. The status footer displays the current model name, mode (auto/interactive), and live token count that updates as the response streams
   4. The session ID is visible in the status footer
   5. When streaming completes, the active cell becomes immutable and the input widget reactivates
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 33-01-PLAN.md — Streaming widget upgrades (AssistantCell lifecycle, StatusFooter reactives, tests)
+- [ ] 33-02-PLAN.md — SDK @work streaming coroutine wiring in ConductorApp
 
 ### Phase 34: Rich Output
 **Goal**: Code, markdown, and diffs in assistant responses render with full visual formatting — syntax-highlighted code blocks, proper markdown structure, and color-coded diff additions/deletions — making output readable without leaving the terminal
