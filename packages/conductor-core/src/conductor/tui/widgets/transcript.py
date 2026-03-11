@@ -2,7 +2,7 @@
 from __future__ import annotations
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
-from textual.widgets import Static
+from textual.widgets import LoadingIndicator, Markdown, Static
 from textual.widget import Widget
 
 
@@ -32,7 +32,13 @@ class UserCell(Widget):
 
 
 class AssistantCell(Widget):
-    """A single assistant message turn. Lighter background than UserCell."""
+    """A single assistant message turn with optional streaming lifecycle.
+
+    Two modes:
+    - Static: AssistantCell("some text") — renders text immediately (Phase 32 compat).
+    - Streaming: AssistantCell() — shows LoadingIndicator, then transitions to
+      Markdown via start_streaming() / append_token() / finalize().
+    """
 
     DEFAULT_CSS = """
     AssistantCell {
@@ -47,20 +53,51 @@ class AssistantCell(Widget):
     }
     """
 
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str | None = None) -> None:
         super().__init__()
         self._text = text
+        self._is_streaming: bool = text is None
+        self._stream = None  # MarkdownStream | None
+        self._markdown: Markdown | None = None
 
     def compose(self) -> ComposeResult:
         yield Static("Conductor", classes="cell-label")
-        yield Static(self._text)
+        if self._text is not None:
+            # Static mode — render text immediately
+            yield Static(self._text)
+        else:
+            # Streaming mode — show thinking indicator
+            yield LoadingIndicator()
+
+    async def start_streaming(self) -> None:
+        """Transition from thinking to streaming: remove LoadingIndicator, mount Markdown."""
+        try:
+            indicator = self.query_one(LoadingIndicator)
+            await indicator.remove()
+        except Exception:
+            pass
+        self._markdown = Markdown("")
+        await self.mount(self._markdown)
+        self._stream = Markdown.get_stream(self._markdown)
+
+    async def append_token(self, chunk: str) -> None:
+        """Route a token chunk into the MarkdownStream."""
+        if self._stream is not None:
+            await self._stream.write(chunk)
+
+    async def finalize(self) -> None:
+        """Stop the stream and make the cell immutable."""
+        if self._stream is not None:
+            await self._stream.stop()
+            self._stream = None
+        self._is_streaming = False
 
 
 class TranscriptPane(VerticalScroll):
     """Scrollable vertical container for conversation cells.
 
     Receives UserSubmitted messages from CommandInput (via app message bus)
-    and mounts a new UserCell. AssistantCell creation comes in Phase 33.
+    and mounts a new UserCell. AssistantCell creation comes via StreamingStarted.
     """
 
     DEFAULT_CSS = """
@@ -85,3 +122,10 @@ class TranscriptPane(VerticalScroll):
         cell = UserCell(text)
         await self.mount(cell)
         self.scroll_end(animate=False)
+
+    async def add_assistant_streaming(self) -> AssistantCell:
+        """Mount a streaming AssistantCell (thinking state) and return it."""
+        cell = AssistantCell()
+        await self.mount(cell)
+        self.scroll_end(animate=False)
+        return cell

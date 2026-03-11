@@ -43,11 +43,13 @@ async def test_token_chunk_routes_to_cell():
         cell = app.query_one(AssistantCell)
         await cell.start_streaming()
         await cell.append_token("Hello")
+        # Stop the stream so content is flushed to the Markdown widget
+        await cell.finalize()
         await pilot.pause()
 
         md = cell.query_one(Markdown)
-        # Markdown widget should contain the streamed text
-        assert "Hello" in md._markdown_content or "Hello" in str(md.render())
+        # After finalize, the accumulated markdown content should contain "Hello"
+        assert "Hello" in md._markdown, f"Expected 'Hello' in markdown, got: {md._markdown!r}"
 
 
 async def test_stream_done_finalizes():
@@ -87,12 +89,13 @@ async def test_status_footer_token_update():
     app = FooterApp()
     async with app.run_test() as pilot:
         footer = app.query_one(StatusFooter)
-        app.post_message(TokensUpdated({"input_tokens": 100, "output_tokens": 50}))
+        footer.post_message(TokensUpdated({"input_tokens": 100, "output_tokens": 50}))
         await pilot.pause()
 
         assert footer.token_count == 150, f"Expected 150, got {footer.token_count}"
         left_label = footer.query_one("#status-left", Static)
-        assert "tokens: 150" in left_label.renderable, f"Expected 'tokens: 150' in label"
+        label_text = str(left_label._Static__content)
+        assert "tokens: 150" in label_text, f"Expected 'tokens: 150' in label, got: {label_text!r}"
 
 
 async def test_status_footer_session_id():
@@ -113,4 +116,5 @@ async def test_status_footer_session_id():
         await pilot.pause()
 
         left_label = footer.query_one("#status-left", Static)
-        assert "session: abc-123" in left_label.renderable, f"Expected 'session: abc-123' in label"
+        label_text = str(left_label._Static__content)
+        assert "session: abc-123" in label_text, f"Expected 'session: abc-123' in label, got: {label_text!r}"

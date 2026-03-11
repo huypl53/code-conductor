@@ -52,6 +52,10 @@ class DelegationComplete(Message):
         super().__init__()
 
 
+class StreamingStarted(Message):
+    """Signal that an AssistantCell should be created in streaming mode."""
+
+
 class UserSubmitted(Message):
     """User pressed Enter in CommandInput — text ready for transcript."""
 
