@@ -1,0 +1,19 @@
+/* Conductor TUI — layout skeleton for Phase 31 */
+/* Full layout established in Phase 32 */
+
+Screen {
+    layers: base overlay;
+    background: $surface;
+}
+
+#app-body {
+    width: 1fr;
+    height: 1fr;
+}
+
+#placeholder-label {
+    content-align: center middle;
+    width: 1fr;
+    height: 1fr;
+    color: $text-muted;
+}
