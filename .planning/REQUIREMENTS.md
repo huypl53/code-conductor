@@ -9,9 +9,9 @@ Requirements for the Orchestrator Intelligence milestone. Each maps to roadmap p
 
 ### Infrastructure
 
-- [ ] **INFRA-01**: Scheduler exposes `compute_waves()` returning pre-computed dependency wave groups
-- [ ] **INFRA-02**: `OrchestratorConfig` model with configurable iteration limits (max_revisions, max_decomposition_retries) replaces hardcoded defaults
-- [ ] **MODEL-01**: `ModelProfile` model maps roles (decomposer, reviewer, executor, verifier) to model names with quality/balanced/budget presets
+- [x] **INFRA-01**: Scheduler exposes `compute_waves()` returning pre-computed dependency wave groups
+- [x] **INFRA-02**: `OrchestratorConfig` model with configurable iteration limits (max_revisions, max_decomposition_retries) replaces hardcoded defaults
+- [x] **MODEL-01**: `ModelProfile` model maps roles (decomposer, reviewer, executor, verifier) to model names with quality/balanced/budget presets
 
 ### Execution Pipeline
 
@@ -67,9 +67,9 @@ All 19 requirements delivered. See `.planning/milestones/v1.1-REQUIREMENTS.md`.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | Phase 26 | Pending |
-| INFRA-02 | Phase 26 | Pending |
-| MODEL-01 | Phase 26 | Pending |
+| INFRA-01 | Phase 26 | Complete |
+| INFRA-02 | Phase 26 | Complete |
+| MODEL-01 | Phase 26 | Complete |
 | WAVE-01 | Phase 27 | Pending |
 | ROUTE-01 | Phase 27 | Pending |
 | LEAN-01 | Phase 27 | Pending |

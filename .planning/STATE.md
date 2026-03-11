@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: Orchestrator Intelligence
-status: in_progress
-stopped_at: null
-last_updated: "2026-03-11"
-last_activity: "2026-03-11 — Milestone v1.3 started"
+milestone: v1.2
+milestone_name: Task Verification & Build Safety
+status: planning
+stopped_at: Completed 26-01-PLAN.md
+last_updated: "2026-03-11T11:25:22.047Z"
+last_activity: 2026-03-11 — Milestone v1.3 started
 progress:
-  total_phases: 5
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_phases: 13
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 3
   percent: 0
 ---
 
@@ -41,6 +41,9 @@ Progress: [░░░░░░░░░░] 0%
 - Post-run build command is a final report, not a gate — does not block task completion
 - Build command configurable via `--build-command` CLI flag and `.conductor/config.json`
 - Config loading in run.py, not inside Orchestrator (orchestrator is pure execution engine)
+- [Phase 26]: compute_waves() uses a scratch TopologicalSorter from self._graph to avoid consuming the active sorter
+- [Phase 26]: Explicit max_revisions/max_agents params override OrchestratorConfig when non-default — backward compat preserved
+- [Phase 26]: AgentRole uses StrEnum so values are plain strings and JSON-serializable
 
 ### Pending Todos
 
@@ -58,6 +61,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11
-Stopped at: Starting Phase 26
+Last session: 2026-03-11T11:25:15.595Z
+Stopped at: Completed 26-01-PLAN.md
 Resume file: None
