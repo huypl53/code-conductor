@@ -28,6 +28,8 @@ async def _dispatch_command(
     orchestrator: object,
     state_manager: StateManager | None = None,
     console: Console | None = None,
+    human_out: asyncio.Queue | None = None,
+    human_in: asyncio.Queue | None = None,
 ) -> bool:
     """Parse and dispatch a single CLI command line.
 
@@ -68,6 +70,23 @@ async def _dispatch_command(
         await orchestrator.cancel_agent(agent_id, new_instructions=new_instructions)  # type: ignore[union-attr]
         console.print(f"[green]Redirected agent {agent_id}[/]")
 
+    elif cmd == "pause":
+        if len(tokens) < 3:
+            console.print("[red]Usage: pause <agent_id> <question...>[/]")
+            return False
+        if human_out is None or human_in is None:
+            console.print("[red]pause requires interactive mode[/]")
+            return False
+        agent_id = tokens[1]
+        question = " ".join(tokens[2:])
+        try:
+            await orchestrator.pause_for_human_decision(  # type: ignore[union-attr]
+                agent_id, question, human_out, human_in
+            )
+            console.print(f"[green]Paused agent {agent_id}[/]")
+        except Exception as e:
+            console.print(f"[red]pause failed: {e}[/]")
+
     elif cmd == "status":
         if state_manager is None:
             console.print("No state manager available")
@@ -81,7 +100,7 @@ async def _dispatch_command(
     else:
         console.print(
             f"Unknown command: {cmd}. "
-            "Available: cancel, feedback, redirect, status, quit"
+            "Available: cancel, feedback, pause, redirect, status, quit"
         )
 
     return False
@@ -130,7 +149,8 @@ async def _input_loop(
                 line = input_task.result().strip()
                 if line:
                     should_exit = await _dispatch_command(
-                        line, orchestrator, state_manager=state_manager, console=console
+                        line, orchestrator, state_manager=state_manager, console=console,
+                        human_out=human_out, human_in=human_in,
                     )
                     if should_exit:
                         break

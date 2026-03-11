@@ -192,3 +192,67 @@ def test_ws_initial_snapshot_still_sent_with_orchestrator(tmp_path: Path) -> Non
     assert "tasks" in data
     assert "agents" in data
     assert "version" in data
+
+
+# ---------------------------------------------------------------------------
+# Test 7: pause action -> orchestrator.pause_for_human_decision called
+# ---------------------------------------------------------------------------
+
+
+def test_ws_pause_action_calls_pause_for_human_decision(tmp_path: Path) -> None:
+    """WebSocket receives pause action -> orchestrator.pause_for_human_decision called."""
+    import asyncio
+
+    state_path = tmp_path / "state.json"
+    write_empty_state(state_path)
+
+    mock_orch = make_mock_orchestrator()
+    mock_orch.pause_for_human_decision = AsyncMock()
+    # Set up _human_out and _human_in so the pause branch does not skip
+    mock_orch._human_out = asyncio.Queue()
+    mock_orch._human_in = asyncio.Queue()
+    app = create_app(state_path, orchestrator=mock_orch)
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws") as ws:
+            ws.receive_text()
+            ws.send_text(
+                json.dumps(
+                    {"action": "pause", "agent_id": "a1", "message": "question?"}
+                )
+            )
+
+    mock_orch.pause_for_human_decision.assert_called_once()
+    call_args = mock_orch.pause_for_human_decision.call_args
+    assert call_args[1].get("agent_id") == "a1" or call_args[0][0] == "a1"
+    # Question should be passed
+    assert "question?" in str(call_args)
+
+
+# ---------------------------------------------------------------------------
+# Test 8: pause action with no queues -> silently skips, no crash
+# ---------------------------------------------------------------------------
+
+
+def test_ws_pause_action_no_queues_silently_skips(tmp_path: Path) -> None:
+    """pause action when orchestrator._human_out is None silently skips, no crash."""
+    state_path = tmp_path / "state.json"
+    write_empty_state(state_path)
+
+    mock_orch = make_mock_orchestrator()
+    mock_orch.pause_for_human_decision = AsyncMock()
+    mock_orch._human_out = None
+    mock_orch._human_in = None
+    app = create_app(state_path, orchestrator=mock_orch)
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws") as ws:
+            ws.receive_text()
+            ws.send_text(
+                json.dumps(
+                    {"action": "pause", "agent_id": "a1", "message": "question?"}
+                )
+            )
+
+    # pause_for_human_decision should NOT be called when queues are None
+    mock_orch.pause_for_human_decision.assert_not_called()

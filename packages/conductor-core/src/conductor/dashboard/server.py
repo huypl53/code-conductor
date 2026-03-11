@@ -110,6 +110,12 @@ async def handle_intervention(data: str, orchestrator: Orchestrator) -> None:
                     target_file="",
                 ),
             )
+        elif action == "pause":
+            question = command.get("message", "pause requested from dashboard")
+            if orchestrator._human_out is not None and orchestrator._human_in is not None:
+                await orchestrator.pause_for_human_decision(
+                    agent_id, question, orchestrator._human_out, orchestrator._human_in
+                )
     except Exception:
         logger.exception("Error handling intervention command action=%s agent=%s", action, agent_id)
 

@@ -211,6 +211,69 @@ def test_dispatch_status() -> None:
     mock_sm.read_state.assert_called_once()
 
 
+def test_dispatch_pause_calls_pause_for_human_decision() -> None:
+    """_dispatch_command('pause agent-1 Why is this file modified?') calls pause_for_human_decision."""
+    from conductor.cli.input_loop import _dispatch_command
+
+    mock_orch = MagicMock()
+    mock_orch.pause_for_human_decision = AsyncMock()
+
+    human_out: asyncio.Queue = asyncio.Queue()
+    human_in: asyncio.Queue = asyncio.Queue()
+
+    asyncio.run(
+        _dispatch_command(
+            "pause agent-1 Why is this file modified?",
+            mock_orch,
+            human_out=human_out,
+            human_in=human_in,
+        )
+    )
+
+    mock_orch.pause_for_human_decision.assert_awaited_once_with(
+        "agent-1", "Why is this file modified?", human_out, human_in
+    )
+
+
+def test_dispatch_pause_missing_args_prints_usage() -> None:
+    """_dispatch_command('pause') with too few args prints usage and does NOT call pause_for_human_decision."""
+    from conductor.cli.input_loop import _dispatch_command
+
+    mock_orch = MagicMock()
+    mock_orch.pause_for_human_decision = AsyncMock()
+    mock_console = MagicMock()
+
+    asyncio.run(
+        _dispatch_command("pause", mock_orch, console=mock_console)
+    )
+
+    mock_orch.pause_for_human_decision.assert_not_awaited()
+    # Console should have printed some error/usage message
+    mock_console.print.assert_called()
+
+
+def test_dispatch_pause_no_queues_prints_error() -> None:
+    """_dispatch_command('pause agent-1 question') with human_out=None prints error, no pause call."""
+    from conductor.cli.input_loop import _dispatch_command
+
+    mock_orch = MagicMock()
+    mock_orch.pause_for_human_decision = AsyncMock()
+    mock_console = MagicMock()
+
+    asyncio.run(
+        _dispatch_command(
+            "pause agent-1 Is this correct?",
+            mock_orch,
+            console=mock_console,
+            human_out=None,
+            human_in=None,
+        )
+    )
+
+    mock_orch.pause_for_human_decision.assert_not_awaited()
+    mock_console.print.assert_called()
+
+
 def test_run_interactive_routes_input(tmp_path: "Path") -> None:  # type: ignore[name-defined]
     """_run_async constructs Orchestrator with correct mode based on auto flag."""
     from pathlib import Path
