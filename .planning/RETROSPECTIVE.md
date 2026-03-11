@@ -2,6 +2,41 @@
 
 *A living document updated after each milestone. Lessons feed forward into future planning.*
 
+## Milestone: v2.1 — UX Polish
+
+**Shipped:** 2026-03-12
+**Phases:** 4 | **Plans:** 4
+
+### What Was Built
+- Auto-focus input on TUI start with crash-safe terminal cleanup
+- Borderless content-first design with subtle accent lines
+- Smooth opacity fade-in animations with CI/SSH disable path
+- Ctrl-G external editor integration for multi-line input composition
+
+### What Worked
+- TDD RED→GREEN pattern across all 4 phases — no regressions
+- CSS-only changes for visual design (Phase 40) — minimal code, maximum impact
+- Research phases caught API pitfalls (styles.animate vs Widget.animate) before implementation
+
+### What Was Inefficient
+- Minor: some research docs over-explored alternatives that were clearly wrong
+
+### Patterns Established
+- styles.animate() for CSS property animation (not Widget.animate)
+- Module-level env var booleans for feature flags
+- @work(thread=True) for sync operations that need terminal control
+
+### Key Lessons
+- Textual messages bubble UP — always post to the target widget, not the app
+- AUTO_FOCUS class variable is the cleanest way to handle initial focus
+- CSS `solid` border at reduced opacity creates subtle accent lines without needing custom widgets
+
+### Cost Observations
+- Sessions: 4 phases in ~14min total execution
+- Notable: Each phase was very focused — 1 plan each, no replanning needed
+
+---
+
 ## Milestone: v1.0 — MVP
 
 **Shipped:** 2026-03-11
@@ -55,14 +90,18 @@
 | Milestone | Commits | Phases | Key Change |
 |-----------|---------|--------|------------|
 | v1.0 | 190 | 17 | Initial build — bottom-up architecture with milestone audit |
+| v2.1 | 23 | 4 | UX polish — focused 1-plan phases, TDD throughout |
 
 ### Cumulative Quality
 
 | Milestone | LOC | Languages | Audit Score |
 |-----------|-----|-----------|-------------|
 | v1.0 | 10,946 | Python + TypeScript | 30/30 requirements |
+| v2.1 | 20,155 | Python + TypeScript | 29/29 requirements (v2.0+v2.1) |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. Milestone audit catches integration gaps that unit tests miss — always audit before shipping
 2. Small, focused gap-closure phases are more efficient than large feature phases
+3. Research phases that test APIs before coding prevent rework — styles.animate vs Widget.animate would have cost hours
+4. TDD RED→GREEN is reliable across both infrastructure (v1.0) and UI (v2.1) code

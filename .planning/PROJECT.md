@@ -6,24 +6,16 @@ Conductor is an open-source multi-agent coding orchestration framework. You desc
 
 ## Current Milestones
 
-### v1.3 Orchestrator Intelligence (in progress)
+All milestones through v2.1 are complete. No active milestone.
 
-**Goal:** Make Conductor's orchestrator smarter — wave-based parallel execution, model routing for cost control, structured agent communication, goal-backward verification, and complexity-informed task decomposition.
+### Completed Milestones
 
-### v2.0 Textual TUI Redesign (complete)
-
-**Goal:** Replace prompt_toolkit + Rich with a full Textual-based TUI inspired by Codex CLI — cell-based transcript, modal approval overlays, inline agent monitoring, syntax-highlighted output, and a polished terminal experience.
-
-### v2.1 UX Polish (in progress)
-
-**Goal:** Refine the Textual TUI to feel native and polished in the terminal — auto-focus, full alt-screen mode, borderless design, smooth animations, and external editor support.
-
-**Target features:**
-- Auto-focus input on TUI start
-- Full alt-screen mode with clean entry/exit
-- Borderless/minimal chrome design — content flows naturally
-- Smooth animations and transitions
-- Ctrl-G to open input in external editor (vim) for multiline composition
+- **v1.0 MVP** — Phases 1-17 (shipped 2026-03-11)
+- **v1.1 Interactive Chat TUI** — Phases 18-22 (completed 2026-03-11)
+- **v1.2 Task Verification & Build Safety** — Phases 23-25 (completed 2026-03-11)
+- **v1.3 Orchestrator Intelligence** — Phases 26-30 (completed 2026-03-11)
+- **v2.0 Textual TUI Redesign** — Phases 31-38 (completed 2026-03-11)
+- **v2.1 UX Polish** — Phases 39-42 (shipped 2026-03-12)
 
 ## Core Value
 
@@ -50,32 +42,24 @@ A product owner describes a feature, and a self-organizing team of AI coding age
 - ✓ CLI interface for chatting with orchestrator and seeing agent status — v1.0
 - ✓ Web dashboard with layered visibility, live stream, smart notifications — v1.0
 - ✓ Installable as pip package (Python core) + npm package (Node.js dashboard) — v1.0
-
-### Active
-
-**v1.3 — Orchestrator Intelligence:**
-- [ ] Wave-based parallel execution with pre-computed dependency waves
-- [ ] Model routing per agent role (opus for planning, haiku for verification)
-- [ ] Structured agent status protocol (DONE/BLOCKED/NEEDS_CONTEXT)
-- [ ] Goal-backward verification (stub detection + wiring checks)
-- [ ] Two-stage review (spec compliance then code quality)
-- [ ] Smart decomposition with complexity scoring
-
-**v2.0 — Textual TUI Redesign (complete):**
-- [x] Textual-based TUI replacing prompt_toolkit + Rich
-- [x] Cell-based transcript with streaming and markdown rendering
-- [x] Modal approval overlays for agent actions
-- [x] Inline agent monitoring panels in TUI
-- [x] Syntax-highlighted diffs and code blocks
-- [x] Status footer with model/tokens/mode
-- [x] Slash command autocomplete popup
-
-**v2.1 — UX Polish:**
-- [ ] Auto-focus input on TUI start
-- [ ] Full alt-screen mode with clean entry/exit
-- [ ] Borderless/minimal chrome design
-- [ ] Smooth animations and transitions
-- [ ] Ctrl-G external editor (vim) for multiline input
+- ✓ Wave-based parallel execution with pre-computed dependency waves — v1.3
+- ✓ Model routing per agent role (opus for planning, haiku for verification) — v1.3
+- ✓ Structured agent status protocol (DONE/BLOCKED/NEEDS_CONTEXT) — v1.3
+- ✓ Goal-backward verification (stub detection + wiring checks) — v1.3
+- ✓ Two-stage review (spec compliance then code quality) — v1.3
+- ✓ Smart decomposition with complexity scoring — v1.3
+- ✓ Textual-based TUI replacing prompt_toolkit + Rich — v2.0
+- ✓ Cell-based transcript with streaming and markdown rendering — v2.0
+- ✓ Modal approval overlays for agent actions — v2.0
+- ✓ Inline agent monitoring panels in TUI — v2.0
+- ✓ Syntax-highlighted diffs and code blocks — v2.0
+- ✓ Status footer with model/tokens/mode — v2.0
+- ✓ Slash command autocomplete popup — v2.0
+- ✓ Auto-focus input on TUI start — v2.1
+- ✓ Full alt-screen mode with clean entry/exit — v2.1
+- ✓ Borderless/minimal chrome design — v2.1
+- ✓ Smooth animations and transitions — v2.1
+- ✓ Ctrl-G external editor (vim) for multiline input — v2.1
 
 ### Out of Scope
 
@@ -87,14 +71,10 @@ A product owner describes a feature, and a self-organizing team of AI coding age
 
 ## Context
 
-Shipped v1.0 with 10,946 LOC (8,604 Python + 2,342 TypeScript). v1.1 delivered Interactive Chat TUI (19 requirements, 5 phases). v1.2 added task verification and build safety. v1.3 adding orchestrator intelligence (parallel track).
-Tech stack: Python core (uv, Pydantic v2, asyncio, filelock) + Node.js dashboard (React, Vite, Tailwind, Vitest).
-Current TUI: prompt_toolkit for input + Rich for output — functional but basic.
+Shipped v2.1 UX Polish with 20,155 Python LOC total, 663 tests passing. 42 phases completed across v1.0-v2.1.
+Tech stack: Python core (uv, Pydantic v2, asyncio, filelock, Textual) + Node.js dashboard (React, Vite, Tailwind, Vitest).
+TUI: Textual-based with cell transcript, modal approvals, agent monitoring, syntax highlighting, shimmer animations, auto-focus, borderless design, smooth fade-in animations, Ctrl-G external editor.
 Distribution: `pip install conductor-ai` + `npm install -g conductor-dashboard`.
-30 phases completed across v1.0-v1.2.
-
-v2.0 TUI shipped with Textual (Python): cell-based transcript, modal approval overlays, shimmer animations, syntax-highlighted diffs, slash command autocomplete, status footer. 8 phases (31-38), 641 tests passing.
-v2.1 polishing TUI to match Codex-level terminal integration: alt-screen, borderless chrome, smooth animations, external editor.
 
 Known tech debt:
 - `get_server_info()` wrapped in broad `except Exception` — session_id persistence silently fails
@@ -120,9 +100,8 @@ Known tech debt:
 | StrEnum + ConfigDict for JSON serialization | Clean enum values in state.json without repr leaking | ✓ Good — no serialization issues |
 | asyncio.wait(FIRST_COMPLETED) for spawn loop | Ready tasks unblock as dependencies complete without waiting for whole wave | ✓ Good — efficient parallelism |
 | Watch parent directory for state changes | watchfiles misses atomic os.replace inode swaps on direct file watch | ✓ Good — solved production bug |
-| Textual over Ratatui for TUI redesign | Stays in Python ecosystem, built by Rich author, CSS styling, widget-based — avoids Rust FFI complexity | — Pending |
-| TUI and web dashboard coexist | TUI for primary terminal use, web dashboard for remote/detailed/mobile monitoring | — Pending |
-| v2.0 TUI as parallel worktree to v1.3 | Unblocks UI work without pausing orchestrator intelligence improvements | — Pending |
+| Textual over Ratatui for TUI redesign | Stays in Python ecosystem, built by Rich author, CSS styling, widget-based — avoids Rust FFI complexity | ✓ Good — Textual delivered full TUI in 12 phases |
+| TUI and web dashboard coexist | TUI for primary terminal use, web dashboard for remote/detailed/mobile monitoring | ✓ Good — both serve distinct use cases |
 
 ---
-*Last updated: 2026-03-11 after v2.1 UX Polish milestone started*
+*Last updated: 2026-03-12 after v2.1 UX Polish milestone shipped*
