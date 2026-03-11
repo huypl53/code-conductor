@@ -117,7 +117,10 @@ Plans:
   4. `review_spec_compliance()` checks output against task description independently from code quality
   5. `review_code_quality()` only runs after spec compliance passes — failing spec skips quality review
   6. All existing tests pass; new tests cover verifier and two-stage review
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 29-01-PLAN.md — TaskVerifier module and two-stage reviewer refactor with tests
+- [ ] 29-02-PLAN.md — Wire verifier into orchestrator, update exports, integration tests
 
 ### Phase 30: Smart Decomposition
 **Goal**: The decomposer produces better task plans by scoring complexity and selectively expanding only high-complexity tasks, giving each sub-task AI-specific guidance
@@ -258,5 +261,5 @@ Phases execute in numeric order: 26 → 27 → 28 → 29 → 30 (Phase 30 can ru
 | 26. Models & Scheduler Infrastructure | v1.3 | 0/1 | In Progress | - |
 | 27. Execution & Routing Pipeline | v1.3 | 0/1 | Pending | - |
 | 28. Agent Communication Protocol | v1.3 | 0/1 | Pending | - |
-| 29. Verification & Review Pipeline | v1.3 | 0/0 | Pending | - |
+| 29. Verification & Review Pipeline | v1.3 | 0/2 | Pending | - |
 | 30. Smart Decomposition | v1.3 | 0/0 | Pending | - |
