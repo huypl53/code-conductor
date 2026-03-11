@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: UX Polish
 status: executing
-stopped_at: Completed 41-01-PLAN.md
-last_updated: "2026-03-11T16:55:00Z"
-last_activity: 2026-03-11 — Phase 41 Plan 01 smooth cell animations complete
+stopped_at: Completed 42-01-PLAN.md
+last_updated: "2026-03-11T17:07:00Z"
+last_activity: 2026-03-11 — Phase 42 Plan 01 Ctrl-G external editor complete
 progress:
   total_phases: 17
-  completed_phases: 12
+  completed_phases: 13
   total_plans: 15
-  completed_plans: 17
+  completed_plans: 18
   percent: 0
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** A product owner describes a feature, and a self-organizing team of AI coding agents delivers quality, reviewed, tested code — with the human staying in control when they want to be.
-**Current focus:** v2.1 UX Polish — Phase 41 (Smooth Cell Animations)
+**Current focus:** v2.1 UX Polish — Phase 42 (Ctrl-G External Editor)
 
 ## Current Position
 
-Phase: 41 of 42 (Smooth Cell Animations)
+Phase: 42 of 42 (Ctrl-G External Editor)
 Plan: 1 of 1 complete
-Status: Phase 41 complete
-Last activity: 2026-03-11 — Phase 41 Plan 01 smooth cell animations complete
+Status: Phase 42 complete
+Last activity: 2026-03-11 — Phase 42 Plan 01 Ctrl-G external editor complete
 
-Progress: [==........] 25%
+Progress: [==========] 100%
 
 ## Performance Metrics
 
@@ -46,6 +46,7 @@ Progress: [==........] 25%
 | Phase 39 P01 | 2min | 2 tasks | 3 files |
 | Phase 40 P01 | 1min | 2 tasks | 3 files |
 | Phase 41 P01 | 8min | 3 tasks | 2 files |
+| Phase 42 P01 | 3min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -59,6 +60,7 @@ Progress: [==........] 25%
 - [Phase 39]: AUTO_FOCUS = 'CommandInput Input' for immediate input focus on app launch
 - [Phase 40]: solid border-left at 40% opacity replaces thick for subtle accent lines; border-top removed entirely for cleanest approach
 - [Phase 41]: styles.animate("opacity", ...) instead of Widget.animate("opacity", ...) -- Widget.animate raises property-has-no-setter for CSS properties
+- [Phase 42]: Post EditorContentReady to CommandInput widget directly (not app) -- Textual messages bubble UP so app.post_message would not reach child widget handlers
 
 ### Pending Todos
 
@@ -72,6 +74,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T16:55:00Z
-Stopped at: Completed 41-01-PLAN.md
+Last session: 2026-03-11T17:07:00Z
+Stopped at: Completed 42-01-PLAN.md
 Resume file: None
