@@ -1719,3 +1719,102 @@ class TestCancelAgentIntegration:
 
         # Must NOT raise any exception for a nonexistent agent
         await orch.cancel_agent("nonexistent")
+
+
+# ---------------------------------------------------------------------------
+# COMM-03 tests: EscalationRouter wired as PermissionHandler in _run_agent_loop
+# ---------------------------------------------------------------------------
+
+
+class TestPermissionHandlerWiring:
+    """COMM-03: ACPClient sessions receive PermissionHandler wrapping EscalationRouter."""
+
+    @pytest.mark.asyncio
+    async def test_acp_client_receives_permission_handler(self, tmp_path):
+        """_run_agent_loop passes permission_handler kwarg to ACPClient."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.acp.permission import PermissionHandler
+
+        task_spec = _make_task_spec("t1", "src/a.py")
+        sem = asyncio.Semaphore(2)
+        state_mgr = _make_state_manager()
+
+        captured_kwargs: list[dict] = []
+
+        def _acp_factory(**kwargs):
+            captured_kwargs.append(kwargs)
+            return _make_mock_acp_client()
+
+        with (
+            patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
+            patch(f"{_ORCH}.review_output", _approved_review_mock()),
+        ):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            await orch._run_agent_loop(task_spec, sem)
+
+        assert captured_kwargs, "ACPClient was not instantiated"
+        handler = captured_kwargs[0].get("permission_handler")
+        assert handler is not None, "permission_handler kwarg was not passed to ACPClient"
+        assert isinstance(handler, PermissionHandler), (
+            f"Expected PermissionHandler, got {type(handler)}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_permission_handler_answer_fn_is_escalation_router_resolve(self, tmp_path):
+        """PermissionHandler's _answer_fn is the escalation router's resolve method."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        task_spec = _make_task_spec("t1", "src/a.py")
+        sem = asyncio.Semaphore(2)
+        state_mgr = _make_state_manager()
+
+        captured_kwargs: list[dict] = []
+
+        def _acp_factory(**kwargs):
+            captured_kwargs.append(kwargs)
+            return _make_mock_acp_client()
+
+        with (
+            patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
+            patch(f"{_ORCH}.review_output", _approved_review_mock()),
+        ):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            await orch._run_agent_loop(task_spec, sem)
+
+        assert captured_kwargs, "ACPClient was not instantiated"
+        handler = captured_kwargs[0].get("permission_handler")
+        assert handler is not None, "permission_handler was not passed"
+        # The answer_fn should be bound to the escalation router's resolve method
+        assert handler._answer_fn == orch._escalation_router.resolve, (
+            "permission_handler._answer_fn should be escalation_router.resolve"
+        )
+
+    @pytest.mark.asyncio
+    async def test_permission_handler_timeout_is_150s(self, tmp_path):
+        """PermissionHandler timeout is escalation_router._human_timeout + 30 (150s by default)."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        task_spec = _make_task_spec("t1", "src/a.py")
+        sem = asyncio.Semaphore(2)
+        state_mgr = _make_state_manager()
+
+        captured_kwargs: list[dict] = []
+
+        def _acp_factory(**kwargs):
+            captured_kwargs.append(kwargs)
+            return _make_mock_acp_client()
+
+        with (
+            patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
+            patch(f"{_ORCH}.review_output", _approved_review_mock()),
+        ):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            await orch._run_agent_loop(task_spec, sem)
+
+        assert captured_kwargs, "ACPClient was not instantiated"
+        handler = captured_kwargs[0].get("permission_handler")
+        assert handler is not None, "permission_handler was not passed"
+        expected_timeout = orch._escalation_router._human_timeout + 30.0
+        assert handler._timeout == expected_timeout, (
+            f"Expected timeout={expected_timeout}, got {handler._timeout}"
+        )

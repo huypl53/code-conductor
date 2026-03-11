@@ -17,6 +17,7 @@ from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
 from pydantic import BaseModel, Field
 
 from conductor.acp import ACPClient
+from conductor.acp.permission import PermissionHandler
 from conductor.orchestrator.decomposer import TaskDecomposer
 from conductor.orchestrator.errors import DecompositionError, EscalationError
 from conductor.orchestrator.escalation import EscalationRouter, HumanQuery
@@ -547,10 +548,15 @@ class Orchestrator:
             final_verdict: ReviewVerdict | None = None
             revision_num = 0
 
+            handler = PermissionHandler(
+                answer_fn=self._escalation_router.resolve,
+                timeout=self._escalation_router._human_timeout + 30.0,
+            )
             async with ACPClient(
                 cwd=self._repo_path,
                 system_prompt=system_prompt,
                 resume=resume_session_id,
+                permission_handler=handler,
             ) as client:
                 self._active_clients[agent_id] = client
                 try:
