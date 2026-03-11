@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Textual TUI Redesign
-status: executing
-stopped_at: "Completed 33-02-PLAN.md"
-last_updated: "2026-03-11T14:08:08Z"
-last_activity: "2026-03-11 — Phase 33 Plan 02 SDK Streaming Integration complete (2 new tests, 601 total)"
+status: completed
+stopped_at: Completed 34-01-PLAN.md
+last_updated: "2026-03-11T14:21:52.145Z"
+last_activity: 2026-03-11 — Phase 33 Plan 02 SDK Streaming Integration complete (2 new tests, 601 total)
 progress:
   total_phases: 13
-  completed_phases: 5
-  total_plans: 8
-  completed_plans: 10
+  completed_phases: 7
+  total_plans: 9
+  completed_plans: 11
   percent: 28
 ---
 
@@ -56,6 +56,7 @@ Progress: [██▓░░░░░░░] 28%
 - [Phase 33]: SDK connected lazily on first message (not on_mount) to avoid blocking app startup
 - [Phase 33]: @work(exclusive=True, exit_on_error=False) for streaming -- prevents double-submit and crash on SDK error
 - [Phase 33]: Session ID from uuid4.hex[:8] on mount, overridable by resume or SDK ResultMessage
+- [Phase 34]: bold green/bold red raw colors for diff spans; DiffHighlightTheme applied only for diff/udiff fences
 
 ### Pending Todos
 
@@ -75,6 +76,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11
-Stopped at: Completed 33-02-PLAN.md
+Last session: 2026-03-11T14:21:52.142Z
+Stopped at: Completed 34-01-PLAN.md
 Resume file: None

@@ -73,7 +73,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 - [x] **Phase 31: TUI Foundation** - Establish Textual event loop ownership, remove prompt_toolkit, wire ConductorApp as entry point, set up test infrastructure — completed 2026-03-11 (1/1 plans)
 - [ ] **Phase 32: Static TUI Shell** - Two-column layout with TranscriptPane, CommandInput, StatusFooter, and AgentMonitorPane placeholder — verified with hard-coded content before live data
 - [ ] **Phase 33: SDK Streaming** - Real Claude responses streaming token-by-token into MarkdownStream-backed cells, thinking indicator, live token counter in status footer
-- [ ] **Phase 34: Rich Output** - Syntax-highlighted code blocks, rendered markdown (headings/bold/links/lists), and syntax-highlighted file diffs in transcript cells
+- [x] **Phase 34: Rich Output** - Syntax-highlighted code blocks, rendered markdown (headings/bold/links/lists), and syntax-highlighted file diffs in transcript cells (completed 2026-03-11)
 - [ ] **Phase 35: Agent Monitoring** - Live collapsible per-agent panels wired to state.json file watcher, showing task/status/tool activity with reactive updates
 - [ ] **Phase 36: Approval Modals** - ModalScreen overlays for file change approvals, command execution approvals, and escalation questions from sub-agents
 - [ ] **Phase 37: Slash Commands & Dashboard Coexistence** - Slash command autocomplete popup, all existing slash commands routed, uvicorn dashboard running alongside TUI in one process
@@ -291,7 +291,7 @@ Phases execute in numeric order: 31 → 32 → 33 → 34 → 35 → 36 → 37 �
 | 31. TUI Foundation | v2.0 | 0/TBD | Not started | - |
 | 32. Static TUI Shell | v2.0 | 0/TBD | Not started | - |
 | 33. SDK Streaming | 1/2 | In Progress|  | - |
-| 34. Rich Output | v2.0 | 0/1 | Not started | - |
+| 34. Rich Output | 1/1 | Complete   | 2026-03-11 | - |
 | 35. Agent Monitoring | v2.0 | 0/TBD | Not started | - |
 | 36. Approval Modals | v2.0 | 0/TBD | Not started | - |
 | 37. Slash Commands & Dashboard Coexistence | v2.0 | 0/TBD | Not started | - |

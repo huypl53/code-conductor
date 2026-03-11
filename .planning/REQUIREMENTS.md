@@ -18,9 +18,9 @@ Requirements for the Textual TUI Redesign milestone. Each maps to roadmap phases
 
 - [ ] **TRNS-01**: User sees a scrollable cell-based conversation transcript with distinct user and assistant cells
 - [x] **TRNS-02**: Assistant responses stream token-by-token into the active cell with a working/thinking indicator before first token
-- [ ] **TRNS-03**: Code blocks in responses render with syntax highlighting
-- [ ] **TRNS-04**: Markdown in responses renders with proper formatting (headings, bold, links, lists, blockquotes)
-- [ ] **TRNS-05**: File diffs render with syntax-highlighted additions/deletions
+- [x] **TRNS-03**: Code blocks in responses render with syntax highlighting
+- [x] **TRNS-04**: Markdown in responses renders with proper formatting (headings, bold, links, lists, blockquotes)
+- [x] **TRNS-05**: File diffs render with syntax-highlighted additions/deletions
 
 ### Agent Monitoring
 
@@ -119,9 +119,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TRNS-01 | Phase 32 | Pending |
 | TRNS-02 | Phase 33 | Complete |
 | STAT-01 | Phase 33 | Complete |
-| TRNS-03 | Phase 34 | Pending |
-| TRNS-04 | Phase 34 | Pending |
-| TRNS-05 | Phase 34 | Pending |
+| TRNS-03 | Phase 34 | Complete |
+| TRNS-04 | Phase 34 | Complete |
+| TRNS-05 | Phase 34 | Complete |
 | AGNT-01 | Phase 35 | Pending |
 | AGNT-02 | Phase 35 | Pending |
 | AGNT-03 | Phase 35 | Pending |
