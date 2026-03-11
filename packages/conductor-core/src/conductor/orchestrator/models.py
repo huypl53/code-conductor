@@ -1,7 +1,69 @@
 """Pydantic v2 models for orchestrator task decomposition output."""
 from __future__ import annotations
 
+from enum import StrEnum
+
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class AgentRole(StrEnum):
+    """Roles that agents can play in the orchestration pipeline."""
+
+    decomposer = "decomposer"
+    reviewer = "reviewer"
+    executor = "executor"
+    verifier = "verifier"
+
+
+class OrchestratorConfig(BaseModel):
+    """Configuration for orchestrator behaviour — used to avoid hardcoded defaults."""
+
+    max_review_iterations: int = 2
+    max_decomposition_retries: int = 3
+    max_agents: int = 10
+
+
+class ModelProfile(BaseModel):
+    """Maps agent roles to model names with preset profiles."""
+
+    name: str
+    role_models: dict[AgentRole, str] = Field(default_factory=dict)
+
+    def get_model(self, role: AgentRole) -> str:
+        """Return the model string for *role*, falling back to executor or a hardcoded default."""
+        return self.role_models.get(
+            role,
+            self.role_models.get(AgentRole.executor, "claude-sonnet-4-20250514"),
+        )
+
+    @classmethod
+    def quality(cls) -> ModelProfile:
+        """All roles use claude-sonnet-4-20250514."""
+        return cls(
+            name="quality",
+            role_models={role: "claude-sonnet-4-20250514" for role in AgentRole},
+        )
+
+    @classmethod
+    def balanced(cls) -> ModelProfile:
+        """Decomposer/reviewer use Sonnet; executor/verifier use Haiku."""
+        return cls(
+            name="balanced",
+            role_models={
+                AgentRole.decomposer: "claude-sonnet-4-20250514",
+                AgentRole.reviewer: "claude-sonnet-4-20250514",
+                AgentRole.executor: "claude-haiku-35-20241022",
+                AgentRole.verifier: "claude-haiku-35-20241022",
+            },
+        )
+
+    @classmethod
+    def budget(cls) -> ModelProfile:
+        """All roles use claude-haiku-35-20241022."""
+        return cls(
+            name="budget",
+            role_models={role: "claude-haiku-35-20241022" for role in AgentRole},
+        )
 
 
 class TaskSpec(BaseModel):

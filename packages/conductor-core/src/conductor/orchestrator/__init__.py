@@ -10,7 +10,7 @@ from conductor.orchestrator.errors import (
 )
 from conductor.orchestrator.escalation import DecisionLog, EscalationRouter, HumanQuery
 from conductor.orchestrator.identity import AgentIdentity, build_system_prompt
-from conductor.orchestrator.models import TaskPlan, TaskSpec
+from conductor.orchestrator.models import AgentRole, ModelProfile, OrchestratorConfig, TaskPlan, TaskSpec
 from conductor.orchestrator.monitor import StreamMonitor
 from conductor.orchestrator.orchestrator import Orchestrator
 from conductor.orchestrator.ownership import validate_file_ownership
@@ -28,6 +28,9 @@ __all__ = [
     # models
     "TaskSpec",
     "TaskPlan",
+    "OrchestratorConfig",
+    "ModelProfile",
+    "AgentRole",
     # identity
     "AgentIdentity",
     "build_system_prompt",

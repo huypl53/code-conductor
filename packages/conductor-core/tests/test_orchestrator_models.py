@@ -353,3 +353,121 @@ class TestExtendedTaskModel:
         assert restored.produces == ["output"]
         assert restored.target_file == "src/api.py"
         assert restored.material_files == ["src/models.py"]
+
+
+# ---------------------------------------------------------------------------
+# OrchestratorConfig model
+# ---------------------------------------------------------------------------
+
+
+class TestOrchestratorConfig:
+    def test_default_values(self) -> None:
+        from conductor.orchestrator.models import OrchestratorConfig
+        cfg = OrchestratorConfig()
+        assert cfg.max_review_iterations == 2
+        assert cfg.max_decomposition_retries == 3
+        assert cfg.max_agents == 10
+
+    def test_override_max_review_iterations(self) -> None:
+        from conductor.orchestrator.models import OrchestratorConfig
+        cfg = OrchestratorConfig(max_review_iterations=5)
+        assert cfg.max_review_iterations == 5
+        assert cfg.max_decomposition_retries == 3  # unchanged
+        assert cfg.max_agents == 10  # unchanged
+
+    def test_override_max_decomposition_retries(self) -> None:
+        from conductor.orchestrator.models import OrchestratorConfig
+        cfg = OrchestratorConfig(max_decomposition_retries=1)
+        assert cfg.max_decomposition_retries == 1
+        assert cfg.max_review_iterations == 2  # unchanged
+
+    def test_json_round_trip(self) -> None:
+        from conductor.orchestrator.models import OrchestratorConfig
+        cfg = OrchestratorConfig(max_review_iterations=5, max_decomposition_retries=1, max_agents=4)
+        json_str = cfg.model_dump_json()
+        restored = OrchestratorConfig.model_validate_json(json_str)
+        assert restored.max_review_iterations == 5
+        assert restored.max_decomposition_retries == 1
+        assert restored.max_agents == 4
+
+
+# ---------------------------------------------------------------------------
+# AgentRole enum and ModelProfile model
+# ---------------------------------------------------------------------------
+
+
+class TestAgentRole:
+    def test_role_values_exist(self) -> None:
+        from conductor.orchestrator.models import AgentRole
+        assert AgentRole.decomposer
+        assert AgentRole.reviewer
+        assert AgentRole.executor
+        assert AgentRole.verifier
+
+    def test_role_is_string(self) -> None:
+        from conductor.orchestrator.models import AgentRole
+        assert isinstance(AgentRole.executor, str)
+
+
+class TestModelProfile:
+    def test_quality_preset_name(self) -> None:
+        from conductor.orchestrator.models import ModelProfile
+        profile = ModelProfile.quality()
+        assert profile.name == "quality"
+
+    def test_quality_preset_all_sonnet(self) -> None:
+        from conductor.orchestrator.models import AgentRole, ModelProfile
+        profile = ModelProfile.quality()
+        for role in AgentRole:
+            assert profile.get_model(role) == "claude-sonnet-4-20250514"
+
+    def test_balanced_preset_name(self) -> None:
+        from conductor.orchestrator.models import ModelProfile
+        profile = ModelProfile.balanced()
+        assert profile.name == "balanced"
+
+    def test_balanced_preset_decomposer_reviewer_sonnet(self) -> None:
+        from conductor.orchestrator.models import AgentRole, ModelProfile
+        profile = ModelProfile.balanced()
+        assert profile.get_model(AgentRole.decomposer) == "claude-sonnet-4-20250514"
+        assert profile.get_model(AgentRole.reviewer) == "claude-sonnet-4-20250514"
+
+    def test_balanced_preset_executor_verifier_haiku(self) -> None:
+        from conductor.orchestrator.models import AgentRole, ModelProfile
+        profile = ModelProfile.balanced()
+        assert profile.get_model(AgentRole.executor) == "claude-haiku-35-20241022"
+        assert profile.get_model(AgentRole.verifier) == "claude-haiku-35-20241022"
+
+    def test_budget_preset_name(self) -> None:
+        from conductor.orchestrator.models import ModelProfile
+        profile = ModelProfile.budget()
+        assert profile.name == "budget"
+
+    def test_budget_preset_all_haiku(self) -> None:
+        from conductor.orchestrator.models import AgentRole, ModelProfile
+        profile = ModelProfile.budget()
+        for role in AgentRole:
+            assert profile.get_model(role) == "claude-haiku-35-20241022"
+
+    def test_get_model_returns_mapped_model(self) -> None:
+        from conductor.orchestrator.models import AgentRole, ModelProfile
+        profile = ModelProfile(
+            name="custom",
+            role_models={AgentRole.executor: "my-model"},
+        )
+        assert profile.get_model(AgentRole.executor) == "my-model"
+
+    def test_get_model_fallback_to_executor_model(self) -> None:
+        from conductor.orchestrator.models import AgentRole, ModelProfile
+        # Only executor is mapped; querying decomposer should fall back to executor's model
+        profile = ModelProfile(
+            name="partial",
+            role_models={AgentRole.executor: "fallback-model"},
+        )
+        assert profile.get_model(AgentRole.decomposer) == "fallback-model"
+
+    def test_get_model_ultimate_fallback(self) -> None:
+        from conductor.orchestrator.models import AgentRole, ModelProfile
+        # Empty role_models — ultimate fallback to hardcoded sonnet
+        profile = ModelProfile(name="empty", role_models={})
+        assert profile.get_model(AgentRole.executor) == "claude-sonnet-4-20250514"

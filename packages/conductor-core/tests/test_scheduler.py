@@ -121,3 +121,57 @@ class TestCord04Cycle:
         err = exc_info.value
         assert hasattr(err, "cycle")
         assert len(err.cycle) >= 2
+
+
+class TestComputeWaves:
+    """Tests for DependencyScheduler.compute_waves()."""
+
+    def test_empty_graph_returns_empty_list(self) -> None:
+        sched = DependencyScheduler({})
+        assert sched.compute_waves() == []
+
+    def test_two_concurrent_tasks_single_wave(self) -> None:
+        sched = DependencyScheduler({"a": set(), "b": set()})
+        waves = sched.compute_waves()
+        assert len(waves) == 1
+        assert set(waves[0]) == {"a", "b"}
+
+    def test_sequential_tasks_two_waves(self) -> None:
+        sched = DependencyScheduler({"a": set(), "b": {"a"}})
+        waves = sched.compute_waves()
+        assert len(waves) == 2
+        assert set(waves[0]) == {"a"}
+        assert set(waves[1]) == {"b"}
+
+    def test_diamond_three_waves(self) -> None:
+        """a and b concurrent, then c (depends on both), then d."""
+        sched = DependencyScheduler({
+            "a": set(),
+            "b": set(),
+            "c": {"a", "b"},
+            "d": {"c"},
+        })
+        waves = sched.compute_waves()
+        assert len(waves) == 3
+        assert set(waves[0]) == {"a", "b"}
+        assert set(waves[1]) == {"c"}
+        assert set(waves[2]) == {"d"}
+
+    def test_compute_waves_does_not_consume_scheduler(self) -> None:
+        """compute_waves() should not affect get_ready()/done() functionality."""
+        sched = DependencyScheduler({"a": set(), "b": {"a"}})
+        # Call compute_waves first
+        waves = sched.compute_waves()
+        assert len(waves) == 2
+        # Scheduler still functional: get_ready returns "a"
+        assert set(sched.get_ready()) == {"a"}
+        sched.done("a")
+        assert set(sched.get_ready()) == {"b"}
+        sched.done("b")
+        assert not sched.is_active()
+
+    def test_single_task_single_wave(self) -> None:
+        sched = DependencyScheduler({"only": set()})
+        waves = sched.compute_waves()
+        assert len(waves) == 1
+        assert set(waves[0]) == {"only"}
