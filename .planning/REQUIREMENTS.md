@@ -60,22 +60,22 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ACELL-01 | - | Pending |
-| ACELL-02 | - | Pending |
-| ACELL-03 | - | Pending |
-| ACELL-04 | - | Pending |
-| ORCH-01 | - | Pending |
-| ORCH-02 | - | Pending |
-| STRM-01 | - | Pending |
-| STRM-02 | - | Pending |
-| BRDG-01 | - | Pending |
-| BRDG-02 | - | Pending |
+| ACELL-01 | Phase 44 | Pending |
+| ACELL-02 | Phase 44 | Pending |
+| ACELL-03 | Phase 44 | Pending |
+| ACELL-04 | Phase 43 | Pending |
+| ORCH-01 | Phase 45 | Pending |
+| ORCH-02 | Phase 45 | Pending |
+| STRM-01 | Phase 45 | Pending |
+| STRM-02 | Phase 45 | Pending |
+| BRDG-01 | Phase 44 | Pending |
+| BRDG-02 | Phase 44 | Pending |
 
 **Coverage:**
 - v2.2 requirements: 10 total
-- Mapped to phases: 0
-- Unmapped: 10 ⚠️
+- Mapped to phases: 10
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-12*
-*Last updated: 2026-03-12 after initial definition*
+*Last updated: 2026-03-12 after roadmap creation (phases 43-46)*

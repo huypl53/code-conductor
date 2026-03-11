@@ -8,6 +8,7 @@
 - ✅ **v1.3 Orchestrator Intelligence** — Phases 26-30 (completed 2026-03-11)
 - ✅ **v2.0 Textual TUI Redesign** — Phases 31-38 (completed 2026-03-11)
 - ✅ **v2.1 UX Polish** — Phases 39-42 (shipped 2026-03-12)
+- 🚧 **v2.2 Agent Visibility** — Phases 43-46 (in progress)
 
 ## Phases
 
@@ -93,6 +94,63 @@ Full details: `.planning/milestones/v2.1-ROADMAP.md`
 
 </details>
 
+### 🚧 v2.2 Agent Visibility (In Progress)
+
+**Milestone Goal:** Surface real-time agent activity in the TUI transcript — labeled per-agent cells with name, role, and status; orchestrator status during planning/delegation; tool-use event interception from SDK stream; and state.json agent updates feeding the transcript.
+
+- [ ] **Phase 43: Agent Cell Widgets** - Create AgentCell and OrchestratorStatusCell widget classes with full lifecycle
+- [ ] **Phase 44: TranscriptPane Extensions and State Bridge** - Extend TranscriptPane with agent_cells registry and state.json fan-out
+- [ ] **Phase 45: SDK Stream Interception and Orchestrator Status** - Wire stream loop to detect conductor_delegate and show orchestrator phase labels
+- [ ] **Phase 46: Visual Polish and Verification** - CSS accent colors, inline delegation event cells, agent completion summaries, pitfall checklist
+
+## Phase Details
+
+### Phase 43: Agent Cell Widgets
+**Goal**: AgentCell and OrchestratorStatusCell widget classes exist with full lifecycle methods, correct CSS styling, and safe widget IDs — enabling all subsequent phases to build on them
+**Depends on**: Phase 42 (existing transcript.py widget patterns)
+**Requirements**: ACELL-04
+**Success Criteria** (what must be TRUE):
+  1. An AgentCell widget can be mounted in the transcript showing agent name, role, and task title in a labeled badge header
+  2. AgentCell.update_status() transitions the cell display (working shimmer → waiting → done) without errors
+  3. AgentCell.finalize() works correctly whether or not streaming was ever started (defensive finalize)
+  4. OrchestratorStatusCell can be created, updated, and finalized as an ephemeral status cell
+  5. Multiple AgentCells with different agent_id values render independently with no CSS ID collisions (sanitized IDs with distinct prefixes)
+**Plans**: TBD
+
+### Phase 44: TranscriptPane Extensions and State Bridge
+**Goal**: TranscriptPane receives AgentStateUpdated messages from the state.json watcher and mounts AgentCells for new WORKING agents, updating and finalizing them as state transitions occur
+**Depends on**: Phase 43
+**Requirements**: BRDG-01, BRDG-02, ACELL-01, ACELL-02, ACELL-03
+**Success Criteria** (what must be TRUE):
+  1. When a new agent transitions to WORKING in state.json, a labeled AgentCell appears in the transcript showing the agent name, role, and task title
+  2. When an agent's status changes (working → waiting → done), the AgentCell in the transcript updates to reflect the new state
+  3. When an agent reaches DONE, the AgentCell shows a completion summary with final status
+  4. The transcript maintains a _agent_cells dict so each agent_id maps to exactly one cell — no duplicate cells created for the same agent across state updates
+  5. Scroll position is preserved when new AgentCells are mounted while the user has scrolled up (no jump to bottom)
+**Plans**: TBD
+
+### Phase 45: SDK Stream Interception and Orchestrator Status
+**Goal**: The SDK stream loop detects conductor_delegate tool-use events, creates OrchestratorStatusCells, and changes the active cell label from "Assistant" to "Orchestrator" during delegation phases
+**Depends on**: Phase 44
+**Requirements**: STRM-01, STRM-02, ORCH-01, ORCH-02
+**Success Criteria** (what must be TRUE):
+  1. When the orchestrator enters a planning/delegation phase, the active cell label in the transcript changes from "Assistant" to "Orchestrator — delegating" (not just "Assistant")
+  2. When conductor_delegate tool-use fires, an OrchestratorStatusCell appears in the transcript showing which agents were spawned and what tasks they received
+  3. Tool-use input (task description, agent config) accumulated across input_json_delta events is correctly parsed — the delegation cell shows real task content, not empty labels
+  4. The SDK stream loop continues receiving events without stutter — widget creation uses post_message, not await mount
+**Plans**: TBD
+
+### Phase 46: Visual Polish and Verification
+**Goal**: Agent and orchestrator cells are visually distinct with accent colors, inline delegation event cells orient the user between stream and state-driven phases, and all pitfall checklist items are verified
+**Depends on**: Phase 45
+**Requirements**: (no new requirements — polish and verification pass)
+**Success Criteria** (what must be TRUE):
+  1. AgentCell and OrchestratorStatusCell have visually distinct CSS accent colors that differentiate them from AssistantCell (CSS-only change)
+  2. A brief inline delegation event cell appears in the transcript before sub-agent cells, keeping the user oriented without requiring side-panel attention
+  3. Agent completion cells include the final task summary so the user can see what each agent delivered
+  4. With 3+ concurrent agents active, shimmer timers are cleaned up on finalize and no lingering animations remain after all agents complete
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -139,3 +197,7 @@ Full details: `.planning/milestones/v2.1-ROADMAP.md`
 | 40. Borderless Design | v2.1 | 1/1 | Complete | 2026-03-11 |
 | 41. Smooth Cell Animations | v2.1 | 1/1 | Complete | 2026-03-11 |
 | 42. Ctrl-G External Editor | v2.1 | 1/1 | Complete | 2026-03-12 |
+| 43. Agent Cell Widgets | v2.2 | 0/? | Not started | - |
+| 44. TranscriptPane Extensions and State Bridge | v2.2 | 0/? | Not started | - |
+| 45. SDK Stream Interception and Orchestrator Status | v2.2 | 0/? | Not started | - |
+| 46. Visual Polish and Verification | v2.2 | 0/? | Not started | - |

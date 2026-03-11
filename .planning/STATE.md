@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Agent Visibility
-status: defining_requirements
-stopped_at: Defining requirements
+status: ready_to_plan
+stopped_at: Roadmap created — ready to plan Phase 43
 last_updated: "2026-03-12"
-last_activity: 2026-03-12 — Milestone v2.2 started
+last_activity: 2026-03-12 — v2.2 roadmap created (phases 43-46)
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,30 +21,36 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** A product owner describes a feature, and a self-organizing team of AI coding agents delivers quality, reviewed, tested code — with the human staying in control when they want to be.
-**Current focus:** v2.2 Agent Visibility — Defining requirements
+**Current focus:** Phase 43 — Agent Cell Widgets
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-12 — Milestone v2.2 started
+Phase: 43 of 46 (Agent Cell Widgets)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-03-12 — v2.2 roadmap created (phases 43-46)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [░░░░░░░░░░] 0% (0/4 v2.2 phases complete)
 
 ## Performance Metrics
 
-(No phases executed yet)
+(No v2.2 phases executed yet)
+
+Prior milestones: 42 phases shipped across v1.0–v2.1 (6 milestones, 2 days)
 
 ## Accumulated Context
 
 ### Decisions
 
-- [v2.2 pre-work]: Ctrl-C during streaming cancels the active stream, second Ctrl-C exits -- action_quit checks _active_cell._is_streaming
+- [v2.2 pre-work]: Ctrl-C during streaming cancels active stream, second Ctrl-C exits — action_quit checks _active_cell._is_streaming
 - [v2.2 pre-work]: AgentMonitorPane hidden by default (display: none), auto-shows when agents appear
-- [v2.2 pre-work]: Smart scroll -- transcript only auto-scrolls if user is already at bottom
-- [v2.2 pre-work]: action_open_editor must NOT use @work(thread=True) -- Textual suspend() calls signal.signal() which only works from main thread
-- [v2.2 pre-work]: os.system() with shlex.quote() for editor launch per Textual docs (not subprocess.run)
+- [v2.2 pre-work]: Smart scroll — transcript only auto-scrolls if user is already at bottom
+- [v2.2 pre-work]: os.system() with shlex.quote() for editor launch (not subprocess.run)
+- [v2.2 research]: Agent cells inline in primary transcript — conversation-centric mental model confirmed by Codex RFC
+- [v2.2 research]: Zero new dependencies — all required APIs (AssistantMessage, ToolUseBlock, AgentStateUpdated) already installed
+- [v2.2 research]: Sub-agent live token streaming is out of scope — state.json snapshots only
+- [v2.2 research]: _agent_cells dict from Phase 44 start — single _active_cell cannot track N concurrent agents
+- [v2.2 research]: Use post_message not await mount inside stream loop — avoids blocking SDK async generator
 
 ### Pending Todos
 
@@ -52,11 +58,12 @@ None.
 
 ### Blockers/Concerns
 
-- SDK stream only provides content_block_delta (text tokens) and ResultMessage -- tool_use events for delegation need to be intercepted and parsed
-- state.json updates from DelegationManager need to be correlated with transcript cells
+- [Phase 45]: DelegationStarted message lacks agent identity fields — resolve during Phase 45 planning (extend DelegationStarted or use TaskStartedMessage.description)
+- [Phase 45]: input_json_delta accumulation is high-risk — content_block_start.input always {} on real streaming; must accumulate by content_block_index, parse on content_block_stop
+- [Phase 46]: Scroll behavior under N concurrent agents not yet profiled — validate with 3+ agents
 
 ## Session Continuity
 
 Last session: 2026-03-12
-Stopped at: Defining requirements
+Stopped at: Roadmap created for v2.2 Agent Visibility (phases 43-46). Ready to plan Phase 43.
 Resume file: None
