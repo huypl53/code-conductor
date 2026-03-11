@@ -47,10 +47,12 @@ class ACPClient:
         allowed_tools: list[str] | None = None,
         permission_handler: PermissionHandler | None = None,
         max_turns: int = _DEFAULT_MAX_TURNS,
+        model: str | None = None,
         setting_sources: list[SettingSource] | None = None,
     ) -> None:
         self._closed = False
         self._sdk_client: ClaudeSDKClient | None = None
+        self._model = model
 
         hooks: dict | None = None
         can_use_tool = None
@@ -71,7 +73,7 @@ class ACPClient:
         resolved_sources: list[SettingSource] = (
             setting_sources if setting_sources is not None else _DEFAULT_SETTING_SOURCES
         )
-        self._options = ClaudeAgentOptions(
+        options_kwargs: dict = dict(
             cwd=cwd,
             system_prompt=system_prompt,
             resume=resume,
@@ -82,6 +84,9 @@ class ACPClient:
             can_use_tool=can_use_tool,
             hooks=hooks,
         )
+        if model is not None:
+            options_kwargs["model"] = model
+        self._options = ClaudeAgentOptions(**options_kwargs)
 
     async def __aenter__(self) -> ACPClient:
         self._sdk_client = ClaudeSDKClient(options=self._options)

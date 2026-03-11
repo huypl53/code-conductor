@@ -18,37 +18,37 @@ class AgentIdentity(BaseModel):
 
 
 def build_system_prompt(identity: AgentIdentity) -> str:
-    """Build a system prompt string from an AgentIdentity.
+    """Build a lean system prompt string from an AgentIdentity.
 
     The prompt establishes the agent's persona, task scope, and file boundaries.
-    It is designed to anchor the agent's role throughout a long session.
+    It uses file paths only (no file content) to keep the prompt under 500 tokens.
+    The task description is sent separately as the first user message.
 
     Args:
         identity: The AgentIdentity to build a prompt for.
 
     Returns:
-        A multi-line system prompt string.
+        A concise multi-line system prompt string with file paths only.
     """
-    material_section: str
-    if identity.material_files:
-        material_list = "\n".join(f"  - {f}" for f in identity.material_files)
-        material_section = f"Reference files (read-only context):\n{material_list}"
-    else:
-        material_section = "Reference files: none"
-
     memory_file = f".memory/{identity.name}.md"
 
-    return (
-        f"You are {identity.name}, a {identity.role}.\n\n"
-        f"Task ID: {identity.task_id}\n"
-        f"Task: {identity.task_description}\n\n"
-        f"Your assigned file:\n  {identity.target_file}\n\n"
-        f"{material_section}\n\n"
-        f"Your memory file: {memory_file}\n"
-        "Write important decisions, context, and discoveries here"
-        " using the Write tool.\n"
-        "Read other agents' memory files at .memory/ using the Read tool.\n\n"
-        f"Do not modify files outside your assignment, "
-        f"except your memory file at {memory_file}. "
-        "Focus exclusively on your target file and task."
+    parts = [
+        f"You are {identity.name}, a {identity.role}.",
+        "",
+        f"Task: {identity.task_id}",
+        f"Target file: {identity.target_file}",
+    ]
+
+    if identity.material_files:
+        material_list = "\n".join(f"  - {f}" for f in identity.material_files)
+        parts.append("")
+        parts.append(f"Read these files for context:\n{material_list}")
+
+    parts.append("")
+    parts.append(
+        f"Memory: {memory_file} — write decisions here, read other agents' at .memory/."
     )
+    parts.append("")
+    parts.append("Stay within your target file and memory file. Do not modify other files.")
+
+    return "\n".join(parts)

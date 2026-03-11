@@ -251,9 +251,15 @@ class TestBuildSystemPrompt:
         prompt = build_system_prompt(self._make_identity(role="backend-engineer"))
         assert "backend-engineer" in prompt
 
-    def test_prompt_contains_task_description(self) -> None:
+    def test_prompt_does_not_contain_task_description(self) -> None:
+        """Task description is sent as first user message, not in system prompt (LEAN-01)."""
         prompt = build_system_prompt(self._make_identity(task_description="Implement JWT authentication"))
-        assert "Implement JWT authentication" in prompt
+        assert "Implement JWT authentication" not in prompt
+
+    def test_prompt_contains_task_id(self) -> None:
+        """Task ID should appear in the lean prompt."""
+        prompt = build_system_prompt(self._make_identity(task_id="t1"))
+        assert "t1" in prompt
 
     def test_prompt_contains_target_file(self) -> None:
         prompt = build_system_prompt(self._make_identity(target_file="src/auth.py"))
@@ -267,7 +273,7 @@ class TestBuildSystemPrompt:
 
     def test_prompt_contains_do_not_modify_constraint(self) -> None:
         prompt = build_system_prompt(self._make_identity())
-        assert "Do not modify files outside your assignment" in prompt
+        assert "Do not modify other files" in prompt
 
     def test_prompt_is_string(self) -> None:
         prompt = build_system_prompt(self._make_identity())
@@ -277,8 +283,8 @@ class TestBuildSystemPrompt:
     def test_prompt_with_empty_material_files(self) -> None:
         identity = self._make_identity(material_files=[])
         prompt = build_system_prompt(identity)
-        # Should still contain constraint and other fields
-        assert "Do not modify files outside your assignment" in prompt
+        # Should still contain constraint and target file
+        assert "Do not modify other files" in prompt
         assert "src/auth.py" in prompt
 
 

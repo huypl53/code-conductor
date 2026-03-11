@@ -42,10 +42,17 @@ class TestBuildSystemPromptCore:
         prompt = build_system_prompt(identity)
         assert "src/auth.py" in prompt
 
-    def test_prompt_contains_task_description(self) -> None:
+    def test_prompt_does_not_contain_task_description(self) -> None:
+        """Task description is sent as first user message, not in system prompt (LEAN-01)."""
         identity = _make_identity(task_description="Implement JWT auth")
         prompt = build_system_prompt(identity)
-        assert "Implement JWT auth" in prompt
+        assert "Implement JWT auth" not in prompt
+
+    def test_prompt_contains_task_id(self) -> None:
+        """Task ID (not full description) should appear in the lean prompt."""
+        identity = _make_identity(task_id="task-42")
+        prompt = build_system_prompt(identity)
+        assert "task-42" in prompt
 
     def test_prompt_contains_material_files(self) -> None:
         identity = _make_identity(material_files=["src/utils.py", "src/models.py"])
@@ -53,10 +60,11 @@ class TestBuildSystemPromptCore:
         assert "src/utils.py" in prompt
         assert "src/models.py" in prompt
 
-    def test_prompt_no_material_files_says_none(self) -> None:
+    def test_prompt_no_material_files_omits_context_section(self) -> None:
+        """When no material files, the 'Read these files' section is omitted."""
         identity = _make_identity(material_files=[])
         prompt = build_system_prompt(identity)
-        assert "none" in prompt.lower()
+        assert "Read these files for context" not in prompt
 
 
 class TestBuildSystemPromptMemorySection:
@@ -85,8 +93,8 @@ class TestBuildSystemPromptMemorySection:
         """File boundary rule must name .memory/ as an exception."""
         identity = _make_identity(name="agent-delta")
         prompt = build_system_prompt(identity)
-        # Must still restrict files outside assignment
-        assert "Do not modify files outside your assignment" in prompt
+        # Must still restrict files outside target
+        assert "Do not modify other files" in prompt
         # Must carve out memory file as exception
         assert ".memory/" in prompt
 
