@@ -1818,3 +1818,83 @@ class TestPermissionHandlerWiring:
         assert handler._timeout == expected_timeout, (
             f"Expected timeout={expected_timeout}, got {handler._timeout}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Tests: Phase 16 — Agent status lifecycle mutations
+# ---------------------------------------------------------------------------
+
+
+class TestAgentStatusLifecycle:
+    """Phase 16: Agent status lifecycle mutations."""
+
+    def test_complete_task_sets_agent_done(self):
+        """_make_complete_task_fn sets agent.status to DONE."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import (
+            AgentRecord,
+            AgentStatus,
+            ConductorState,
+            Task,
+            TaskStatus,
+        )
+
+        state = ConductorState(
+            tasks=[Task(id="t1", title="T", description="D", status=TaskStatus.IN_PROGRESS)],
+            agents=[AgentRecord(id="a1", name="a1", role="dev", status=AgentStatus.WORKING, current_task_id="t1")],
+        )
+
+        fn = Orchestrator._make_complete_task_fn("t1", "a1")
+        fn(state)
+
+        assert state.tasks[0].status == "completed"
+        assert state.agents[0].status == "done"
+
+    def test_set_agent_status_fn(self):
+        """_make_set_agent_status_fn changes agent status."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import (
+            AgentRecord,
+            AgentStatus,
+            ConductorState,
+        )
+
+        state = ConductorState(
+            agents=[AgentRecord(id="a1", name="a1", role="dev", status=AgentStatus.WORKING)],
+        )
+
+        fn = Orchestrator._make_set_agent_status_fn("a1", AgentStatus.WAITING)
+        fn(state)
+        assert state.agents[0].status == "waiting"
+
+        fn2 = Orchestrator._make_set_agent_status_fn("a1", AgentStatus.WORKING)
+        fn2(state)
+        assert state.agents[0].status == "working"
+
+    @pytest.mark.asyncio
+    async def test_pause_sets_waiting_then_working(self, tmp_path):
+        """pause_for_human_decision sets WAITING before human_out and WORKING after resume."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        state_mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+
+        mock_client = AsyncMock()
+        mock_client.interrupt = AsyncMock()
+
+        async def _empty():
+            return
+            yield
+
+        mock_client.stream_response = MagicMock(side_effect=_empty)
+        mock_client.send = AsyncMock()
+        orch._active_clients["a1"] = mock_client
+
+        human_out = asyncio.Queue()
+        human_in: asyncio.Queue = asyncio.Queue()
+        await human_in.put("proceed")
+
+        await orch.pause_for_human_decision("a1", "What?", human_out, human_in)
+
+        # Verify mutate was called at least twice (WAITING + WORKING)
+        assert state_mgr.mutate.call_count >= 2
