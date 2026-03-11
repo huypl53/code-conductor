@@ -243,6 +243,9 @@ Plans:
   1. Dashboard cancel action calls `cancel_agent()` with `str|None` (not TaskSpec)
   2. Dashboard redirect action constructs valid parameters for redirect
   3. Test suite validates correct argument types (no longer masks wrong contract)
+**Plans:** 1 plan
+Plans:
+- [ ] 15-01-PLAN.md — Fix server.py cancel/redirect branches + update test assertions
 
 ### Phase 16: Fix Agent Status Lifecycle
 **Goal:** AgentRecord.status accurately reflects agent lifecycle — transitions to DONE on completion and WAITING on pause, enabling dashboard status display and intervention_needed notifications
@@ -285,6 +288,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 12. Fix CLI Cancel/Redirect Signatures | 1/1 | Complete    | 2026-03-11 |
 | 13. Wire Escalation Router + Pause Surface | 2/2 | Complete    | 2026-03-11 |
 | 14. Fix Getting-Started Guide .env Claim | 1/1 | Complete    | 2026-03-11 |
-| 15. Fix Dashboard Server Cancel Type Mismatch | 0/0 | Not Started |  |
+| 15. Fix Dashboard Server Cancel Type Mismatch | 0/1 | Not Started |  |
 | 16. Fix Agent Status Lifecycle | 0/0 | Not Started |  |
 | 17. Fix Production WebSocket URL | 0/0 | Not Started |  |
