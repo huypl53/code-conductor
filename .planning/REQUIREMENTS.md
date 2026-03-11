@@ -33,8 +33,8 @@ Requirements for the Orchestrator Intelligence milestone. Each maps to roadmap p
 
 ### Smart Decomposition
 
-- [ ] **DCMP-01**: Decomposer scores each task's complexity (1-10) with reasoning and recommended subtask count
-- [ ] **DCMP-02**: Tasks scoring above threshold are selectively expanded into sub-tasks with task-specific guidance prompts
+- [x] **DCMP-01**: Decomposer scores each task's complexity (1-10) with reasoning and recommended subtask count
+- [x] **DCMP-02**: Tasks scoring above threshold are selectively expanded into sub-tasks with task-specific guidance prompts
 
 ## v1.2 Requirements (Completed)
 
@@ -79,8 +79,8 @@ All 19 requirements delivered. See `.planning/milestones/v1.1-REQUIREMENTS.md`.
 | VERI-01 | Phase 29 | Complete |
 | VERI-02 | Phase 29 | Complete |
 | RVEW-01 | Phase 29 | Complete |
-| DCMP-01 | Phase 30 | Pending |
-| DCMP-02 | Phase 30 | Pending |
+| DCMP-01 | Phase 30 | Complete |
+| DCMP-02 | Phase 30 | Complete |
 
 **Coverage:**
 - v1.3 requirements: 14 total

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Task Verification & Build Safety
 status: planning
-stopped_at: Completed 29-02-PLAN.md
-last_updated: "2026-03-11T12:02:03.036Z"
+stopped_at: Completed 30-01-PLAN.md
+last_updated: "2026-03-11T12:12:48.634Z"
 last_activity: 2026-03-11 — Milestone v1.3 started
 progress:
   total_phases: 13
-  completed_phases: 4
-  total_plans: 5
-  completed_plans: 7
+  completed_phases: 5
+  total_plans: 6
+  completed_plans: 8
   percent: 0
 ---
 
@@ -54,6 +54,8 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 29]: Substantive heuristic combines stub pattern match AND fewer than 10 non-comment lines to avoid flagging real files with TODO comments
 - [Phase 29]: review_output() short-circuits: spec compliance failure skips quality review entirely
 - [Phase 29]: Patch conductor.orchestrator.orchestrator.TaskVerifier in tests to control the instance created in __init__
+- [Phase 30]: Three-phase decomposition pipeline: decompose -> analyze complexity -> selective expansion with graceful fallback
+- [Phase 30]: complexity_threshold=5 default; scores > threshold trigger expansion; failures in any post-decompose phase return original plan unchanged
 
 ### Pending Todos
 
@@ -71,6 +73,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T12:01:59.907Z
-Stopped at: Completed 29-02-PLAN.md
+Last session: 2026-03-11T12:12:48.630Z
+Stopped at: Completed 30-01-PLAN.md
 Resume file: None
