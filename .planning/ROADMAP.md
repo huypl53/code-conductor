@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ **v1.0 MVP** — Phases 1-17 (shipped 2026-03-11)
-- 🚧 **v1.1 Interactive Chat TUI** — Phases 18-22 (in progress)
+- ✅ **v1.1 Interactive Chat TUI** — Phases 18-22 (completed 2026-03-11)
 
 ## Phases
 
@@ -32,15 +32,15 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
 </details>
 
-### 🚧 v1.1 Interactive Chat TUI (In Progress)
+### ✅ v1.1 Interactive Chat TUI (Completed 2026-03-11)
 
 **Milestone Goal:** Add an interactive conversational TUI so users can chat with the orchestrator like a coding agent CLI — direct tool use for simple tasks, smart sub-agent delegation for complex work, accessible via `conductor` with no arguments.
 
-- [ ] **Phase 18: CLI Foundation and Input Layer** — Fix entry point, adopt prompt_toolkit, wire safe terminal lifecycle
-- [ ] **Phase 19: Streaming Display and Session Lifecycle** — Stream tokens, show tool activity, persist chat history, warn on context exhaustion
-- [ ] **Phase 20: Session Resumption** — Resume prior sessions by timestamp selection via `conductor --resume`
-- [ ] **Phase 21: Smart Delegation and Orchestrator Integration** — Direct tool use for simple tasks, sub-agent spawning for complex work, visible delegation decisions
-- [ ] **Phase 22: Sub-Agent Visibility and Escalation Bridge** — Live per-agent status lines during delegation, escalation questions surfaced in chat
+- [x] **Phase 18: CLI Foundation and Input Layer** — Fix entry point, adopt prompt_toolkit, wire safe terminal lifecycle — completed 2026-03-11
+- [x] **Phase 19: Streaming Display and Session Lifecycle** — Stream tokens, show tool activity, persist chat history, warn on context exhaustion — completed 2026-03-11
+- [x] **Phase 20: Session Resumption** — Resume prior sessions by timestamp selection via `conductor --resume` — completed 2026-03-11
+- [x] **Phase 21: Smart Delegation and Orchestrator Integration** — Direct tool use for simple tasks, sub-agent spawning for complex work, visible delegation decisions — completed 2026-03-11
+- [x] **Phase 22: Sub-Agent Visibility and Escalation Bridge** — Live per-agent status lines during delegation, escalation questions surfaced in chat — completed 2026-03-11
 
 ## Phase Details
 
@@ -124,8 +124,8 @@ Phases execute in numeric order: 18 → 19 → 20 → 21 → 22
 | 15. Fix Dashboard Cancel Type | v1.0 | 1/1 | Complete | 2026-03-11 |
 | 16. Fix Agent Status Lifecycle | v1.0 | 1/1 | Complete | 2026-03-11 |
 | 17. Fix Production WebSocket URL | v1.0 | 1/1 | Complete | 2026-03-11 |
-| 18. CLI Foundation and Input Layer | v1.1 | 0/? | Not started | - |
-| 19. Streaming Display and Session Lifecycle | v1.1 | 0/? | Not started | - |
-| 20. Session Resumption | v1.1 | 0/? | Not started | - |
-| 21. Smart Delegation and Orchestrator Integration | v1.1 | 0/? | Not started | - |
-| 22. Sub-Agent Visibility and Escalation Bridge | v1.1 | 0/? | Not started | - |
+| 18. CLI Foundation and Input Layer | v1.1 | 1/1 | Complete | 2026-03-11 |
+| 19. Streaming Display and Session Lifecycle | v1.1 | 1/1 | Complete | 2026-03-11 |
+| 20. Session Resumption | v1.1 | 1/1 | Complete | 2026-03-11 |
+| 21. Smart Delegation and Orchestrator Integration | v1.1 | 1/1 | Complete | 2026-03-11 |
+| 22. Sub-Agent Visibility and Escalation Bridge | v1.1 | 1/1 | Complete | 2026-03-11 |

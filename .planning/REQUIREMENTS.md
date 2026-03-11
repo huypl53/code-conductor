@@ -72,25 +72,25 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CHAT-01 | Phase 18 | Pending |
-| CHAT-02 | Phase 19 | Pending |
-| CHAT-03 | Phase 18 | Pending |
-| CHAT-04 | Phase 18 | Pending |
-| CHAT-05 | Phase 18 | Pending |
-| CHAT-06 | Phase 19 | Pending |
-| CHAT-07 | Phase 19 | Pending |
-| CHAT-08 | Phase 19 | Pending |
-| DELG-01 | Phase 21 | Pending |
-| DELG-02 | Phase 21 | Pending |
-| DELG-03 | Phase 21 | Pending |
-| DELG-04 | Phase 21 | Pending |
-| SESS-01 | Phase 18 | Pending |
-| SESS-02 | Phase 18 | Pending |
-| SESS-03 | Phase 21 | Pending |
-| SESS-04 | Phase 20 | Pending |
-| SESS-05 | Phase 19 | Pending |
-| VISB-01 | Phase 22 | Pending |
-| VISB-02 | Phase 22 | Pending |
+| CHAT-01 | Phase 18 | Complete |
+| CHAT-02 | Phase 19 | Complete |
+| CHAT-03 | Phase 18 | Complete |
+| CHAT-04 | Phase 18 | Complete |
+| CHAT-05 | Phase 18 | Complete |
+| CHAT-06 | Phase 19 | Complete |
+| CHAT-07 | Phase 19 | Complete |
+| CHAT-08 | Phase 19 | Complete |
+| DELG-01 | Phase 21 | Complete |
+| DELG-02 | Phase 21 | Complete |
+| DELG-03 | Phase 21 | Complete |
+| DELG-04 | Phase 21 | Complete |
+| SESS-01 | Phase 18 | Complete |
+| SESS-02 | Phase 18 | Complete |
+| SESS-03 | Phase 21 | Complete |
+| SESS-04 | Phase 20 | Complete |
+| SESS-05 | Phase 19 | Complete |
+| VISB-01 | Phase 22 | Complete |
+| VISB-02 | Phase 22 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 19 total
@@ -99,4 +99,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-11*
-*Last updated: 2026-03-11 after roadmap creation*
+*Last updated: 2026-03-11 after v1.1 milestone completion*
