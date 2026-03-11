@@ -1,9 +1,9 @@
 ---
 phase: 05
 slug: orchestrator-intelligence
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-10
 ---
 
@@ -38,18 +38,18 @@ created: 2026-03-10
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 05-01-01 | 01 | 1 | ORCH-03 | unit | `pytest tests/test_monitor.py::TestOrch03ToolUse -x` | ❌ W0 | ⬜ pending |
-| 05-01-02 | 01 | 1 | ORCH-03 | unit | `pytest tests/test_monitor.py::TestOrch03Progress -x` | ❌ W0 | ⬜ pending |
-| 05-01-03 | 01 | 1 | ORCH-03 | unit | `pytest tests/test_monitor.py::TestOrch03ResultCapture -x` | ❌ W0 | ⬜ pending |
-| 05-02-01 | 02 | 1 | ORCH-04 | unit | `pytest tests/test_reviewer.py::TestOrch04Approved -x` | ❌ W0 | ⬜ pending |
-| 05-02-02 | 02 | 1 | ORCH-04 | unit | `pytest tests/test_reviewer.py::TestOrch04FileMissing -x` | ❌ W0 | ⬜ pending |
-| 05-02-03 | 02 | 1 | ORCH-04 | unit | `pytest tests/test_reviewer.py::TestOrch04ReviewError -x` | ❌ W0 | ⬜ pending |
-| 05-03-01 | 03 | 2 | ORCH-04 | unit | `pytest tests/test_orchestrator.py::TestOrch04CompleteGate -x` | ❌ W0 | ⬜ pending |
-| 05-03-02 | 03 | 2 | ORCH-05 | unit | `pytest tests/test_orchestrator.py::TestOrch05RevisionSend -x` | ❌ W0 | ⬜ pending |
-| 05-03-03 | 03 | 2 | ORCH-05 | unit | `pytest tests/test_orchestrator.py::TestOrch05MaxRevisions -x` | ❌ W0 | ⬜ pending |
-| 05-03-04 | 03 | 2 | ORCH-05 | unit | `pytest tests/test_orchestrator.py::TestOrch05SessionOpenForRevision -x` | ❌ W0 | ⬜ pending |
+| 05-01-01 | 01 | 1 | ORCH-03 | unit | `pytest tests/test_monitor.py::TestOrch03ToolUse -x` | ✅ | ✅ green |
+| 05-01-02 | 01 | 1 | ORCH-03 | unit | `pytest tests/test_monitor.py::TestOrch03Progress -x` | ✅ | ✅ green |
+| 05-01-03 | 01 | 1 | ORCH-03 | unit | `pytest tests/test_monitor.py::TestOrch03ResultCapture -x` | ✅ | ✅ green |
+| 05-02-01 | 02 | 1 | ORCH-04 | unit | `pytest tests/test_reviewer.py::TestOrch04Approved -x` | ✅ | ✅ green |
+| 05-02-02 | 02 | 1 | ORCH-04 | unit | `pytest tests/test_reviewer.py::TestOrch04FileMissing -x` | ✅ | ✅ green |
+| 05-02-03 | 02 | 1 | ORCH-04 | unit | `pytest tests/test_reviewer.py::TestOrch04ReviewError -x` | ✅ | ✅ green |
+| 05-03-01 | 03 | 2 | ORCH-04 | unit | `pytest tests/test_orchestrator.py::TestOrch04CompleteGate -x` | ✅ | ✅ green |
+| 05-03-02 | 03 | 2 | ORCH-05 | unit | `pytest tests/test_orchestrator.py::TestOrch05RevisionSend -x` | ✅ | ✅ green |
+| 05-03-03 | 03 | 2 | ORCH-05 | unit | `pytest tests/test_orchestrator.py::TestOrch05MaxRevisions -x` | ✅ | ✅ green |
+| 05-03-04 | 03 | 2 | ORCH-05 | unit | `pytest tests/test_orchestrator.py::TestOrch05SessionOpenForRevision -x` | ✅ | ✅ green |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ✅ green · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
@@ -78,4 +78,13 @@ created: 2026-03-10
 - [ ] Feedback latency < 5s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-03-11
+
+## Validation Audit 2026-03-11
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+All ORCH-03/04/05 tests green: test_monitor.py (10) + test_reviewer.py (11) + test_orchestrator.py ORCH-04/05 classes (13).

@@ -1,9 +1,9 @@
 ---
 phase: 04
 slug: orchestrator-core
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-10
 ---
 
@@ -38,20 +38,20 @@ created: 2026-03-10
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 04-01-01 | 01 | 1 | ORCH-01 | unit | `pytest tests/test_decomposer.py::TestOrch01Decompose -x` | ❌ W0 | ⬜ pending |
-| 04-01-02 | 01 | 1 | ORCH-01 | unit | `pytest tests/test_decomposer.py::TestOrch01RetryError -x` | ❌ W0 | ⬜ pending |
-| 04-01-03 | 01 | 1 | ORCH-01 | unit | `pytest tests/test_decomposer.py::TestOrch01Schema -x` | ❌ W0 | ⬜ pending |
-| 04-02-01 | 02 | 1 | CORD-04 | unit | `pytest tests/test_scheduler.py::TestCord04Ready -x` | ❌ W0 | ⬜ pending |
-| 04-02-02 | 02 | 1 | CORD-04 | unit | `pytest tests/test_scheduler.py::TestCord04Sequencing -x` | ❌ W0 | ⬜ pending |
-| 04-02-03 | 02 | 1 | CORD-04 | unit | `pytest tests/test_scheduler.py::TestCord04Cycle -x` | ❌ W0 | ⬜ pending |
-| 04-03-01 | 03 | 1 | CORD-05 | unit | `pytest tests/test_file_ownership.py::TestCord05Conflict -x` | ❌ W0 | ⬜ pending |
-| 04-03-02 | 03 | 1 | CORD-05 | unit | `pytest tests/test_file_ownership.py::TestCord05NoConflict -x` | ❌ W0 | ⬜ pending |
-| 04-04-01 | 04 | 2 | ORCH-02 | unit | `pytest tests/test_orchestrator.py::TestOrch02Spawn -x` | ❌ W0 | ⬜ pending |
-| 04-04-02 | 04 | 2 | ORCH-06 | unit | `pytest tests/test_orchestrator.py::TestOrch06Identity -x` | ❌ W0 | ⬜ pending |
-| 04-04-03 | 04 | 2 | ORCH-06 | unit | `pytest tests/test_orchestrator.py::TestOrch06StateRecord -x` | ❌ W0 | ⬜ pending |
-| 04-04-04 | 04 | 2 | SC-5 | unit | `pytest tests/test_orchestrator.py::TestMaxAgentsCap -x` | ❌ W0 | ⬜ pending |
+| 04-01-01 | 01 | 1 | ORCH-01 | unit | `pytest tests/test_decomposer.py::TestOrch01Decompose -x` | ✅ | ✅ green |
+| 04-01-02 | 01 | 1 | ORCH-01 | unit | `pytest tests/test_decomposer.py::TestOrch01RetryError -x` | ✅ | ✅ green |
+| 04-01-03 | 01 | 1 | ORCH-01 | unit | `pytest tests/test_decomposer.py::TestOrch01Schema -x` | ✅ | ✅ green |
+| 04-02-01 | 02 | 1 | CORD-04 | unit | `pytest tests/test_scheduler.py::TestCord04Ready -x` | ✅ | ✅ green |
+| 04-02-02 | 02 | 1 | CORD-04 | unit | `pytest tests/test_scheduler.py::TestCord04Sequencing -x` | ✅ | ✅ green |
+| 04-02-03 | 02 | 1 | CORD-04 | unit | `pytest tests/test_scheduler.py::TestCord04Cycle -x` | ✅ | ✅ green |
+| 04-03-01 | 03 | 1 | CORD-05 | unit | `pytest tests/test_file_ownership.py::TestCord05Conflict -x` | ✅ | ✅ green |
+| 04-03-02 | 03 | 1 | CORD-05 | unit | `pytest tests/test_file_ownership.py::TestCord05NoConflict -x` | ✅ | ✅ green |
+| 04-04-01 | 04 | 2 | ORCH-02 | unit | `pytest tests/test_orchestrator.py::TestOrch02Spawn -x` | ✅ | ✅ green |
+| 04-04-02 | 04 | 2 | ORCH-06 | unit | `pytest tests/test_orchestrator.py::TestOrch06Identity -x` | ✅ | ✅ green |
+| 04-04-03 | 04 | 2 | ORCH-06 | unit | `pytest tests/test_orchestrator.py::TestOrch06StateRecord -x` | ✅ | ✅ green |
+| 04-04-04 | 04 | 2 | SC-5 | unit | `pytest tests/test_orchestrator.py::TestMaxAgentsCap -x` | ✅ | ✅ green |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ✅ green · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
@@ -81,4 +81,13 @@ created: 2026-03-10
 - [ ] Feedback latency < 5s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-03-11
+
+## Validation Audit 2026-03-11
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+All ORCH-01/02/06, CORD-04/05 tests green: 78 tests across 5 test files.

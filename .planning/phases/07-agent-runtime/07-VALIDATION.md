@@ -1,9 +1,9 @@
 ---
 phase: 07
 slug: agent-runtime
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-10
 ---
 
@@ -38,16 +38,16 @@ created: 2026-03-10
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 07-01-01 | 01 | 1 | RUNT-01 | unit | `pytest tests/test_acp_client.py -x -k "setting_sources"` | ✅ extend | ⬜ pending |
-| 07-01-02 | 01 | 1 | RUNT-02 | unit | `pytest tests/test_orchestrator_models.py -x -k "memory"` | ✅ extend | ⬜ pending |
-| 07-01-03 | 01 | 1 | RUNT-02 | unit | `pytest tests/test_orchestrator.py -x -k "memory_dir"` | ✅ extend | ⬜ pending |
-| 07-02-01 | 02 | 1 | RUNT-03 | unit | `pytest tests/test_acp_client.py -x -k "resume"` | ✅ extend | ⬜ pending |
-| 07-02-02 | 02 | 1 | RUNT-03 | unit | `pytest tests/test_orchestrator.py -x -k "restart"` | ✅ extend | ⬜ pending |
-| 07-03-01 | 03 | 2 | RUNT-04 | unit | `pytest tests/test_orchestrator.py -x -k "pre_run_review"` | ✅ extend | ⬜ pending |
-| 07-03-02 | 03 | 2 | RUNT-05 | unit | `pytest tests/test_orchestrator.py -x -k "mode"` | ✅ extend | ⬜ pending |
-| 07-03-03 | 03 | 2 | RUNT-06 | unit | `pytest tests/test_orchestrator.py -x -k "max_agents"` | ✅ extend | ⬜ pending |
+| 07-01-01 | 01 | 1 | RUNT-01 | unit | `pytest tests/test_acp_client.py -x -k "setting_sources"` | ✅ extend | ✅ green |
+| 07-01-02 | 01 | 1 | RUNT-02 | unit | `pytest tests/test_orchestrator_models.py -x -k "memory"` | ✅ extend | ✅ green |
+| 07-01-03 | 01 | 1 | RUNT-02 | unit | `pytest tests/test_orchestrator.py -x -k "memory_dir"` | ✅ extend | ✅ green |
+| 07-02-01 | 02 | 1 | RUNT-03 | unit | `pytest tests/test_acp_client.py -x -k "resume"` | ✅ extend | ✅ green |
+| 07-02-02 | 02 | 1 | RUNT-03 | unit | `pytest tests/test_orchestrator.py -x -k "restart"` | ✅ extend | ✅ green |
+| 07-03-01 | 03 | 2 | RUNT-04 | unit | `pytest tests/test_orchestrator.py -x -k "pre_run_review"` | ✅ extend | ✅ green |
+| 07-03-02 | 03 | 2 | RUNT-05 | unit | `pytest tests/test_orchestrator.py -x -k "mode"` | ✅ extend | ✅ green |
+| 07-03-03 | 03 | 2 | RUNT-06 | unit | `pytest tests/test_orchestrator.py -x -k "max_agents"` | ✅ extend | ✅ green |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ✅ green · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
@@ -76,4 +76,13 @@ created: 2026-03-10
 - [ ] Feedback latency < 5s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-03-11
+
+## Validation Audit 2026-03-11
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+All RUNT-01/02/03/04/05/06 tests green: test_identity.py (13) + test_session_registry.py (13) + test_acp_client.py resume tests (5) + test_orchestrator.py runtime classes (21).

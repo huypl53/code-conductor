@@ -1,9 +1,9 @@
 ---
 phase: 08
 slug: cli-interface
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-10
 ---
 
@@ -38,12 +38,12 @@ created: 2026-03-10
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 08-01-01 | 01 | 1 | CLI-02 | unit | `pytest tests/test_cli.py::test_build_table -x` | ✅ extend | ⬜ pending |
-| 08-01-02 | 01 | 1 | CLI-01 | unit | `pytest tests/test_cli.py::test_run_interactive_routes_input -x` | ✅ extend | ⬜ pending |
-| 08-02-01 | 02 | 2 | CLI-03 | unit | `pytest tests/test_cli.py::test_dispatch_cancel -x` | ✅ extend | ⬜ pending |
-| 08-02-02 | 02 | 2 | CLI-03 | unit | `pytest tests/test_cli.py::test_dispatch_feedback -x` | ✅ extend | ⬜ pending |
+| 08-01-01 | 01 | 1 | CLI-02 | unit | `pytest tests/test_cli.py::test_build_table -x` | ✅ extend | ✅ green |
+| 08-01-02 | 01 | 1 | CLI-01 | unit | `pytest tests/test_cli.py::test_run_interactive_routes_input -x` | ✅ extend | ✅ green |
+| 08-02-01 | 02 | 2 | CLI-03 | unit | `pytest tests/test_cli.py::test_dispatch_cancel -x` | ✅ extend | ✅ green |
+| 08-02-02 | 02 | 2 | CLI-03 | unit | `pytest tests/test_cli.py::test_dispatch_feedback -x` | ✅ extend | ✅ green |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ✅ green · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
@@ -73,4 +73,13 @@ created: 2026-03-10
 - [ ] Feedback latency < 5s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-03-11
+
+## Validation Audit 2026-03-11
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+All CLI-01/02/03 tests green: test_cli.py (14 tests).

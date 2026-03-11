@@ -1,9 +1,9 @@
 ---
 phase: 06
 slug: escalation-and-intervention
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-10
 ---
 
@@ -38,20 +38,20 @@ created: 2026-03-10
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 06-01-01 | 01 | 1 | COMM-03 | unit | `pytest tests/test_escalation.py::TestComm03AutoMode -x` | ❌ W0 | ⬜ pending |
-| 06-01-02 | 01 | 1 | COMM-03 | unit | `pytest tests/test_escalation.py::TestComm03DecisionLog -x` | ❌ W0 | ⬜ pending |
-| 06-01-03 | 01 | 1 | COMM-04 | unit | `pytest tests/test_escalation.py::TestComm04HighConfidenceAuto -x` | ❌ W0 | ⬜ pending |
-| 06-01-04 | 01 | 1 | COMM-04 | unit | `pytest tests/test_escalation.py::TestComm04LowConfidenceEscalate -x` | ❌ W0 | ⬜ pending |
-| 06-01-05 | 01 | 1 | COMM-04 | unit | `pytest tests/test_escalation.py::TestComm04EscalationTimeout -x` | ❌ W0 | ⬜ pending |
-| 06-02-01 | 02 | 2 | COMM-05 | unit | `pytest tests/test_orchestrator.py::TestComm05CancelTask -x` | ❌ W0 | ⬜ pending |
-| 06-02-02 | 02 | 2 | COMM-05 | unit | `pytest tests/test_orchestrator.py::TestComm05ReassignSpawns -x` | ❌ W0 | ⬜ pending |
-| 06-02-03 | 02 | 2 | COMM-06 | unit | `pytest tests/test_orchestrator.py::TestComm06InjectSend -x` | ❌ W0 | ⬜ pending |
-| 06-02-04 | 02 | 2 | COMM-06 | unit | `pytest tests/test_orchestrator.py::TestComm06UnknownAgent -x` | ❌ W0 | ⬜ pending |
-| 06-02-05 | 02 | 2 | COMM-07 | unit | `pytest tests/test_orchestrator.py::TestComm07PauseInterrupt -x` | ❌ W0 | ⬜ pending |
-| 06-02-06 | 02 | 2 | COMM-07 | unit | `pytest tests/test_orchestrator.py::TestComm07ResumeAfterDecision -x` | ❌ W0 | ⬜ pending |
-| 06-02-07 | 02 | 2 | COMM-07 | unit | `pytest tests/test_orchestrator.py::TestComm07PauseTimeout -x` | ❌ W0 | ⬜ pending |
+| 06-01-01 | 01 | 1 | COMM-03 | unit | `pytest tests/test_escalation.py::TestComm03AutoMode -x` | ✅ | ✅ green |
+| 06-01-02 | 01 | 1 | COMM-03 | unit | `pytest tests/test_escalation.py::TestComm03DecisionLog -x` | ✅ | ✅ green |
+| 06-01-03 | 01 | 1 | COMM-04 | unit | `pytest tests/test_escalation.py::TestComm04HighConfidenceAuto -x` | ✅ | ✅ green |
+| 06-01-04 | 01 | 1 | COMM-04 | unit | `pytest tests/test_escalation.py::TestComm04LowConfidenceEscalate -x` | ✅ | ✅ green |
+| 06-01-05 | 01 | 1 | COMM-04 | unit | `pytest tests/test_escalation.py::TestComm04EscalationTimeout -x` | ✅ | ✅ green |
+| 06-02-01 | 02 | 2 | COMM-05 | unit | `pytest tests/test_orchestrator.py::TestComm05CancelTask -x` | ✅ | ✅ green |
+| 06-02-02 | 02 | 2 | COMM-05 | unit | `pytest tests/test_orchestrator.py::TestComm05ReassignSpawns -x` | ✅ | ✅ green |
+| 06-02-03 | 02 | 2 | COMM-06 | unit | `pytest tests/test_orchestrator.py::TestComm06InjectSend -x` | ✅ | ✅ green |
+| 06-02-04 | 02 | 2 | COMM-06 | unit | `pytest tests/test_orchestrator.py::TestComm06UnknownAgent -x` | ✅ | ✅ green |
+| 06-02-05 | 02 | 2 | COMM-07 | unit | `pytest tests/test_orchestrator.py::TestComm07PauseInterrupt -x` | ✅ | ✅ green |
+| 06-02-06 | 02 | 2 | COMM-07 | unit | `pytest tests/test_orchestrator.py::TestComm07ResumeAfterDecision -x` | ✅ | ✅ green |
+| 06-02-07 | 02 | 2 | COMM-07 | unit | `pytest tests/test_orchestrator.py::TestComm07PauseTimeout -x` | ✅ | ✅ green |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ✅ green · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
@@ -79,4 +79,13 @@ created: 2026-03-10
 - [ ] Feedback latency < 5s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-03-11
+
+## Validation Audit 2026-03-11
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+All COMM-03/04/05/06/07 tests green: test_escalation.py (27) + test_orchestrator.py COMM classes (13).

@@ -1,9 +1,9 @@
 ---
 phase: 09
 slug: dashboard-backend
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-10
 ---
 
@@ -38,14 +38,14 @@ created: 2026-03-10
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 09-01-01 | 01 | 1 | DASH-04 | unit | `pytest tests/test_dashboard_events.py::test_classify_task_failed -x` | ❌ W0 | ⬜ pending |
-| 09-01-02 | 01 | 1 | DASH-04 | unit | `pytest tests/test_dashboard_events.py::test_classify_task_completed -x` | ❌ W0 | ⬜ pending |
-| 09-01-03 | 01 | 1 | DASH-04 | unit | `pytest tests/test_dashboard_events.py::test_classify_intervention_needed -x` | ❌ W0 | ⬜ pending |
-| 09-02-01 | 02 | 2 | DASH-04 | integration | `pytest tests/test_dashboard.py::test_get_state -x` | ❌ W0 | ⬜ pending |
-| 09-02-02 | 02 | 2 | DASH-04 | integration | `pytest tests/test_dashboard.py::test_ws_delta_on_state_change -x` | ❌ W0 | ⬜ pending |
-| 09-02-03 | 02 | 2 | DASH-04 | integration | `pytest tests/test_dashboard.py::test_ws_initial_state_on_connect -x` | ❌ W0 | ⬜ pending |
+| 09-01-01 | 01 | 1 | DASH-04 | unit | `pytest tests/test_dashboard_events.py::test_classify_task_failed -x` | ✅ | ✅ green |
+| 09-01-02 | 01 | 1 | DASH-04 | unit | `pytest tests/test_dashboard_events.py::test_classify_task_completed -x` | ✅ | ✅ green |
+| 09-01-03 | 01 | 1 | DASH-04 | unit | `pytest tests/test_dashboard_events.py::test_classify_intervention_needed -x` | ✅ | ✅ green |
+| 09-02-01 | 02 | 2 | DASH-04 | integration | `pytest tests/test_dashboard.py::test_get_state -x` | ✅ | ✅ green |
+| 09-02-02 | 02 | 2 | DASH-04 | integration | `pytest tests/test_dashboard.py::test_ws_delta_on_state_change -x` | ✅ | ✅ green |
+| 09-02-03 | 02 | 2 | DASH-04 | integration | `pytest tests/test_dashboard.py::test_ws_initial_state_on_connect -x` | ✅ | ✅ green |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ✅ green · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
@@ -77,4 +77,13 @@ created: 2026-03-10
 - [ ] Feedback latency < 5s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-03-11
+
+## Validation Audit 2026-03-11
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+All DASH-04 tests green: test_dashboard_events.py (15) + test_dashboard.py (6).

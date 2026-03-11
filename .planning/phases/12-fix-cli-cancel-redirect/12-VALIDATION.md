@@ -1,9 +1,9 @@
 ---
 phase: 12
 slug: fix-cli-cancel-redirect
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-11
 ---
 
@@ -38,11 +38,11 @@ created: 2026-03-11
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 12-01-01 | 01 | 1 | CLI-03, COMM-05 | unit+integration | `uv run --project packages/conductor-core pytest packages/conductor-core/tests/test_cli.py -x -q` | Yes | ⬜ pending |
-| 12-01-02 | 01 | 1 | COMM-05 | integration | `uv run --project packages/conductor-core pytest packages/conductor-core/tests/ -k cancel -x -q` | ❌ W0 | ⬜ pending |
-| 12-01-03 | 01 | 1 | CLI-03, COMM-05 | integration | `uv run --project packages/conductor-core pytest packages/conductor-core/tests/ -k redirect -x -q` | ❌ W0 | ⬜ pending |
+| 12-01-01 | 01 | 1 | CLI-03, COMM-05 | unit+integration | `uv run --project packages/conductor-core pytest packages/conductor-core/tests/test_cli.py -x -q` | Yes | ✅ green |
+| 12-01-02 | 01 | 1 | COMM-05 | integration | `uv run --project packages/conductor-core pytest packages/conductor-core/tests/ -k cancel -x -q` | ✅ | ✅ green |
+| 12-01-03 | 01 | 1 | CLI-03, COMM-05 | integration | `uv run --project packages/conductor-core pytest packages/conductor-core/tests/ -k redirect -x -q` | ✅ | ✅ green |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ✅ green · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
@@ -70,4 +70,13 @@ created: 2026-03-11
 - [ ] Feedback latency < 10s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-03-11
+
+## Validation Audit 2026-03-11
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+All CLI-01/03, COMM-05 tests green: TestCancelAgentIntegration (3) + TestComm05CancelReassign (3).

@@ -1,9 +1,9 @@
 ---
 phase: 14
 slug: fix-getting-started-env
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-11
 ---
 
@@ -38,9 +38,9 @@ created: 2026-03-11
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 14-01-01 | 01 | 1 | PKG-04 | grep | `grep -c "automatically reads.*\.env\|auto.*load.*\.env" docs/GETTING-STARTED.md` | ✅ | ⬜ pending |
+| 14-01-01 | 01 | 1 | PKG-04 | grep | `grep -c "automatically reads.*\.env\|auto.*load.*\.env" docs/GETTING-STARTED.md` | ✅ | ✅ green |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ✅ green · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
@@ -67,4 +67,13 @@ created: 2026-03-11
 - [ ] Feedback latency < 5s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-03-11
+
+## Validation Audit 2026-03-11
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+PKG-04 grep validation: zero .env references remain, export instructions present at correct locations.

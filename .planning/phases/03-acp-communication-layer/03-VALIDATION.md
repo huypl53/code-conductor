@@ -1,9 +1,9 @@
 ---
 phase: 3
 slug: acp-communication-layer
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-10
 ---
 
@@ -38,13 +38,13 @@ created: 2026-03-10
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 3-01-01 | 01 | 0 | COMM-01 | unit | `pytest tests/test_acp_client.py::TestComm01Streaming -x` | ❌ W0 | ⬜ pending |
-| 3-01-02 | 01 | 0 | COMM-01 | unit | `pytest tests/test_acp_permission.py::TestComm01PermissionCallback -x` | ❌ W0 | ⬜ pending |
-| 3-01-03 | 01 | 0 | COMM-01 | unit | `pytest tests/test_acp_permission.py::TestComm01Timeout -x` | ❌ W0 | ⬜ pending |
-| 3-01-04 | 01 | 0 | COMM-02 | unit | `pytest tests/test_acp_permission.py::TestComm02AnswerQuestion -x` | ❌ W0 | ⬜ pending |
-| 3-01-05 | 01 | 0 | COMM-01 | unit | `pytest tests/test_acp_client.py::TestComm01SessionLifecycle -x` | ❌ W0 | ⬜ pending |
+| 3-01-01 | 01 | 0 | COMM-01 | unit | `pytest tests/test_acp_client.py::TestComm01Streaming -x` | ✅ | ✅ green |
+| 3-01-02 | 01 | 0 | COMM-01 | unit | `pytest tests/test_acp_permission.py::TestComm01PermissionCallback -x` | ✅ | ✅ green |
+| 3-01-03 | 01 | 0 | COMM-01 | unit | `pytest tests/test_acp_permission.py::TestComm01Timeout -x` | ✅ | ✅ green |
+| 3-01-04 | 01 | 0 | COMM-02 | unit | `pytest tests/test_acp_permission.py::TestComm02AnswerQuestion -x` | ✅ | ✅ green |
+| 3-01-05 | 01 | 0 | COMM-01 | unit | `pytest tests/test_acp_client.py::TestComm01SessionLifecycle -x` | ✅ | ✅ green |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ✅ green · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
@@ -74,4 +74,13 @@ created: 2026-03-10
 - [ ] Feedback latency < 10s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-03-11
+
+## Validation Audit 2026-03-11
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+All COMM-01/02 tests green: test_acp_permission.py (7 tests) + test_acp_client.py (14 tests).

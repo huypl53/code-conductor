@@ -1,9 +1,9 @@
 ---
 phase: 2
 slug: shared-state-infrastructure
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-10
 ---
 
@@ -38,15 +38,15 @@ created: 2026-03-10
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 02-01-01 | 01 | 0 | CORD-01 | unit | `uv run pytest tests/test_state.py::test_task_round_trip -x` | ❌ W0 | ⬜ pending |
-| 02-01-02 | 01 | 0 | CORD-01 | unit | `uv run pytest tests/test_state.py::test_full_state_round_trip -x` | ❌ W0 | ⬜ pending |
-| 02-01-03 | 01 | 0 | CORD-02 | integration | `uv run pytest tests/test_state.py::test_concurrent_writes_no_corruption -x` | ❌ W0 | ⬜ pending |
-| 02-01-04 | 01 | 0 | CORD-02 | unit | `uv run pytest tests/test_state.py::test_assign_task -x` | ❌ W0 | ⬜ pending |
-| 02-01-05 | 01 | 0 | CORD-03 | unit | `uv run pytest tests/test_state.py::test_update_task_status -x` | ❌ W0 | ⬜ pending |
-| 02-01-06 | 01 | 0 | CORD-03 | unit | `uv run pytest tests/test_state.py::test_orchestrator_observes_status -x` | ❌ W0 | ⬜ pending |
-| 02-01-07 | 01 | 0 | CORD-06 | unit | `uv run pytest tests/test_state.py::test_all_tasks_visible -x` | ❌ W0 | ⬜ pending |
+| 02-01-01 | 01 | 0 | CORD-01 | unit | `uv run pytest tests/test_state.py::test_task_round_trip -x` | ✅ | ✅ green |
+| 02-01-02 | 01 | 0 | CORD-01 | unit | `uv run pytest tests/test_state.py::test_full_state_round_trip -x` | ✅ | ✅ green |
+| 02-01-03 | 01 | 0 | CORD-02 | integration | `uv run pytest tests/test_state.py::test_concurrent_writes_no_corruption -x` | ✅ | ✅ green |
+| 02-01-04 | 01 | 0 | CORD-02 | unit | `uv run pytest tests/test_state.py::test_assign_task -x` | ✅ | ✅ green |
+| 02-01-05 | 01 | 0 | CORD-03 | unit | `uv run pytest tests/test_state.py::test_update_task_status -x` | ✅ | ✅ green |
+| 02-01-06 | 01 | 0 | CORD-03 | unit | `uv run pytest tests/test_state.py::test_orchestrator_observes_status -x` | ✅ | ✅ green |
+| 02-01-07 | 01 | 0 | CORD-06 | unit | `uv run pytest tests/test_state.py::test_all_tasks_visible -x` | ✅ | ✅ green |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ✅ green · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
@@ -77,4 +77,13 @@ created: 2026-03-10
 - [ ] Feedback latency < 5s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-03-11
+
+## Validation Audit 2026-03-11
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+All CORD-01/02/03/06 tests green: test_state.py (8 tests) + test_models.py (27 tests).
