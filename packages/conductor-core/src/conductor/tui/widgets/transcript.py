@@ -76,7 +76,8 @@ class AssistantCell(Widget):
             await indicator.remove()
         except Exception:
             pass
-        self._markdown = Markdown("")
+        from conductor.tui.widgets.rich_markdown import RichMarkdown
+        self._markdown = RichMarkdown("")
         await self.mount(self._markdown)
         self._stream = Markdown.get_stream(self._markdown)
 
