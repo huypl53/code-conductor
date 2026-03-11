@@ -1,6 +1,7 @@
 """TranscriptPane — scrollable conversation history with UserCell and AssistantCell."""
 from __future__ import annotations
 import math
+import os
 from textual.app import ComposeResult
 from textual.color import Color
 from textual.containers import VerticalScroll
@@ -13,6 +14,10 @@ _SHIMMER_ON = Color(150, 150, 255, 0.12)
 _SHIMMER_OFF = Color(0, 0, 0, 0.0)
 _SHIMMER_INTERVAL = 1.0 / 15  # ~15 fps
 _SHIMMER_PERIOD = 1.4  # full cycle duration in seconds
+
+# Fade-in animation guard — read once at import time.
+# Set CONDUCTOR_NO_ANIMATIONS=1 to disable for CI/SSH environments.
+_ANIMATIONS = os.environ.get("CONDUCTOR_NO_ANIMATIONS", "") not in ("1", "true", "yes")
 
 
 class UserCell(Widget):
@@ -38,6 +43,11 @@ class UserCell(Widget):
     def compose(self) -> ComposeResult:
         yield Static("You", classes="cell-label")
         yield Static(self._text)
+
+    def on_mount(self) -> None:
+        if _ANIMATIONS:
+            self.styles.opacity = 0.0
+            self.styles.animate("opacity", value=1.0, duration=0.25, easing="out_cubic")
 
 
 class AssistantCell(Widget):
@@ -79,6 +89,11 @@ class AssistantCell(Widget):
         else:
             # Streaming mode — show thinking indicator
             yield LoadingIndicator()
+
+    def on_mount(self) -> None:
+        if _ANIMATIONS:
+            self.styles.opacity = 0.0
+            self.styles.animate("opacity", value=1.0, duration=0.25, easing="out_cubic")
 
     async def start_streaming(self) -> None:
         """Transition from thinking to streaming: remove LoadingIndicator, mount Markdown."""
