@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Textual TUI Redesign
-status: defining_requirements
+status: ready_to_plan
 stopped_at: null
 last_updated: "2026-03-11"
-last_activity: "2026-03-11 — Milestone v2.0 started"
+last_activity: "2026-03-11 — Roadmap created, 8 phases defined (31-38)"
 progress:
-  total_phases: 0
+  total_phases: 8
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** A product owner describes a feature, and a self-organizing team of AI coding agents delivers quality, reviewed, tested code — with the human staying in control when they want to be.
-**Current focus:** v2.0 Textual TUI Redesign
+**Current focus:** v2.0 Textual TUI Redesign — Phase 31: TUI Foundation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-11 — Milestone v2.0 started
+Phase: 31 of 38 (TUI Foundation)
+Plan: — (not yet planned)
+Status: Ready to plan
+Last activity: 2026-03-11 — Roadmap created for v2.0, phases 31-38 defined
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -36,24 +36,14 @@ Progress: [░░░░░░░░░░] 0%
 
 ### Decisions
 
-- File existence gate goes inside `_run_agent_loop`, after review passes, before marking COMPLETED
-- Post-run build command is a final report, not a gate — does not block task completion
-- Config loading in run.py, not inside Orchestrator (orchestrator is pure execution engine)
-- [Phase 26]: compute_waves() uses a scratch TopologicalSorter from self._graph to avoid consuming the active sorter
-- [Phase 26]: Explicit max_revisions/max_agents params override OrchestratorConfig when non-default
-- [Phase 26]: AgentRole uses StrEnum so values are plain strings and JSON-serializable
-- [Phase 27]: run() uses wave-based execution with asyncio.gather; resume() keeps FIRST_COMPLETED
-- [Phase 27]: ACPClient model param is optional None default, only passed to SDK when not None
-- [Phase 27]: Lean prompts removed task_description from system prompt — sent as first user message instead
-- [Phase 28]: AgentReport parsing is best-effort — malformed output falls through to freeform behavior
-- [Phase 28]: Deviation rules are prompt instructions only — no code enforcement
-- [Phase 28]: BLOCKED routing uses continue inside revision loop so it counts as a revision iteration
-- [Phase 29]: Wiring check uses file stem (no extension) for grep to catch import patterns
-- [Phase 29]: Substantive heuristic combines stub pattern match AND fewer than 10 non-comment lines
-- [Phase 29]: review_output() preserved as backward-compat wrapper delegating to two-stage review
-- [Phase 30]: Three-phase decomposition pipeline with graceful fallback on any failure
-- [Phase 30]: Expanded subtasks use namespaced IDs (A.1, A.2) with sequential dependency chain
-- [Phase 30]: Dependents of expanded tasks rewired to require last subtask
+- [v1.3/Phase 26]: compute_waves() uses scratch TopologicalSorter to avoid consuming active sorter
+- [v1.3/Phase 27]: run() uses wave-based execution with asyncio.gather; resume() keeps FIRST_COMPLETED
+- [v1.3/Phase 29]: Wiring check uses file stem (no extension) for grep to catch import patterns
+- [v1.3/Phase 30]: Three-phase decomposition pipeline with graceful fallback on any failure
+- [v2.0 Architecture]: Textual owns the event loop — ConductorApp.run() is sole entry point, no asyncio.run() cohabitation
+- [v2.0 Architecture]: prompt_toolkit fully removed — both frameworks claim terminal raw mode, cannot coexist
+- [v2.0 Architecture]: uvicorn runs as asyncio.create_task(server.serve()) inside on_mount, not uvicorn.run()
+- [v2.0 Architecture]: Token buffering at 20fps via set_interval — never call widget.update() per-token
 
 ### Pending Todos
 
@@ -61,7 +51,9 @@ None.
 
 ### Blockers/Concerns
 
-None.
+- [Phase 33 research flag]: MarkdownStream API (Textual v4) needs verification against actual release notes before coding — `Markdown.get_stream()` / `await stream.append(chunk)` may differ
+- [Phase 36 research flag]: asyncio.Queue bridge from DelegationManager._escalation_listener to push_screen_wait() has no direct Textual docs precedent — prototype before building full modal stack
+- [Phase 31]: Claude Agent SDK subprocess may write to inherited terminal stdout, bypassing Textual renderer — must audit in Phase 1 with a test delegation run
 
 ### Quick Tasks Completed
 
@@ -72,5 +64,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Milestone v1.3 complete
+Stopped at: v2.0 roadmap created — ready to plan Phase 31
 Resume file: None

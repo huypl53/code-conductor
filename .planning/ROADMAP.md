@@ -6,6 +6,7 @@
 - ✅ **v1.1 Interactive Chat TUI** — Phases 18-22 (completed 2026-03-11)
 - ✅ **v1.2 Task Verification & Build Safety** — Phases 23-25 (completed 2026-03-11)
 - ✅ **v1.3 Orchestrator Intelligence** — Phases 26-30 (completed 2026-03-11)
+- 🚧 **v2.0 Textual TUI Redesign** — Phases 31-38 (in progress)
 
 ## Phases
 
@@ -45,23 +46,38 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
 </details>
 
-### v1.2 Task Verification & Build Safety
+<details>
+<summary>✅ v1.2 Task Verification & Build Safety (Phases 23-25) — COMPLETED 2026-03-11</summary>
 
-**Milestone Goal:** Ensure Conductor validates task output before marking tasks complete, with structured review cycles and hardened resume support.
+- [x] **Phase 23: Resume Robustness** — completed 2026-03-11
+- [x] **Phase 24: Task Verification and Quality Loops** — completed 2026-03-11
+- [x] **Phase 25: Post-Run Build Verification** — completed 2026-03-11
 
-- [x] **Phase 23: Resume Robustness** — Harden resume path so exceptions in review_only mode and spawn loop edge cases never crash the orchestrator (completed 2026-03-11)
-- [x] **Phase 24: Task Verification and Quality Loops** — File existence gate forces re-runs when target files are missing; structured review cycles with configurable max rounds and explicit NEEDS_REVISION on exhaustion (completed 2026-03-11)
-- [x] **Phase 25: Post-Run Build Verification** — Orchestrator runs a user-configured build command after all tasks complete and reports pass/fail with stderr output (completed 2026-03-11)
+</details>
 
-### v1.3 Orchestrator Intelligence
+<details>
+<summary>✅ v1.3 Orchestrator Intelligence (Phases 26-30) — COMPLETED 2026-03-11</summary>
 
-**Milestone Goal:** Make Conductor's orchestrator smarter — wave-based parallel execution, model routing for cost control, structured agent communication, goal-backward verification, and complexity-informed task decomposition.
+- [x] **Phase 26: Models & Scheduler Infrastructure** — completed 2026-03-11
+- [x] **Phase 27: Execution & Routing Pipeline** — completed 2026-03-11
+- [x] **Phase 28: Agent Communication Protocol** — completed 2026-03-11
+- [x] **Phase 29: Verification & Review Pipeline** — completed 2026-03-11
+- [x] **Phase 30: Smart Decomposition** — completed 2026-03-11
 
-- [x] **Phase 26: Models & Scheduler Infrastructure** — OrchestratorConfig, ModelProfile, AgentRole models + compute_waves() (completed 2026-03-11)
-- [x] **Phase 27: Execution & Routing Pipeline** — Wave-based spawn loop, ACPClient model routing, context-lean agent prompts (completed 2026-03-11)
-- [x] **Phase 28: Agent Communication Protocol** — AgentReport status protocol, status-based routing, deviation classification rules (completed 2026-03-11)
-- [x] **Phase 29: Verification & Review Pipeline** — TaskVerifier with stub detection and wiring checks, two-stage review (completed 2026-03-11)
-- [x] **Phase 30: Smart Decomposition** — Complexity scoring, selective expansion with dependency rewiring (completed 2026-03-11)
+</details>
+
+### 🚧 v2.0 Textual TUI Redesign (In Progress)
+
+**Milestone Goal:** Replace prompt_toolkit + Rich with a full Textual-based TUI — cell-based transcript, streaming responses, modal approval overlays, inline agent monitoring, syntax-highlighted output, and a polished terminal experience that matches the quality of OpenAI's Codex CLI.
+
+- [ ] **Phase 31: TUI Foundation** - Establish Textual event loop ownership, remove prompt_toolkit, wire ConductorApp as entry point, set up test infrastructure
+- [ ] **Phase 32: Static TUI Shell** - Two-column layout with TranscriptPane, CommandInput, StatusFooter, and AgentMonitorPane placeholder — verified with hard-coded content before live data
+- [ ] **Phase 33: SDK Streaming** - Real Claude responses streaming token-by-token into MarkdownStream-backed cells, thinking indicator, live token counter in status footer
+- [ ] **Phase 34: Rich Output** - Syntax-highlighted code blocks, rendered markdown (headings/bold/links/lists), and syntax-highlighted file diffs in transcript cells
+- [ ] **Phase 35: Agent Monitoring** - Live collapsible per-agent panels wired to state.json file watcher, showing task/status/tool activity with reactive updates
+- [ ] **Phase 36: Approval Modals** - ModalScreen overlays for file change approvals, command execution approvals, and escalation questions from sub-agents
+- [ ] **Phase 37: Slash Commands & Dashboard Coexistence** - Slash command autocomplete popup, all existing slash commands routed, uvicorn dashboard running alongside TUI in one process
+- [ ] **Phase 38: Session Persistence & Polish** - Session history replayed on resume, shimmer animation on active cells, final v2.0 polish pass
 
 ## Phase Details
 
@@ -76,7 +92,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
   4. All existing tests still pass after adding new models
 **Plans**: 1 plan
 Plans:
-- [ ] 26-01-PLAN.md — OrchestratorConfig, ModelProfile, compute_waves(), and orchestrator wiring
+- [x] 26-01-PLAN.md — OrchestratorConfig, ModelProfile, compute_waves(), and orchestrator wiring
 
 ### Phase 27: Execution & Routing Pipeline
 **Goal**: Orchestrator spawns tasks in waves for maximum parallelism, routes model selection per agent role, and uses lean prompts to preserve agent context
@@ -90,7 +106,7 @@ Plans:
   5. All existing tests still pass; new tests cover wave execution and model routing
 **Plans**: 1 plan
 Plans:
-- [ ] 27-01-PLAN.md — Wave-based spawn loop, ACPClient model routing, lean system prompts
+- [x] 27-01-PLAN.md — Wave-based spawn loop, ACPClient model routing, lean system prompts
 
 ### Phase 28: Agent Communication Protocol
 **Goal**: Agents report structured status (DONE/BLOCKED/NEEDS_CONTEXT) that the orchestrator parses and routes programmatically, with deviation rules preventing unplanned scope creep
@@ -104,7 +120,7 @@ Plans:
   5. Agent prompts include deviation rules: auto-fix for bugs/missing-critical (Rules 1-3), escalate for architectural changes (Rule 4)
 **Plans**: 1 plan
 Plans:
-- [ ] 28-PLAN.md — AgentReport model, status parsing, routing, deviation rules
+- [x] 28-PLAN.md — AgentReport model, status parsing, routing, deviation rules
 
 ### Phase 29: Verification & Review Pipeline
 **Goal**: Every completed task is independently verified for substance and wiring (not just file existence), and review is split into spec compliance and code quality stages for faster, more focused feedback
@@ -119,8 +135,8 @@ Plans:
   6. All existing tests pass; new tests cover verifier and two-stage review
 **Plans**: 2 plans
 Plans:
-- [ ] 29-01-PLAN.md — TaskVerifier module and two-stage reviewer refactor with tests
-- [ ] 29-02-PLAN.md — Wire verifier into orchestrator, update exports, integration tests
+- [x] 29-01-PLAN.md — TaskVerifier module and two-stage reviewer refactor with tests
+- [x] 29-02-PLAN.md — Wire verifier into orchestrator, update exports, integration tests
 
 ### Phase 30: Smart Decomposition
 **Goal**: The decomposer produces better task plans by scoring complexity and selectively expanding only high-complexity tasks, giving each sub-task AI-specific guidance
@@ -134,104 +150,102 @@ Plans:
   5. The expanded task plan maintains correct dependency relationships
 **Plans**: 1 plan
 Plans:
-- [ ] 30-01-PLAN.md — Complexity scoring, selective expansion, dependency rewiring
+- [x] 30-01-PLAN.md — Complexity scoring, selective expansion, dependency rewiring
 
-
-
-### Phase 18: CLI Foundation and Input Layer
-**Goal**: Users can open an interactive chat session by running `conductor` with no arguments, type and submit prompts with full input control (history, multiline, interrupt), and use basic slash commands to navigate
-**Depends on**: Phase 17 (v1.0 complete)
-**Requirements**: CHAT-01, CHAT-03, CHAT-04, CHAT-05, SESS-01, SESS-02
+### Phase 31: TUI Foundation
+**Goal**: Textual owns the asyncio event loop and ConductorApp is the sole process entry point — prompt_toolkit is fully removed, all conflicting patterns eliminated, and the test infrastructure is established so subsequent phases can be verified in headless mode
+**Depends on**: Phase 30 (v1.3 complete)
+**Requirements**: TUIF-01, TUIF-02, TUIF-03, TUIF-04
 **Success Criteria** (what must be TRUE):
-  1. Running `conductor` with no arguments opens an interactive input prompt instead of showing help text
-  2. Pressing Up/Down arrow keys cycles through prompts submitted earlier in the current session
-  3. Pasting multi-line text into the prompt does not submit prematurely — user must press Enter on an empty line or a designated submit key
-  4. First Ctrl+C while a response is running stops the agent and returns to the prompt with a cancellation notice; second Ctrl+C in quick succession exits the TUI cleanly
-  5. `/help` displays all slash commands with descriptions; `/exit` terminates cleanly and restores the terminal to its pre-launch state
+  1. Running `conductor` launches a Textual full-screen TUI instead of the prompt_toolkit REPL — the terminal switches to alternate screen mode
+  2. No `prompt_toolkit` import appears in any code path executed during TUI lifetime — verified by grep and runtime audit
+  3. All async subsystems (SDK client, uvicorn dashboard server, orchestrator delegation) launch as Textual workers or asyncio tasks inside `ConductorApp.on_mount` — no competing `asyncio.run()` calls exist in the TUI entry path
+  4. A `pytest` test using Textual's `run_test()` pilot can launch `ConductorApp` in headless mode and assert the app starts without error
 **Plans**: TBD
 
-### Phase 19: Streaming Display and Session Lifecycle
-**Goal**: Users see orchestrator responses rendered token-by-token as they arrive, with a working indicator before the first token, human-readable tool activity lines, and a warning when context is running low — and all of this survives crashes because chat history is persisted to disk
-**Depends on**: Phase 18
-**Requirements**: CHAT-02, CHAT-06, CHAT-07, CHAT-08, SESS-05
+### Phase 32: Static TUI Shell
+**Goal**: The two-column TUI layout is verified with hard-coded content — TranscriptPane displays user message cells, CommandInput submits text, StatusFooter renders structural info, and AgentMonitorPane placeholder renders — before any live data is connected
+**Depends on**: Phase 31
+**Requirements**: TRNS-01
 **Success Criteria** (what must be TRUE):
-  1. Orchestrator response tokens appear incrementally in the chat as they are generated — the user never waits for the full response before seeing output
-  2. A spinner or working indicator is visible from the moment a prompt is submitted until the first response token appears
-  3. Each direct tool invocation (file read, file edit, shell command) shows a human-readable status line in the chat (e.g. "Reading src/auth.py...") rather than raw JSON
-  4. When conversation context reaches approximately 75% utilization, the user receives a warning with an option to summarize and continue
-  5. Chat history written to disk so that a subsequent `conductor --resume` can restore it after a crash or process kill
+  1. User can type a message and press Enter — a user message cell appears in the scrollable transcript with visually distinct styling from assistant cells
+  2. The transcript scrolls as cells are added and older cells remain visible by scrolling up
+  3. The CommandInput widget at the bottom accepts text input and clears after submission
+  4. A status footer bar is visible at the bottom of the screen (structural, not yet live-wired)
+  5. An agent monitor panel area is visible on the right side (placeholder, not yet reactive)
 **Plans**: TBD
 
-### Phase 20: Session Resumption
-**Goal**: Users can resume a prior chat session from exactly where they left off — conversation history is restored before the input prompt activates — so context is never lost across restarts
-**Depends on**: Phase 19
-**Requirements**: SESS-04
+### Phase 33: SDK Streaming
+**Goal**: Users see real Claude responses streaming token-by-token into the active transcript cell with a thinking indicator before the first token arrives, and the status footer displays live token counts
+**Depends on**: Phase 32
+**Requirements**: TRNS-02, STAT-01
 **Success Criteria** (what must be TRUE):
-  1. Running `conductor --resume` shows a numbered list of recent sessions with timestamp and first prompt text for each
-  2. Selecting a session from the list restores the full conversation history in the chat before the input prompt activates
-  3. Resuming a session that was active during a crash or kill recovers all turns that were persisted before the interruption
+  1. After submitting a prompt, a thinking indicator (spinner or animated indicator) appears in the transcript before any response text arrives
+  2. Response tokens appear incrementally in the active assistant cell as they are generated — the user never waits for the full response before seeing output
+  3. The status footer displays the current model name, mode (auto/interactive), and live token count that updates as the response streams
+  4. The session ID is visible in the status footer
+  5. When streaming completes, the active cell becomes immutable and the input widget reactivates
 **Plans**: TBD
 
-### Phase 21: Smart Delegation and Orchestrator Integration
-**Goal**: The orchestrator handles simple coding tasks (file edits, shell commands) directly in-context and transparently delegates complex tasks to a sub-agent team — every request produces a visible delegation decision before work begins
-**Depends on**: Phase 19
-**Requirements**: DELG-01, DELG-02, DELG-03, DELG-04, SESS-03
+### Phase 34: Rich Output
+**Goal**: Code, markdown, and diffs in assistant responses render with full visual formatting — syntax-highlighted code blocks, proper markdown structure, and color-coded diff additions/deletions — making output readable without leaving the terminal
+**Depends on**: Phase 33
+**Requirements**: TRNS-03, TRNS-04, TRNS-05
 **Success Criteria** (what must be TRUE):
-  1. A simple request (e.g. "rename variable X to Y in auth.py") completes via direct file edit with no delegation announcement or sub-agent overhead
-  2. A complex request (e.g. "add OAuth login") triggers a "Delegating to team..." announcement and spawns a sub-agent team via the existing orchestrator
-  3. Every request — simple or complex — produces a visible decision line ("Handling directly" or "Delegating to team") before any work begins
-  4. When sub-agents are spawned, the delegation announcement includes the dashboard URL
-  5. `/status` displays a table of active sub-agents with ID, task, and elapsed time; shows "No active agents" when none are running
+  1. Code blocks in responses render with language-appropriate syntax highlighting (e.g. Python keywords colored, strings colored)
+  2. Markdown headings render larger/bolder, bold text renders bold, bullet lists render with proper indentation, blockquotes render with visual offset
+  3. File diffs render with green-highlighted addition lines and red-highlighted deletion lines — diff syntax is visually distinct from prose
 **Plans**: TBD
 
-### Phase 22: Sub-Agent Visibility and Escalation Bridge
-**Goal**: Users can see live per-agent progress during delegation without switching to the dashboard, and escalation questions from sub-agents surface directly in the chat with the agent ID so users can reply without leaving the TUI
-**Depends on**: Phase 21
-**Requirements**: VISB-01, VISB-02
+### Phase 35: Agent Monitoring
+**Goal**: Users see live per-agent status panels in the TUI without switching to the web dashboard — panels appear when delegation starts, update reactively as state.json changes, and collapse when agents complete
+**Depends on**: Phase 33
+**Requirements**: AGNT-01, AGNT-02, AGNT-03, AGNT-04
 **Success Criteria** (what must be TRUE):
-  1. While sub-agents are active, the chat displays a per-agent status line that updates as each agent progresses through its task
-  2. When all sub-agents complete, the per-agent status lines are removed from the chat display
-  3. When a sub-agent escalates a question, it appears in the chat prefixed with the agent ID and the input field activates immediately so the user can reply without any additional steps
+  1. When the orchestrator delegates to agents, a collapsible panel appears in the agent monitor area for each active agent showing name, task, and current status
+  2. Agent panel status and elapsed time update in real-time as state.json changes — without manual refresh or polling delay visible to the user
+  3. Expanding an agent panel reveals streaming tool activity lines (file reads, edits, shell commands) as the agent works
+  4. When an agent completes its task, its panel collapses or moves to an archived state — the panel does not remain as an active item
 **Plans**: TBD
 
-### Phase 23: Resume Robustness
-**Goal**: The resume path never crashes — review_only exceptions fall back gracefully, and the spawn loop correctly handles all completed-task edge cases so runs always reach a clean terminal state
-**Depends on**: Phase 22 (v1.1 complete)
-**Requirements**: RESM-01, RESM-02
+### Phase 36: Approval Modals
+**Goal**: Agent approval requests and escalation questions surface as modal overlays in the TUI — the user can approve or deny file changes and command execution, and reply to sub-agent questions, all without leaving the terminal
+**Depends on**: Phase 35
+**Requirements**: APRV-01, APRV-02, APRV-03
 **Success Criteria** (what must be TRUE):
-  1. When a review_only review raises an exception, the task is approved with a warning log instead of crashing the orchestrator process
-  2. When resuming a run where some tasks are already complete, the spawn loop does not exit prematurely — it processes all remaining ready tasks to completion
-  3. Task exceptions surfaced from `get_ready()` are retrieved and logged without causing the resume loop to hang or crash
-  4. The `marked_done` flag correctly tracks task completion so the loop exits only when all tasks have been handled
+  1. When an agent requests approval to write a file, a modal overlay appears showing the file path and approve/deny options — the background TUI remains visible but inactive
+  2. When an agent requests approval to run a command, a modal overlay appears showing the command and approve/deny options
+  3. When a sub-agent escalates a question, a modal dialog appears prefixed with the agent ID and an input field — the user can type a reply and submit without any additional steps
+  4. Approving or denying in the modal dismisses it and the background TUI immediately reactivates
 **Plans**: TBD
 
-### Phase 24: Task Verification and Quality Loops
-**Goal**: Every task that declares a target file is verified to have produced that file before being marked complete, and reviewers drive structured revision cycles with an explicit failure mode when retries are exhausted — no task silently completes with missing or unreviewed output
-**Depends on**: Phase 23
-**Requirements**: VRFY-01, QUAL-01, QUAL-02
+### Phase 37: Slash Commands & Dashboard Coexistence
+**Goal**: Users can type `/` to trigger a fuzzy autocomplete popup for slash commands, all existing slash commands work correctly, and the web dashboard runs simultaneously in the same process so both TUI and browser views are live at once
+**Depends on**: Phase 36
+**Requirements**: APRV-04
 **Success Criteria** (what must be TRUE):
-  1. When an agent session ends and `target_file` is set but the file does not exist on disk, the orchestrator sends a revision message to the agent and re-enters the revision loop instead of marking the task COMPLETED
-  2. When the file is still missing after all revision attempts are exhausted, the task is marked NEEDS_REVISION with a reason string, not silently completed
-  3. The reviewer returns structured feedback that the agent receives as concrete revision instructions, not a raw boolean
-  4. When the maximum number of revision rounds is reached without approval, the task is marked NEEDS_REVISION with the reviewer's last reason — the orchestrator does not approve it silently
-  5. The maximum revision rounds is configurable (not hardcoded)
+  1. Typing `/` in the input widget opens an autocomplete dropdown showing available slash commands with fuzzy matching as the user types additional characters
+  2. Pressing Tab or Enter selects a command from the dropdown and populates the input field
+  3. All existing slash commands (`/help`, `/exit`, `/status`, `/summarize`, `/resume`) execute correctly from the Textual input widget
+  4. Running `conductor --dashboard-port 8000` starts both the Textual TUI and the WebSocket dashboard server in a single process — opening the dashboard URL in a browser shows live state
+  5. `conductor run "..."` batch mode still works without launching the TUI
 **Plans**: TBD
 
-### Phase 25: Post-Run Build Verification
-**Goal**: After all tasks finish, the orchestrator optionally runs a user-specified build command and reports whether the project builds cleanly — giving users a single-line verdict and the full error output if it fails
-**Depends on**: Phase 24
-**Requirements**: VRFY-02, VRFY-03
+### Phase 38: Session Persistence & Polish
+**Goal**: Resumed sessions replay conversation history before input activates, in-progress cells show shimmer animation, and all v2.0 polish is complete — the TUI delivers a terminal experience credibly better than the prompt_toolkit baseline
+**Depends on**: Phase 37
+**Requirements**: STAT-02, STAT-03
 **Success Criteria** (what must be TRUE):
-  1. After all tasks complete, if `build_command` is configured, the orchestrator runs it and prints "Build passed" or "Build failed" with the full stderr output
-  2. A build failure does not mark any tasks as failed — it is a post-run report only
-  3. `conductor run --build-command "npx tsc --noEmit"` passes the command through to the orchestrator and runs it after task completion
-  4. The build command can be set in `.conductor/config.json` so it persists across runs without repeating the CLI flag
+  1. Running `conductor --resume` (or `--resume-id`) replays the prior conversation history as immutable cells in the transcript before the input widget activates
+  2. While an assistant response is streaming, the active cell has a visible shimmer or pulse animation that stops when streaming completes
+  3. The TUI passes a full end-to-end smoke test: launch, send a prompt, see streaming response, open agent monitor, approve a modal, use slash command, resume a session — all without error
 **Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 26 → 27 → 28 → 29 → 30 (Phase 30 can run after 26)
+Phases execute in numeric order: 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38
+(Phase 34 and Phase 35 can run in parallel after Phase 33)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -257,11 +271,19 @@ Phases execute in numeric order: 26 → 27 → 28 → 29 → 30 (Phase 30 can ru
 | 20. Session Resumption | v1.1 | 1/1 | Complete | 2026-03-11 |
 | 21. Smart Delegation and Orchestrator Integration | v1.1 | 1/1 | Complete | 2026-03-11 |
 | 22. Sub-Agent Visibility and Escalation Bridge | v1.1 | 1/1 | Complete | 2026-03-11 |
-| 23. Resume Robustness | 1/1 | Complete   | 2026-03-11 | - |
-| 24. Task Verification and Quality Loops | 1/1 | Complete   | 2026-03-11 | - |
+| 23. Resume Robustness | v1.2 | 1/1 | Complete | 2026-03-11 |
+| 24. Task Verification and Quality Loops | v1.2 | 1/1 | Complete | 2026-03-11 |
 | 25. Post-Run Build Verification | v1.2 | 1/1 | Complete | 2026-03-11 |
 | 26. Models & Scheduler Infrastructure | v1.3 | 1/1 | Complete | 2026-03-11 |
 | 27. Execution & Routing Pipeline | v1.3 | 1/1 | Complete | 2026-03-11 |
 | 28. Agent Communication Protocol | v1.3 | 1/1 | Complete | 2026-03-11 |
 | 29. Verification & Review Pipeline | v1.3 | 2/2 | Complete | 2026-03-11 |
 | 30. Smart Decomposition | v1.3 | 1/1 | Complete | 2026-03-11 |
+| 31. TUI Foundation | v2.0 | 0/TBD | Not started | - |
+| 32. Static TUI Shell | v2.0 | 0/TBD | Not started | - |
+| 33. SDK Streaming | v2.0 | 0/TBD | Not started | - |
+| 34. Rich Output | v2.0 | 0/TBD | Not started | - |
+| 35. Agent Monitoring | v2.0 | 0/TBD | Not started | - |
+| 36. Approval Modals | v2.0 | 0/TBD | Not started | - |
+| 37. Slash Commands & Dashboard Coexistence | v2.0 | 0/TBD | Not started | - |
+| 38. Session Persistence & Polish | v2.0 | 0/TBD | Not started | - |

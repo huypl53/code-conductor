@@ -112,32 +112,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TUIF-01 | TBD | Pending |
-| TUIF-02 | TBD | Pending |
-| TUIF-03 | TBD | Pending |
-| TUIF-04 | TBD | Pending |
-| TRNS-01 | TBD | Pending |
-| TRNS-02 | TBD | Pending |
-| TRNS-03 | TBD | Pending |
-| TRNS-04 | TBD | Pending |
-| TRNS-05 | TBD | Pending |
-| AGNT-01 | TBD | Pending |
-| AGNT-02 | TBD | Pending |
-| AGNT-03 | TBD | Pending |
-| AGNT-04 | TBD | Pending |
-| APRV-01 | TBD | Pending |
-| APRV-02 | TBD | Pending |
-| APRV-03 | TBD | Pending |
-| APRV-04 | TBD | Pending |
-| STAT-01 | TBD | Pending |
-| STAT-02 | TBD | Pending |
-| STAT-03 | TBD | Pending |
+| TUIF-01 | Phase 31 | Pending |
+| TUIF-02 | Phase 31 | Pending |
+| TUIF-03 | Phase 31 | Pending |
+| TUIF-04 | Phase 31 | Pending |
+| TRNS-01 | Phase 32 | Pending |
+| TRNS-02 | Phase 33 | Pending |
+| STAT-01 | Phase 33 | Pending |
+| TRNS-03 | Phase 34 | Pending |
+| TRNS-04 | Phase 34 | Pending |
+| TRNS-05 | Phase 34 | Pending |
+| AGNT-01 | Phase 35 | Pending |
+| AGNT-02 | Phase 35 | Pending |
+| AGNT-03 | Phase 35 | Pending |
+| AGNT-04 | Phase 35 | Pending |
+| APRV-01 | Phase 36 | Pending |
+| APRV-02 | Phase 36 | Pending |
+| APRV-03 | Phase 36 | Pending |
+| APRV-04 | Phase 37 | Pending |
+| STAT-02 | Phase 38 | Pending |
+| STAT-03 | Phase 38 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 20 total
-- Mapped to phases: 0
-- Unmapped: 20 ⚠️
+- Mapped to phases: 20
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-11*
-*Last updated: 2026-03-11 after initial definition*
+*Last updated: 2026-03-11 after roadmap creation — all 20 requirements mapped*
