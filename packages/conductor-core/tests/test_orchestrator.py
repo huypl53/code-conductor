@@ -1898,3 +1898,72 @@ class TestAgentStatusLifecycle:
 
         # Verify mutate was called at least twice (WAITING + WORKING)
         assert state_mgr.mutate.call_count >= 2
+
+
+# ---------------------------------------------------------------------------
+# Tests: Semaphore scope — review_only mode
+# ---------------------------------------------------------------------------
+
+
+class TestSemaphoreScope:
+    """Verify review_only runs outside the semaphore."""
+
+    @pytest.mark.asyncio
+    async def test_review_only_skips_semaphore(self, tmp_path):
+        """review_only=True should not acquire the semaphore at all."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=mgr, repo_path=str(tmp_path))
+
+        sem = asyncio.Semaphore(1)
+        # Lock the semaphore — if review_only tries to acquire, it will block forever
+        await sem.acquire()
+
+        spec = _make_task_spec("t1", str(tmp_path / "file.txt"))
+
+        with patch(f"{_ORCH}.review_output", _approved_review_mock()):
+            # Should complete without blocking (doesn't need semaphore)
+            await asyncio.wait_for(
+                orch._run_agent_loop(spec, sem, review_only=True),
+                timeout=5.0,
+            )
+
+        # Release the semaphore we locked
+        sem.release()
+
+    @pytest.mark.asyncio
+    async def test_review_only_calls_review_output(self, tmp_path):
+        """review_only=True should still call review_output."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=mgr, repo_path=str(tmp_path))
+
+        sem = asyncio.Semaphore(1)
+        spec = _make_task_spec("t1", str(tmp_path / "file.txt"))
+
+        mock_review = _approved_review_mock()
+        with patch(f"{_ORCH}.review_output", mock_review):
+            await orch._run_agent_loop(spec, sem, review_only=True)
+
+        mock_review.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_review_only_false_acquires_semaphore(self, tmp_path):
+        """review_only=False (default) should acquire the semaphore."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=mgr, repo_path=str(tmp_path))
+
+        sem = asyncio.Semaphore(1)
+        spec = _make_task_spec("t1", str(tmp_path / "file.txt"))
+
+        with patch(f"{_ORCH}.ACPClient") as mock_acp, \
+             patch(f"{_ORCH}.review_output", _approved_review_mock()):
+            mock_acp.return_value = _make_mock_acp_client()
+            await orch._run_agent_loop(spec, sem)
+
+        # Semaphore should be released after completion (value back to 1)
+        assert sem._value == 1

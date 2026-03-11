@@ -520,6 +520,7 @@ class Orchestrator:
         sem: asyncio.Semaphore,
         max_revisions: int | None = None,
         resume_session_id: str | None = None,
+        review_only: bool = False,
     ) -> None:
         """Acquire semaphore, run the observe-review-revise cycle for *task_spec*.
 
@@ -528,6 +529,11 @@ class Orchestrator:
         Task status is only set to COMPLETED after review passes, or after
         ``max_revisions`` exhaustion (best-effort).
 
+        When *review_only* is True, the agent execution is skipped entirely
+        and only a review of the existing file on disk is performed (no
+        semaphore acquired). This is used during ``resume()`` for in-progress
+        tasks whose target file already exists.
+
         Args:
             task_spec: Task specification for the agent to execute.
             sem: Semaphore limiting concurrent sessions.
@@ -535,112 +541,125 @@ class Orchestrator:
                 (uses instance default if None).
             resume_session_id: SDK session ID to resume an existing conversation.
                 If None, a new session is started.
+            review_only: If True, skip agent execution and semaphore, run
+                review only.
         """
         if max_revisions is None:
             max_revisions = self._max_revisions
 
-        async with sem:
-            agent_id = f"agent-{task_spec.id}-{uuid.uuid4().hex[:8]}"
-            identity = AgentIdentity(
-                name=agent_id,
-                role=task_spec.role,
-                target_file=task_spec.target_file,
-                material_files=task_spec.material_files,
-                task_id=task_spec.id,
-                task_description=task_spec.description,
-            )
-            system_prompt = build_system_prompt(identity)
+        agent_id = f"agent-{task_spec.id}-{uuid.uuid4().hex[:8]}"
+        identity = AgentIdentity(
+            name=agent_id,
+            role=task_spec.role,
+            target_file=task_spec.target_file,
+            material_files=task_spec.material_files,
+            task_id=task_spec.id,
+            task_description=task_spec.description,
+        )
+        system_prompt = build_system_prompt(identity)
 
-            # Write AgentRecord to state before opening session
-            await asyncio.to_thread(
-                self._state.mutate,
-                self._make_add_agent_fn(agent_id, task_spec),
-            )
+        # Write AgentRecord to state before opening session
+        await asyncio.to_thread(
+            self._state.mutate,
+            self._make_add_agent_fn(agent_id, task_spec),
+        )
 
-            final_verdict: ReviewVerdict | None = None
-            revision_num = 0
+        final_verdict: ReviewVerdict | None = None
+        revision_num = 0
 
-            handler = PermissionHandler(
-                answer_fn=self._escalation_router.resolve,
-                timeout=self._escalation_router._human_timeout + 30.0,
-            )
-            async with ACPClient(
-                cwd=self._repo_path,
-                system_prompt=system_prompt,
-                resume=resume_session_id,
-                permission_handler=handler,
-            ) as client:
-                self._active_clients[agent_id] = client
-                try:
-                    # Persist session_id BEFORE sending first message (crash safety)
-                    if client._sdk_client is not None:
-                        try:
-                            server_info = (
-                                await client._sdk_client.get_server_info()
-                            )
-                            if server_info and "session_id" in server_info:
-                                session_id = server_info["session_id"]
-                                self._session_registry.register(
-                                    agent_id, session_id
+        if not review_only:
+            # --- Agent execution (holds semaphore) ---
+            async with sem:
+                handler = PermissionHandler(
+                    answer_fn=self._escalation_router.resolve,
+                    timeout=self._escalation_router._human_timeout + 30.0,
+                )
+                async with ACPClient(
+                    cwd=self._repo_path,
+                    system_prompt=system_prompt,
+                    resume=resume_session_id,
+                    permission_handler=handler,
+                ) as client:
+                    self._active_clients[agent_id] = client
+                    try:
+                        # Persist session_id BEFORE sending first message (crash safety)
+                        if client._sdk_client is not None:
+                            try:
+                                server_info = (
+                                    await client._sdk_client.get_server_info()
                                 )
-                                self._session_registry.save(self._sessions_path)
-                                await asyncio.to_thread(
-                                    self._state.mutate,
-                                    self._make_save_session_fn(
+                                if server_info and "session_id" in server_info:
+                                    session_id = server_info["session_id"]
+                                    self._session_registry.register(
                                         agent_id, session_id
-                                    ),
+                                    )
+                                    self._session_registry.save(self._sessions_path)
+                                    await asyncio.to_thread(
+                                        self._state.mutate,
+                                        self._make_save_session_fn(
+                                            agent_id, session_id
+                                        ),
+                                    )
+                            except Exception:  # noqa: BLE001
+                                logger.debug(
+                                    "get_server_info() unavailable or failed "
+                                    "for agent %s — skipping session_id persist",
+                                    agent_id,
                                 )
-                        except Exception:  # noqa: BLE001
-                            logger.debug(
-                                "get_server_info() unavailable or failed "
-                                "for agent %s — skipping session_id persist",
-                                agent_id,
-                            )
 
-                    await client.send(
-                        f"Task {task_spec.id}: {task_spec.description}"
-                    )
-
-                    for revision_num in range(max_revisions + 1):
-                        monitor = StreamMonitor(task_spec.id)
-                        async for message in client.stream_response():
-                            monitor.process(message)
-
-                        verdict = await review_output(
-                            task_description=task_spec.description,
-                            target_file=task_spec.target_file,
-                            agent_summary=monitor.result_text or "",
-                            repo_path=self._repo_path,
+                        await client.send(
+                            f"Task {task_spec.id}: {task_spec.description}"
                         )
-                        final_verdict = verdict
 
-                        if verdict.approved:
-                            break
+                        for revision_num in range(max_revisions + 1):
+                            monitor = StreamMonitor(task_spec.id)
+                            async for message in client.stream_response():
+                                monitor.process(message)
 
-                        if revision_num < max_revisions:
-                            await client.send(
-                                f"Revision needed:\n{verdict.revision_instructions}"
-                                "\n\nPlease revise your implementation."
+                            verdict = await review_output(
+                                task_description=task_spec.description,
+                                target_file=task_spec.target_file,
+                                agent_summary=monitor.result_text or "",
+                                repo_path=self._repo_path,
                             )
-                finally:
-                    self._active_clients.pop(agent_id, None)
+                            final_verdict = verdict
 
-            # After session closes, update state with review result
-            review_status = (
-                ReviewStatus.APPROVED
-                if final_verdict and final_verdict.approved
-                else ReviewStatus.NEEDS_REVISION
+                            if verdict.approved:
+                                break
+
+                            if revision_num < max_revisions:
+                                await client.send(
+                                    f"Revision needed:\n{verdict.revision_instructions}"
+                                    "\n\nPlease revise your implementation."
+                                )
+                    finally:
+                        self._active_clients.pop(agent_id, None)
+            # --- Semaphore released here ---
+        else:
+            # --- Review only (no semaphore needed) ---
+            final_verdict = await review_output(
+                task_description=task_spec.description,
+                target_file=task_spec.target_file,
+                agent_summary="(resumed — file already exists on disk)",
+                repo_path=self._repo_path,
             )
 
-            await asyncio.to_thread(
-                self._state.mutate,
-                self._make_complete_task_fn(
-                    task_spec.id,
-                    agent_id,
-                    review_status=review_status,
-                    revision_count=revision_num,
-                ),
-            )
+        # Update state with review result (runs without semaphore)
+        review_status = (
+            ReviewStatus.APPROVED
+            if final_verdict and final_verdict.approved
+            else ReviewStatus.NEEDS_REVISION
+        )
+
+        await asyncio.to_thread(
+            self._state.mutate,
+            self._make_complete_task_fn(
+                task_spec.id,
+                agent_id,
+                review_status=review_status,
+                revision_count=revision_num,
+            ),
+        )
 
     @staticmethod
     def _make_add_tasks_fn(
