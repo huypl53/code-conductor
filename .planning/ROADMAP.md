@@ -74,7 +74,9 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
   2. `OrchestratorConfig` model exists with `max_review_iterations`, `max_decomposition_retries` fields and the orchestrator reads from it instead of hardcoded defaults
   3. `ModelProfile` model exists with role-to-model mapping and at least three presets (quality, balanced, budget)
   4. All existing tests still pass after adding new models
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 26-01-PLAN.md — OrchestratorConfig, ModelProfile, compute_waves(), and orchestrator wiring
 
 ### Phase 27: Execution & Routing Pipeline
 **Goal**: Orchestrator spawns tasks in waves for maximum parallelism, routes model selection per agent role, and uses lean prompts to preserve agent context
@@ -249,7 +251,7 @@ Phases execute in numeric order: 26 → 27 → 28 → 29 → 30 (Phase 30 can ru
 | 23. Resume Robustness | 1/1 | Complete   | 2026-03-11 | - |
 | 24. Task Verification and Quality Loops | 1/1 | Complete   | 2026-03-11 | - |
 | 25. Post-Run Build Verification | v1.2 | 1/1 | Complete | 2026-03-11 |
-| 26. Models & Scheduler Infrastructure | v1.3 | 0/0 | Pending | - |
+| 26. Models & Scheduler Infrastructure | v1.3 | 0/1 | In Progress | - |
 | 27. Execution & Routing Pipeline | v1.3 | 0/0 | Pending | - |
 | 28. Agent Communication Protocol | v1.3 | 0/0 | Pending | - |
 | 29. Verification & Review Pipeline | v1.3 | 0/0 | Pending | - |
