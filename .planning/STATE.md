@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Task Verification & Build Safety
-status: planning
-stopped_at: Completed 30-01-PLAN.md
-last_updated: "2026-03-11T12:12:48.634Z"
-last_activity: 2026-03-11 — Milestone v1.3 started
+milestone: v1.3
+milestone_name: Orchestrator Intelligence
+status: complete
+stopped_at: null
+last_updated: "2026-03-11"
+last_activity: "2026-03-11 — All 5 phases complete (26-30), 579 tests passing"
 progress:
-  total_phases: 13
+  total_phases: 5
   completed_phases: 5
   total_plans: 6
-  completed_plans: 8
-  percent: 0
+  completed_plans: 6
+  percent: 100
 ---
 
 # Project State
@@ -21,41 +21,39 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** A product owner describes a feature, and a self-organizing team of AI coding agents delivers quality, reviewed, tested code — with the human staying in control when they want to be.
-**Current focus:** Phase 26 — Models & Scheduler Infrastructure
+**Current focus:** v1.3 milestone complete
 
 ## Current Position
 
-Phase: 26 of 30
-Plan: Not started
-Status: Planning
-Last activity: 2026-03-11 — Milestone v1.3 started
+Phase: 30 of 30 (all complete)
+Plan: All plans executed
+Status: Complete
+Last activity: 2026-03-11 — All 5 phases delivered, 579 tests passing
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████████] 100%
 
 ## Accumulated Context
 
 ### Decisions
 
 - File existence gate goes inside `_run_agent_loop`, after review passes, before marking COMPLETED
-- Missing file treated same as failed review — reuses existing revision loop
 - Post-run build command is a final report, not a gate — does not block task completion
-- Build command configurable via `--build-command` CLI flag and `.conductor/config.json`
 - Config loading in run.py, not inside Orchestrator (orchestrator is pure execution engine)
 - [Phase 26]: compute_waves() uses a scratch TopologicalSorter from self._graph to avoid consuming the active sorter
-- [Phase 26]: Explicit max_revisions/max_agents params override OrchestratorConfig when non-default — backward compat preserved
+- [Phase 26]: Explicit max_revisions/max_agents params override OrchestratorConfig when non-default
 - [Phase 26]: AgentRole uses StrEnum so values are plain strings and JSON-serializable
-- [Phase 27]: ACPClient uses options_kwargs dict to conditionally include model only when not None for backward compat
-- [Phase 27]: run() uses compute_waves() for wave-based asyncio.gather execution; resume() left with FIRST_COMPLETED per constraints
-- [Phase 27]: build_system_prompt() emits file paths only (no task description); task description sent as first user message
-- [Phase 28]: parse_agent_report uses best-effort regex extraction — returns None on any failure (no crash)
-- [Phase 28]: STATUS_BLOCK_INSTRUCTIONS and DEVIATION_RULES are prompt-only constants — no code enforcement
-- [Phase 28]: BLOCKED routing uses continue inside the revision loop so it counts as a revision iteration
-- [Phase 29]: Wiring check uses file stem (no extension) for grep to catch import patterns without .py suffix
-- [Phase 29]: Substantive heuristic combines stub pattern match AND fewer than 10 non-comment lines to avoid flagging real files with TODO comments
-- [Phase 29]: review_output() short-circuits: spec compliance failure skips quality review entirely
-- [Phase 29]: Patch conductor.orchestrator.orchestrator.TaskVerifier in tests to control the instance created in __init__
-- [Phase 30]: Three-phase decomposition pipeline: decompose -> analyze complexity -> selective expansion with graceful fallback
-- [Phase 30]: complexity_threshold=5 default; scores > threshold trigger expansion; failures in any post-decompose phase return original plan unchanged
+- [Phase 27]: run() uses wave-based execution with asyncio.gather; resume() keeps FIRST_COMPLETED
+- [Phase 27]: ACPClient model param is optional None default, only passed to SDK when not None
+- [Phase 27]: Lean prompts removed task_description from system prompt — sent as first user message instead
+- [Phase 28]: AgentReport parsing is best-effort — malformed output falls through to freeform behavior
+- [Phase 28]: Deviation rules are prompt instructions only — no code enforcement
+- [Phase 28]: BLOCKED routing uses continue inside revision loop so it counts as a revision iteration
+- [Phase 29]: Wiring check uses file stem (no extension) for grep to catch import patterns
+- [Phase 29]: Substantive heuristic combines stub pattern match AND fewer than 10 non-comment lines
+- [Phase 29]: review_output() preserved as backward-compat wrapper delegating to two-stage review
+- [Phase 30]: Three-phase decomposition pipeline with graceful fallback on any failure
+- [Phase 30]: Expanded subtasks use namespaced IDs (A.1, A.2) with sequential dependency chain
+- [Phase 30]: Dependents of expanded tasks rewired to require last subtask
 
 ### Pending Todos
 
@@ -73,6 +71,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T12:12:48.630Z
-Stopped at: Completed 30-01-PLAN.md
+Last session: 2026-03-11
+Stopped at: Milestone v1.3 complete
 Resume file: None

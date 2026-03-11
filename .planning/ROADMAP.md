@@ -5,7 +5,7 @@
 - ✅ **v1.0 MVP** — Phases 1-17 (shipped 2026-03-11)
 - ✅ **v1.1 Interactive Chat TUI** — Phases 18-22 (completed 2026-03-11)
 - ✅ **v1.2 Task Verification & Build Safety** — Phases 23-25 (completed 2026-03-11)
-- 🔄 **v1.3 Orchestrator Intelligence** — Phases 26-30 (in progress)
+- ✅ **v1.3 Orchestrator Intelligence** — Phases 26-30 (completed 2026-03-11)
 
 ## Phases
 
@@ -57,11 +57,11 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
 **Milestone Goal:** Make Conductor's orchestrator smarter — wave-based parallel execution, model routing for cost control, structured agent communication, goal-backward verification, and complexity-informed task decomposition.
 
-- [ ] **Phase 26: Models & Scheduler Infrastructure** — Add foundational models (OrchestratorConfig, ModelProfile, AgentReport) and compute_waves() to scheduler
-- [ ] **Phase 27: Execution & Routing Pipeline** — Wave-based spawn loop, model routing through ACPClient, context-lean agent prompts
-- [ ] **Phase 28: Agent Communication Protocol** — Structured AgentReport status protocol, status-based routing, deviation classification rules
-- [ ] **Phase 29: Verification & Review Pipeline** — TaskVerifier with stub detection and wiring checks, two-stage review (spec then quality)
-- [ ] **Phase 30: Smart Decomposition** — Complexity scoring per task, selective expansion of high-complexity tasks
+- [x] **Phase 26: Models & Scheduler Infrastructure** — OrchestratorConfig, ModelProfile, AgentRole models + compute_waves() (completed 2026-03-11)
+- [x] **Phase 27: Execution & Routing Pipeline** — Wave-based spawn loop, ACPClient model routing, context-lean agent prompts (completed 2026-03-11)
+- [x] **Phase 28: Agent Communication Protocol** — AgentReport status protocol, status-based routing, deviation classification rules (completed 2026-03-11)
+- [x] **Phase 29: Verification & Review Pipeline** — TaskVerifier with stub detection and wiring checks, two-stage review (completed 2026-03-11)
+- [x] **Phase 30: Smart Decomposition** — Complexity scoring, selective expansion with dependency rewiring (completed 2026-03-11)
 
 ## Phase Details
 
@@ -260,8 +260,8 @@ Phases execute in numeric order: 26 → 27 → 28 → 29 → 30 (Phase 30 can ru
 | 23. Resume Robustness | 1/1 | Complete   | 2026-03-11 | - |
 | 24. Task Verification and Quality Loops | 1/1 | Complete   | 2026-03-11 | - |
 | 25. Post-Run Build Verification | v1.2 | 1/1 | Complete | 2026-03-11 |
-| 26. Models & Scheduler Infrastructure | v1.3 | 0/1 | In Progress | - |
-| 27. Execution & Routing Pipeline | v1.3 | 0/1 | Pending | - |
-| 28. Agent Communication Protocol | v1.3 | 0/1 | Pending | - |
-| 29. Verification & Review Pipeline | v1.3 | 0/2 | Pending | - |
-| 30. Smart Decomposition | v1.3 | 0/1 | Pending | - |
+| 26. Models & Scheduler Infrastructure | v1.3 | 1/1 | Complete | 2026-03-11 |
+| 27. Execution & Routing Pipeline | v1.3 | 1/1 | Complete | 2026-03-11 |
+| 28. Agent Communication Protocol | v1.3 | 1/1 | Complete | 2026-03-11 |
+| 29. Verification & Review Pipeline | v1.3 | 2/2 | Complete | 2026-03-11 |
+| 30. Smart Decomposition | v1.3 | 1/1 | Complete | 2026-03-11 |
