@@ -69,7 +69,9 @@ class ConductorApp(App):
 
         state_path = Path(self._cwd) / ".conductor" / "state.json"
         with Horizontal(id="app-body"):
-            yield TranscriptPane(id="transcript")
+            yield TranscriptPane(
+                resume_mode=bool(self._resume_session_id), id="transcript"
+            )
             yield AgentMonitorPane(state_path=state_path, id="agent-monitor")
         yield CommandInput(id="command-input")
         yield StatusFooter(id="status-footer")
@@ -173,6 +175,10 @@ class ConductorApp(App):
         footer = self.query_one(StatusFooter)
         if self._resume_session_id:
             footer.session_id = self._resume_session_id
+            # Lock input BEFORE starting replay worker
+            from conductor.tui.widgets.command_input import CommandInput
+            self.query_one(CommandInput).disabled = True
+            self._replay_session()
         else:
             footer.session_id = uuid.uuid4().hex[:8]
 
@@ -185,6 +191,35 @@ class ConductorApp(App):
         # Phase 37: Start dashboard server if port is set
         if self._dashboard_port is not None:
             await self._start_dashboard()
+
+    # -- Session replay (Phase 38) --------------------------------------------
+
+    @work(exclusive=False, exit_on_error=False)
+    async def _replay_session(self) -> None:
+        """Replay prior conversation history as immutable cells."""
+        from conductor.cli.chat_persistence import ChatHistoryStore
+        from conductor.tui.widgets.command_input import CommandInput
+        from conductor.tui.widgets.transcript import TranscriptPane
+        from textual.widgets import Input
+
+        conductor_dir = Path(self._cwd) / ".conductor"
+        session = ChatHistoryStore.load_session(conductor_dir, self._resume_session_id)
+
+        pane = self.query_one(TranscriptPane)
+        if session is None:
+            await pane.add_assistant_message(
+                f"Session `{self._resume_session_id}` not found."
+            )
+        else:
+            for turn in session.get("turns", []):
+                if turn.get("role") == "user":
+                    await pane.add_user_message(turn["content"])
+                else:
+                    await pane.add_assistant_message(turn["content"])
+
+        cmd = self.query_one(CommandInput)
+        cmd.disabled = False
+        cmd.query_one(Input).focus()
 
     # -- Dashboard server (Phase 37) ------------------------------------------
 
