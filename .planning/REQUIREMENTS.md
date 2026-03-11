@@ -31,7 +31,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **COMM-02**: Orchestrator answers sub-agent questions using project context and shared state knowledge
 - [x] **COMM-03**: In `--auto` mode, orchestrator uses best judgment to answer questions and logs decisions
 - [x] **COMM-04**: In interactive mode, orchestrator escalates questions it can't confidently answer to the human
-- [ ] **COMM-05**: Orchestrator can cancel a sub-agent's work and reassign with corrected instructions
+- [x] **COMM-05**: Orchestrator can cancel a sub-agent's work and reassign with corrected instructions
 - [x] **COMM-06**: Orchestrator can inject guidance to a sub-agent mid-stream without stopping their work
 - [x] **COMM-07**: Orchestrator can pause a sub-agent and escalate to human for a decision
 
@@ -57,7 +57,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **DASH-03**: Dashboard supports live stream view per agent (real-time tool calls, streaming output)
 - [ ] **DASH-04**: Dashboard sends smart notifications for key events (errors, completions, intervention needed)
 - [x] **DASH-05**: Dashboard handles conversation verbosity with layered visibility — collapsed by default, expand on demand
-- [ ] **DASH-06**: User can intervene from dashboard (cancel, redirect, provide feedback to agents)
+- [x] **DASH-06**: User can intervene from dashboard (cancel, redirect, provide feedback to agents)
 
 ### Packaging
 
@@ -152,8 +152,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COMM-04 | Phase 13: Wire Escalation Router + Pause Surface | Complete |
 | COMM-07 | Phase 13: Wire Escalation Router + Pause Surface | Complete |
 | PKG-04 | Phase 14: Fix Getting-Started Guide .env Claim | Complete |
-| COMM-05 | Phase 15: Fix Dashboard Server Cancel Type Mismatch | Pending |
-| DASH-06 | Phase 15: Fix Dashboard Server Cancel Type Mismatch | Pending |
+| COMM-05 | Phase 15: Fix Dashboard Server Cancel Type Mismatch | Complete |
+| DASH-06 | Phase 15: Fix Dashboard Server Cancel Type Mismatch | Complete |
 | DASH-01 | Phase 16: Fix Agent Status Lifecycle | Pending |
 | DASH-04 | Phase 16: Fix Agent Status Lifecycle | Pending |
 | PKG-02 | Phase 17: Fix Production WebSocket URL | Pending |
