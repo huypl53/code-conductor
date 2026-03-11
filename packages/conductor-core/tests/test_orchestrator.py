@@ -2379,3 +2379,125 @@ class TestResumeSpawnLoop:
             "failed during resume" in record.message
             for record in caplog.records
         ), f"Expected 'failed during resume' in ERROR log. Records: {[r.message for r in caplog.records]}"
+
+
+# ---------------------------------------------------------------------------
+# VRFY-01/QUAL-01/QUAL-02 tests: File existence gate
+# ---------------------------------------------------------------------------
+
+
+class TestFileExistenceGate:
+    """VRFY-01/QUAL-01/QUAL-02: File existence gate in _run_agent_loop revision loop."""
+
+    @pytest.mark.asyncio
+    async def test_missing_file_triggers_revision(self, tmp_path):
+        """Reviewer approves but file is absent — gate injects revision message."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=mgr, repo_path=str(tmp_path))
+        sem = asyncio.Semaphore(1)
+        spec = _make_task_spec("t1", "src/missing.tsx")
+        revision_sent = False
+
+        def _acp_factory(**kwargs):
+            client = _make_mock_acp_client()
+            original_send = client.send
+
+            async def _track_send(msg):
+                nonlocal revision_sent
+                if "target file" in msg.lower() and "not created" in msg.lower():
+                    revision_sent = True
+                    # Create file so loop terminates on next pass
+                    (tmp_path / "src").mkdir(parents=True, exist_ok=True)
+                    (tmp_path / "src" / "missing.tsx").write_text("export default 1;")
+                return await original_send(msg)
+
+            client.send = _track_send
+            return client
+
+        with patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory), \
+             patch(f"{_ORCH}.review_output", _approved_review_mock()):
+            await orch._run_agent_loop(spec, sem, max_revisions=2)
+
+        assert revision_sent, "Should have sent revision about missing target file"
+
+    @pytest.mark.asyncio
+    async def test_existing_file_no_revision(self, tmp_path):
+        """File exists before loop runs, reviewer approves — no extra revision send."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        # Pre-create the target file
+        (tmp_path / "src").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "src" / "present.tsx").write_text("export default 2;")
+
+        mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=mgr, repo_path=str(tmp_path))
+        sem = asyncio.Semaphore(1)
+        spec = _make_task_spec("t1", "src/present.tsx")
+
+        mock_client = _make_mock_acp_client()
+
+        with patch(f"{_ORCH}.ACPClient", side_effect=lambda **kw: mock_client), \
+             patch(f"{_ORCH}.review_output", _approved_review_mock()):
+            await orch._run_agent_loop(spec, sem, max_revisions=2)
+
+        # mutate called exactly twice: add_agent + complete_task
+        assert mgr.mutate.call_count == 2, (
+            f"Expected exactly 2 mutate calls (add_agent + complete), "
+            f"got {mgr.mutate.call_count}"
+        )
+        # No revision send (only the initial task send)
+        assert mock_client.send.call_count == 1, (
+            f"Expected only 1 send (initial task), got {mock_client.send.call_count}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_missing_file_exhausts_revisions(self, tmp_path):
+        """File never appears after max_revisions=1 — task ends with NEEDS_REVISION."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import ConductorState, ReviewStatus
+
+        state = ConductorState()
+        mgr = _make_state_manager()
+        completed_statuses = []
+
+        def _track_mutate(fn):
+            fn(state)
+            for t in state.tasks:
+                if t.review_status == ReviewStatus.NEEDS_REVISION:
+                    completed_statuses.append("needs_revision")
+
+        mgr.mutate = _track_mutate
+        orch = Orchestrator(state_manager=mgr, repo_path=str(tmp_path))
+        sem = asyncio.Semaphore(1)
+        spec = _make_task_spec("t1", "src/never_created.tsx")
+
+        with patch(f"{_ORCH}.ACPClient") as mock_acp, \
+             patch(f"{_ORCH}.review_output", _approved_review_mock()):
+            mock_acp.return_value = _make_mock_acp_client()
+            await orch._run_agent_loop(spec, sem, max_revisions=1)
+
+        assert "needs_revision" in completed_statuses
+
+    @pytest.mark.asyncio
+    async def test_empty_target_file_skips_check(self, tmp_path):
+        """target_file='' — gate never runs, task completes normally."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        mgr = _make_state_manager()
+        orch = Orchestrator(state_manager=mgr, repo_path=str(tmp_path))
+        sem = asyncio.Semaphore(1)
+        spec = _make_task_spec("t1", "")  # empty target_file
+
+        mock_client = _make_mock_acp_client()
+
+        with patch(f"{_ORCH}.ACPClient", side_effect=lambda **kw: mock_client), \
+             patch(f"{_ORCH}.review_output", _approved_review_mock()):
+            await orch._run_agent_loop(spec, sem, max_revisions=2)
+
+        # mutate called exactly twice: add_agent + complete_task
+        assert mgr.mutate.call_count == 2, (
+            f"Expected exactly 2 mutate calls (add_agent + complete), "
+            f"got {mgr.mutate.call_count}"
+        )
