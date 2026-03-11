@@ -469,7 +469,14 @@ class ConductorApp(App):
         try:
             try:
                 with self.app.suspend():
-                    subprocess.run([editor, tmp_path], check=False)
+                    import sys
+                    subprocess.run(
+                        [editor, tmp_path],
+                        stdin=sys.stdin,
+                        stdout=sys.stdout,
+                        stderr=sys.stderr,
+                        check=False,
+                    )
                     # Read INSIDE suspend block -- documented safe pattern
                     with open(tmp_path) as fh:
                         edited_text = fh.read()
