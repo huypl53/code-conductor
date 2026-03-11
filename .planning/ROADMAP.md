@@ -202,6 +202,6 @@ Plans:
 | 41. Smooth Cell Animations | v2.1 | 1/1 | Complete | 2026-03-11 |
 | 42. Ctrl-G External Editor | v2.1 | 1/1 | Complete | 2026-03-12 |
 | 43. Agent Cell Widgets | v2.2 | 1/1 | Complete | 2026-03-11 |
-| 44. TranscriptPane Extensions and State Bridge | 1/1 | Complete   | 2026-03-11 | - |
+| 44. TranscriptPane Extensions and State Bridge | 1/1 | Complete    | 2026-03-11 | - |
 | 45. SDK Stream Interception and Orchestrator Status | v2.2 | 0/? | Not started | - |
 | 46. Visual Polish and Verification | v2.2 | 0/? | Not started | - |
