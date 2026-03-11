@@ -75,12 +75,20 @@ class ConductorApp(App):
         yield StatusFooter(id="status-footer")
 
     async def on_user_submitted(self, event: "UserSubmitted") -> None:
-        """Route user message to the transcript pane and start streaming."""
+        """Route user message to the transcript pane and start streaming.
+
+        Phase 37: Slash commands are intercepted before the SDK streaming path.
+        """
+        text = event.text
+        if text.startswith("/"):
+            await self._handle_slash_command(text)
+            return
+
         from conductor.tui.widgets.transcript import TranscriptPane
         from conductor.tui.widgets.command_input import CommandInput
 
         pane = self.query_one(TranscriptPane)
-        await pane.add_user_message(event.text)
+        await pane.add_user_message(text)
 
         # Create streaming AssistantCell
         self._active_cell = await pane.add_assistant_streaming()
@@ -89,7 +97,64 @@ class ConductorApp(App):
         self.query_one(CommandInput).disabled = True
 
         # Start SDK streaming worker
-        self._stream_response(event.text)
+        self._stream_response(text)
+
+    # -- Slash command dispatch (Phase 37) ------------------------------------
+
+    async def _handle_slash_command(self, text: str) -> None:
+        """Dispatch a slash command to the appropriate local handler.
+
+        Slash commands never reach the SDK streaming path.
+        """
+        cmd = text.split()[0].lower()
+        from conductor.tui.widgets.transcript import TranscriptPane
+
+        pane = self.query_one(TranscriptPane)
+
+        if cmd == "/help":
+            from conductor.cli.chat import SLASH_COMMANDS
+
+            lines = ["**Available commands:**"]
+            for c, desc in SLASH_COMMANDS.items():
+                lines.append(f"  `{c}` -- {desc}")
+            help_text = "\n".join(lines)
+            await pane.add_assistant_message(help_text)
+
+        elif cmd == "/exit":
+            await self.action_quit()
+
+        elif cmd == "/status":
+            if self._delegation_manager is not None:
+                await pane.add_assistant_message("No active agents.")
+            else:
+                await pane.add_assistant_message("No active delegation session.")
+
+        elif cmd == "/summarize":
+            # Reuse streaming path with summarize prompt
+            await pane.add_user_message(text)
+            self._active_cell = await pane.add_assistant_streaming()
+            from conductor.tui.widgets.command_input import CommandInput
+
+            self.query_one(CommandInput).disabled = True
+            summarize_prompt = (
+                "Please provide a concise summary of our conversation so far, "
+                "capturing all key decisions, code changes, and context needed "
+                "to continue effectively. Format as a brief bullet-point list."
+            )
+            self._stream_response(summarize_prompt)
+
+        elif cmd == "/resume":
+            if self._delegation_manager is not None:
+                await self._delegation_manager.resume_delegation()
+            else:
+                await pane.add_assistant_message(
+                    "No delegation session to resume."
+                )
+
+        else:
+            await pane.add_assistant_message(
+                f"Unknown command: `{cmd}`. Type `/help` for available commands."
+            )
 
     def on_stream_done(self, event: "StreamDone") -> None:
         """Re-enable CommandInput and restore focus after streaming completes."""
@@ -116,6 +181,29 @@ class ConductorApp(App):
             self._resume_session_id,
             self._dashboard_port,
         )
+
+        # Phase 37: Start dashboard server if port is set
+        if self._dashboard_port is not None:
+            await self._start_dashboard()
+
+    # -- Dashboard server (Phase 37) ------------------------------------------
+
+    async def _start_dashboard(self) -> None:
+        """Start the dashboard uvicorn server as a tracked background task."""
+        import uvicorn
+        from conductor.dashboard.server import create_app
+
+        state_path = Path(self._cwd) / ".conductor" / "state.json"
+        dashboard_app = create_app(state_path)
+        config = uvicorn.Config(
+            dashboard_app,
+            host="127.0.0.1",
+            port=self._dashboard_port,
+            log_level="warning",
+        )
+        server = uvicorn.Server(config)
+        self._track_task(asyncio.create_task(server.serve()))
+        logger.info("Dashboard started on port %s", self._dashboard_port)
 
     # -- SDK connection --------------------------------------------------------
 

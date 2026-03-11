@@ -124,6 +124,13 @@ class TranscriptPane(VerticalScroll):
         await self.mount(cell)
         self.scroll_end(animate=False)
 
+    async def add_assistant_message(self, text: str) -> AssistantCell:
+        """Mount a static AssistantCell with pre-set text content."""
+        cell = AssistantCell(text)
+        await self.mount(cell)
+        self.scroll_end(animate=False)
+        return cell
+
     async def add_assistant_streaming(self) -> AssistantCell:
         """Mount a streaming AssistantCell (thinking state) and return it."""
         cell = AssistantCell()

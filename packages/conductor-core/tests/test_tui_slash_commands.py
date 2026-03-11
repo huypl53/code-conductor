@@ -77,3 +77,120 @@ async def test_slash_search_string_without_slash():
         state = TargetState(text="hello", cursor_position=5)
         result = ac.get_search_string(state)
         assert result == "\x00"
+
+
+# ---------------------------------------------------------------------------
+# Task 2: Slash command dispatch tests
+# ---------------------------------------------------------------------------
+
+
+async def test_slash_help_shows_in_transcript():
+    """Submitting '/help' adds a help message cell to the transcript."""
+    from conductor.tui.app import ConductorApp
+    from conductor.tui.widgets.transcript import TranscriptPane, AssistantCell
+
+    app = ConductorApp()
+    async with app.run_test() as pilot:
+        pane = app.query_one(TranscriptPane)
+        initial_count = len(pane.query(AssistantCell))
+
+        # Dispatch /help directly via the handler
+        await app._handle_slash_command("/help")
+        await pilot.pause()
+
+        # A new AssistantCell should have been added
+        cells = pane.query(AssistantCell)
+        assert len(cells) > initial_count
+        # The last cell should contain "Available commands"
+        last_cell = cells[-1]
+        assert last_cell._text is not None
+        assert "Available commands" in last_cell._text
+
+
+async def test_slash_exit_quits():
+    """Submitting '/exit' calls action_quit."""
+    from conductor.tui.app import ConductorApp
+
+    app = ConductorApp()
+    async with app.run_test() as pilot:
+        with patch.object(app, "action_quit", new_callable=AsyncMock) as mock_quit:
+            await app._handle_slash_command("/exit")
+            mock_quit.assert_called_once()
+
+
+async def test_slash_unknown_shows_error():
+    """Submitting unknown '/foo' shows 'Unknown command' in transcript."""
+    from conductor.tui.app import ConductorApp
+    from conductor.tui.widgets.transcript import TranscriptPane, AssistantCell
+
+    app = ConductorApp()
+    async with app.run_test() as pilot:
+        await app._handle_slash_command("/foo")
+        await pilot.pause()
+
+        pane = app.query_one(TranscriptPane)
+        cells = pane.query(AssistantCell)
+        last_cell = cells[-1]
+        assert last_cell._text is not None
+        assert "Unknown command" in last_cell._text
+
+
+async def test_slash_does_not_stream():
+    """Slash commands must NOT call _stream_response."""
+    from conductor.tui.app import ConductorApp
+    from conductor.tui.messages import UserSubmitted
+
+    app = ConductorApp()
+    async with app.run_test() as pilot:
+        with patch.object(app, "_stream_response") as mock_stream:
+            await app._handle_slash_command("/help")
+            mock_stream.assert_not_called()
+
+
+async def test_slash_status_no_delegation():
+    """'/status' with no delegation_manager shows appropriate message."""
+    from conductor.tui.app import ConductorApp
+    from conductor.tui.widgets.transcript import TranscriptPane, AssistantCell
+
+    app = ConductorApp()
+    async with app.run_test() as pilot:
+        # _delegation_manager is None by default
+        await app._handle_slash_command("/status")
+        await pilot.pause()
+
+        pane = app.query_one(TranscriptPane)
+        cells = pane.query(AssistantCell)
+        last_cell = cells[-1]
+        assert last_cell._text is not None
+        assert "delegation" in last_cell._text.lower() or "agent" in last_cell._text.lower()
+
+
+async def test_on_user_submitted_routes_slash():
+    """on_user_submitted routes slash commands to _handle_slash_command, not streaming."""
+    from conductor.tui.app import ConductorApp
+    from conductor.tui.messages import UserSubmitted
+
+    app = ConductorApp()
+    async with app.run_test() as pilot:
+        with patch.object(app, "_handle_slash_command", new_callable=AsyncMock) as mock_handler:
+            with patch.object(app, "_stream_response") as mock_stream:
+                event = UserSubmitted("/help")
+                await app.on_user_submitted(event)
+                mock_handler.assert_called_once_with("/help")
+                mock_stream.assert_not_called()
+
+
+async def test_dashboard_port_stored():
+    """ConductorApp stores dashboard_port attribute."""
+    from conductor.tui.app import ConductorApp
+
+    app = ConductorApp(dashboard_port=9999)
+    assert app._dashboard_port == 9999
+
+
+async def test_start_dashboard_method_exists():
+    """ConductorApp has _start_dashboard method."""
+    from conductor.tui.app import ConductorApp
+
+    assert hasattr(ConductorApp, "_start_dashboard")
+    assert callable(getattr(ConductorApp, "_start_dashboard"))
