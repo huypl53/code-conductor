@@ -621,3 +621,502 @@ class TestDecomposeWithComplexity:
         # Custom threshold
         d2 = TaskDecomposer(complexity_threshold=7)
         assert d2._complexity_threshold == 7
+
+
+# ---------------------------------------------------------------------------
+# Tests: _expand_task() and _expand_complex_tasks() (Task 2 — TDD RED)
+# ---------------------------------------------------------------------------
+
+
+def _make_result_msg(structured_output: dict, session_id: str = "sess-exp-001"):
+    """Helper to create a ResultMessage with given structured output."""
+    from claude_agent_sdk import ResultMessage
+
+    return ResultMessage(
+        subtype="success",
+        duration_ms=100,
+        duration_api_ms=80,
+        is_error=False,
+        num_turns=1,
+        session_id=session_id,
+        structured_output=structured_output,
+    )
+
+
+def _make_task_spec(
+    task_id: str,
+    target_file: str,
+    requires: list[str] | None = None,
+    complexity_score: int | None = None,
+    role: str = "executor",
+) -> TaskSpec:
+    return TaskSpec(
+        id=task_id,
+        title=f"Task {task_id}",
+        description=f"Description for {task_id}",
+        role=role,
+        target_file=target_file,
+        requires=requires or [],
+        complexity_score=complexity_score,
+    )
+
+
+def _make_complexity_analysis(
+    task_id: str,
+    score: int = 7,
+    recommended_subtasks: int = 3,
+) -> "ComplexityAnalysis":
+    from conductor.orchestrator.models import ComplexityAnalysis
+
+    return ComplexityAnalysis(
+        task_id=task_id,
+        complexity_score=score,
+        reasoning=f"Reasoning for {task_id}",
+        expansion_prompt=f"Expand {task_id} into service, model, and API layers",
+        recommended_subtasks=recommended_subtasks,
+    )
+
+
+class TestExpandTask:
+    """Tests for _expand_task() method."""
+
+    def _make_expansion_dict(self, parent_id: str, count: int = 3) -> dict:
+        """Build an ExpansionResult dict with count subtasks."""
+        return {
+            "subtasks": [
+                {
+                    "id": f"{parent_id}.{i + 1}",  # SDK might or might not set this
+                    "title": f"Subtask {i + 1} of {parent_id}",
+                    "description": f"Detailed step {i + 1} for {parent_id}",
+                    "role": "executor",
+                    "target_file": f"src/layer{i + 1}.py",
+                    "material_files": [],
+                    "requires": [],
+                    "produces": [],
+                }
+                for i in range(count)
+            ]
+        }
+
+    @pytest.mark.asyncio
+    async def test_expand_task_returns_subtasks(self):
+        """_expand_task() returns list of sub-TaskSpec objects on success."""
+        from conductor.orchestrator.decomposer import TaskDecomposer
+
+        task = _make_task_spec("A", "src/main.py", complexity_score=8)
+        analysis = _make_complexity_analysis("A", score=8, recommended_subtasks=3)
+        expansion_dict = self._make_expansion_dict("A", count=3)
+
+        async def _mock_query(**kwargs):
+            yield _make_result_msg(expansion_dict, session_id="exp-001")
+
+        with patch("conductor.orchestrator.decomposer.query", side_effect=_mock_query):
+            decomposer = TaskDecomposer()
+            subtasks = await decomposer._expand_task(task, analysis)
+
+        assert subtasks is not None
+        assert len(subtasks) == 3
+
+    @pytest.mark.asyncio
+    async def test_expand_task_ids_are_namespaced(self):
+        """Sub-task IDs are namespaced as '{parent_id}.1', '{parent_id}.2', etc."""
+        from conductor.orchestrator.decomposer import TaskDecomposer
+
+        task = _make_task_spec("myTask", "src/main.py", complexity_score=8)
+        analysis = _make_complexity_analysis("myTask", score=8, recommended_subtasks=2)
+        expansion_dict = self._make_expansion_dict("myTask", count=2)
+
+        async def _mock_query(**kwargs):
+            yield _make_result_msg(expansion_dict, session_id="exp-002")
+
+        with patch("conductor.orchestrator.decomposer.query", side_effect=_mock_query):
+            decomposer = TaskDecomposer()
+            subtasks = await decomposer._expand_task(task, analysis)
+
+        assert subtasks is not None
+        assert subtasks[0].id == "myTask.1"
+        assert subtasks[1].id == "myTask.2"
+
+    @pytest.mark.asyncio
+    async def test_expand_task_subtasks_inherit_parent_role(self):
+        """Sub-tasks inherit the parent task's role."""
+        from conductor.orchestrator.decomposer import TaskDecomposer
+
+        task = _make_task_spec("R", "src/main.py", complexity_score=8, role="backend developer")
+        analysis = _make_complexity_analysis("R", score=8, recommended_subtasks=2)
+        expansion_dict = self._make_expansion_dict("R", count=2)
+
+        async def _mock_query(**kwargs):
+            yield _make_result_msg(expansion_dict, session_id="exp-003")
+
+        with patch("conductor.orchestrator.decomposer.query", side_effect=_mock_query):
+            decomposer = TaskDecomposer()
+            subtasks = await decomposer._expand_task(task, analysis)
+
+        assert subtasks is not None
+        for st in subtasks:
+            assert st.role == "backend developer"
+
+    @pytest.mark.asyncio
+    async def test_expand_task_requires_chain(self):
+        """Sub-tasks form a sequential dependency chain: first is independent, rest depend on previous."""
+        from conductor.orchestrator.decomposer import TaskDecomposer
+
+        task = _make_task_spec("X", "src/main.py", complexity_score=9)
+        analysis = _make_complexity_analysis("X", score=9, recommended_subtasks=3)
+        expansion_dict = self._make_expansion_dict("X", count=3)
+
+        async def _mock_query(**kwargs):
+            yield _make_result_msg(expansion_dict, session_id="exp-004")
+
+        with patch("conductor.orchestrator.decomposer.query", side_effect=_mock_query):
+            decomposer = TaskDecomposer()
+            subtasks = await decomposer._expand_task(task, analysis)
+
+        assert subtasks is not None
+        assert subtasks[0].requires == []          # first: independent
+        assert subtasks[1].requires == ["X.1"]     # second: depends on first
+        assert subtasks[2].requires == ["X.2"]     # third: depends on second
+
+    @pytest.mark.asyncio
+    async def test_expand_task_returns_none_on_failure(self):
+        """_expand_task() returns None when SDK call fails (no result)."""
+        from conductor.orchestrator.decomposer import TaskDecomposer
+
+        task = _make_task_spec("Y", "src/main.py", complexity_score=8)
+        analysis = _make_complexity_analysis("Y", score=8)
+
+        async def _mock_query(**kwargs):
+            return
+            yield  # make it an async generator
+
+        with patch("conductor.orchestrator.decomposer.query", side_effect=_mock_query):
+            decomposer = TaskDecomposer()
+            result = await decomposer._expand_task(task, analysis)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_expand_task_returns_none_on_sdk_exception(self):
+        """_expand_task() returns None when SDK raises exception."""
+        from conductor.orchestrator.decomposer import TaskDecomposer
+
+        task = _make_task_spec("Z", "src/main.py", complexity_score=8)
+        analysis = _make_complexity_analysis("Z", score=8)
+
+        async def _mock_query(**kwargs):
+            raise RuntimeError("SDK connection error")
+            yield  # make it an async generator
+
+        with patch("conductor.orchestrator.decomposer.query", side_effect=_mock_query):
+            decomposer = TaskDecomposer()
+            result = await decomposer._expand_task(task, analysis)
+
+        assert result is None
+
+
+class TestExpandComplexTasks:
+    """Tests for _expand_complex_tasks() and the full pipeline integration."""
+
+    def _make_expansion_dict(self, parent_id: str, count: int = 3) -> dict:
+        return {
+            "subtasks": [
+                {
+                    "id": f"{parent_id}.{i + 1}",
+                    "title": f"Subtask {i + 1} of {parent_id}",
+                    "description": f"Detailed step {i + 1} for {parent_id}",
+                    "role": "executor",
+                    "target_file": f"src/layer{i + 1}_{parent_id}.py",
+                    "material_files": [],
+                    "requires": [],
+                    "produces": [],
+                }
+                for i in range(count)
+            ]
+        }
+
+    @pytest.mark.asyncio
+    async def test_only_above_threshold_expanded(self):
+        """Only tasks with complexity_score > threshold are expanded."""
+        from conductor.orchestrator.decomposer import TaskDecomposer
+
+        # Task A: score 3 (low), Task B: score 8 (high, above default threshold 5)
+        tasks = [
+            _make_task_spec("A", "src/a.py", complexity_score=3),
+            _make_task_spec("B", "src/b.py", complexity_score=8),
+        ]
+        plan = TaskPlan(feature_name="TestFeature", tasks=tasks, max_agents=4)
+        analyses = [
+            _make_complexity_analysis("A", score=3),
+            _make_complexity_analysis("B", score=8, recommended_subtasks=2),
+        ]
+
+        expansion_dict = self._make_expansion_dict("B", count=2)
+
+        async def _mock_query(**kwargs):
+            yield _make_result_msg(expansion_dict, session_id="exp-threshold-001")
+
+        with patch("conductor.orchestrator.decomposer.query", side_effect=_mock_query):
+            decomposer = TaskDecomposer(complexity_threshold=5)
+            result = await decomposer._expand_complex_tasks(plan, analyses)
+
+        task_ids = [t.id for t in result.tasks]
+        # A should be unchanged; B should be expanded into B.1, B.2
+        assert "A" in task_ids
+        assert "B" not in task_ids  # replaced by subtasks
+        assert "B.1" in task_ids
+        assert "B.2" in task_ids
+
+    @pytest.mark.asyncio
+    async def test_dependency_rewiring(self):
+        """If task B required task A, and A is expanded to A.1/A.2/A.3, then B now requires A.3."""
+        from conductor.orchestrator.decomposer import TaskDecomposer
+
+        # Task A (high complexity), Task B depends on A (low complexity)
+        tasks = [
+            _make_task_spec("A", "src/a.py", complexity_score=8),
+            _make_task_spec("B", "src/b.py", requires=["A"], complexity_score=2),
+        ]
+        plan = TaskPlan(feature_name="TestFeature", tasks=tasks, max_agents=4)
+        analyses = [
+            _make_complexity_analysis("A", score=8, recommended_subtasks=3),
+            _make_complexity_analysis("B", score=2),
+        ]
+
+        expansion_dict = self._make_expansion_dict("A", count=3)
+
+        async def _mock_query(**kwargs):
+            yield _make_result_msg(expansion_dict, session_id="exp-rewire-001")
+
+        with patch("conductor.orchestrator.decomposer.query", side_effect=_mock_query):
+            decomposer = TaskDecomposer(complexity_threshold=5)
+            result = await decomposer._expand_complex_tasks(plan, analyses)
+
+        task_map = {t.id: t for t in result.tasks}
+        # B should now require A.3 (the last subtask of A)
+        assert "B" in task_map
+        assert task_map["B"].requires == ["A.3"]
+
+    @pytest.mark.asyncio
+    async def test_expansion_failure_keeps_original_task(self):
+        """If expansion fails for one task, that task passes through unchanged."""
+        from conductor.orchestrator.decomposer import TaskDecomposer
+
+        tasks = [
+            _make_task_spec("A", "src/a.py", complexity_score=9),
+        ]
+        plan = TaskPlan(feature_name="TestFeature", tasks=tasks, max_agents=4)
+        analyses = [_make_complexity_analysis("A", score=9)]
+
+        # Expansion call returns nothing (failure)
+        async def _mock_query(**kwargs):
+            return
+            yield  # make it an async generator
+
+        with patch("conductor.orchestrator.decomposer.query", side_effect=_mock_query):
+            decomposer = TaskDecomposer(complexity_threshold=5)
+            result = await decomposer._expand_complex_tasks(plan, analyses)
+
+        # Original task should be kept
+        assert len(result.tasks) == 1
+        assert result.tasks[0].id == "A"
+
+    @pytest.mark.asyncio
+    async def test_feature_name_preserved(self):
+        """Expanded plan preserves the feature_name from original plan."""
+        from conductor.orchestrator.decomposer import TaskDecomposer
+
+        tasks = [_make_task_spec("A", "src/a.py", complexity_score=8)]
+        plan = TaskPlan(feature_name="MySpecialFeature", tasks=tasks, max_agents=4)
+        analyses = [_make_complexity_analysis("A", score=8, recommended_subtasks=2)]
+
+        expansion_dict = self._make_expansion_dict("A", count=2)
+
+        async def _mock_query(**kwargs):
+            yield _make_result_msg(expansion_dict, session_id="exp-name-001")
+
+        with patch("conductor.orchestrator.decomposer.query", side_effect=_mock_query):
+            decomposer = TaskDecomposer()
+            result = await decomposer._expand_complex_tasks(plan, analyses)
+
+        assert result.feature_name == "MySpecialFeature"
+
+    @pytest.mark.asyncio
+    async def test_full_pipeline_integration(self):
+        """Full decompose() pipeline with mix of high and low complexity tasks."""
+        from claude_agent_sdk import ResultMessage
+
+        from conductor.orchestrator.decomposer import TaskDecomposer
+
+        # Initial decomposition result: 3 tasks
+        plan_dict = {
+            "feature_name": "IntegrationFeature",
+            "tasks": [
+                {
+                    "id": "t1",
+                    "title": "Simple task",
+                    "description": "A simple task",
+                    "role": "executor",
+                    "target_file": "src/simple.py",
+                    "material_files": [],
+                    "requires": [],
+                    "produces": [],
+                },
+                {
+                    "id": "t2",
+                    "title": "Complex task",
+                    "description": "A very complex task",
+                    "role": "executor",
+                    "target_file": "src/complex.py",
+                    "material_files": [],
+                    "requires": ["t1"],
+                    "produces": [],
+                },
+                {
+                    "id": "t3",
+                    "title": "Dependent task",
+                    "description": "Depends on t2",
+                    "role": "executor",
+                    "target_file": "src/dependent.py",
+                    "material_files": [],
+                    "requires": ["t2"],
+                    "produces": [],
+                },
+            ],
+            "max_agents": 4,
+        }
+
+        # Complexity analysis: t1=3 (low), t2=8 (high), t3=2 (low)
+        complexity_dict = {
+            "analyses": [
+                {
+                    "task_id": "t1",
+                    "complexity_score": 3,
+                    "reasoning": "Simple task",
+                    "expansion_prompt": "n/a",
+                    "recommended_subtasks": 2,
+                },
+                {
+                    "task_id": "t2",
+                    "complexity_score": 8,
+                    "reasoning": "Very complex",
+                    "expansion_prompt": "Break into data, service, API layers",
+                    "recommended_subtasks": 3,
+                },
+                {
+                    "task_id": "t3",
+                    "complexity_score": 2,
+                    "reasoning": "Simple dependent",
+                    "expansion_prompt": "n/a",
+                    "recommended_subtasks": 2,
+                },
+            ]
+        }
+
+        # Expansion of t2 into 3 subtasks
+        expansion_dict = {
+            "subtasks": [
+                {
+                    "id": "t2.1",
+                    "title": "Data layer",
+                    "description": "Implement data layer",
+                    "role": "executor",
+                    "target_file": "src/data.py",
+                    "material_files": [],
+                    "requires": [],
+                    "produces": [],
+                },
+                {
+                    "id": "t2.2",
+                    "title": "Service layer",
+                    "description": "Implement service layer",
+                    "role": "executor",
+                    "target_file": "src/service.py",
+                    "material_files": [],
+                    "requires": [],
+                    "produces": [],
+                },
+                {
+                    "id": "t2.3",
+                    "title": "API layer",
+                    "description": "Implement API layer",
+                    "role": "executor",
+                    "target_file": "src/api.py",
+                    "material_files": [],
+                    "requires": [],
+                    "produces": [],
+                },
+            ]
+        }
+
+        call_count = 0
+
+        async def _mock_query(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # Phase 1: decompose
+                yield ResultMessage(
+                    subtype="success",
+                    duration_ms=100,
+                    duration_api_ms=80,
+                    is_error=False,
+                    num_turns=1,
+                    session_id="int-001",
+                    structured_output=plan_dict,
+                )
+            elif call_count == 2:
+                # Phase 2: complexity analysis
+                yield ResultMessage(
+                    subtype="success",
+                    duration_ms=100,
+                    duration_api_ms=80,
+                    is_error=False,
+                    num_turns=1,
+                    session_id="int-002",
+                    structured_output=complexity_dict,
+                )
+            else:
+                # Phase 3: expand t2 (only this task is complex)
+                yield ResultMessage(
+                    subtype="success",
+                    duration_ms=100,
+                    duration_api_ms=80,
+                    is_error=False,
+                    num_turns=1,
+                    session_id="int-003",
+                    structured_output=expansion_dict,
+                )
+
+        with patch("conductor.orchestrator.decomposer.query", side_effect=_mock_query):
+            decomposer = TaskDecomposer(complexity_threshold=5)
+            plan = await decomposer.decompose("Build integration feature")
+
+        # Feature name preserved
+        assert plan.feature_name == "IntegrationFeature"
+
+        # t1 unchanged, t2 expanded to t2.1/t2.2/t2.3, t3 unchanged
+        task_ids = [t.id for t in plan.tasks]
+        assert "t1" in task_ids
+        assert "t2" not in task_ids
+        assert "t2.1" in task_ids
+        assert "t2.2" in task_ids
+        assert "t2.3" in task_ids
+        assert "t3" in task_ids
+
+        task_map = {t.id: t for t in plan.tasks}
+
+        # t2 subtask chain: t2.1 independent, t2.2 requires t2.1, t2.3 requires t2.2
+        assert task_map["t2.1"].requires == []
+        assert task_map["t2.2"].requires == ["t2.1"]
+        assert task_map["t2.3"].requires == ["t2.2"]
+
+        # Dependency rewiring: t3 originally required t2, now must require t2.3
+        assert task_map["t3"].requires == ["t2.3"]
+
+        # t1 and t3 have complexity scores set
+        assert task_map["t1"].complexity_score == 3
+        assert task_map["t3"].complexity_score == 2
+
+        # 3 SDK calls total (decompose, analyze, expand-t2)
+        assert call_count == 3
