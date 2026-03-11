@@ -3323,3 +3323,211 @@ class TestAgentReportRouting:
         assert len(context_msgs) >= 1, f"Expected context message, got: {send_calls}"
         # Should have streamed twice (NEEDS_CONTEXT + retry)
         assert stream_count >= 2, f"Expected at least 2 stream iterations, got {stream_count}"
+
+
+# ---------------------------------------------------------------------------
+# VERI-01/02 tests: verifier integration in orchestrator loop
+# ---------------------------------------------------------------------------
+
+
+class TestVerifierIntegration:
+    """VERI-01/02: TaskVerifier called after review passes, before marking COMPLETED."""
+
+    @pytest.mark.asyncio
+    async def test_stub_detection_triggers_revision(self, tmp_path):
+        """When verifier reports substantive=False, revision instructions are sent (not COMPLETED with approved)."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.orchestrator.verifier import VerificationResult
+
+        tasks = [_make_task_spec("t1", "src/a.py")]
+        plan = _make_plan(tasks)
+        state_mgr = _make_state_manager()
+
+        # Track mutations to see review_status at completion
+        completed_reviews: list[str] = []
+
+        def _track_mutate(fn):
+            from conductor.state.models import ConductorState, Task
+            dummy = ConductorState(
+                tasks=[Task(id="t1", title="T1", description="D1")]
+            )
+            fn(dummy)
+            for task in dummy.tasks:
+                if task.status == "completed":
+                    completed_reviews.append(task.review_status or "none")
+            return None
+
+        state_mgr.mutate = _track_mutate
+
+        mock_decomposer = AsyncMock()
+        mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        # Pre-create the target file so the file existence gate passes
+        (tmp_path / "src").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "src" / "a.py").write_text("pass\n")
+
+        captured_clients: list = []
+
+        def _acp_factory(**kwargs):
+            client = _make_mock_acp_client_with_result("Done")
+            captured_clients.append(client)
+            return client
+
+        # Stub result: substantive=False → revision loop
+        stub_result = VerificationResult(
+            exists=True, substantive=False, wired=False, stub_matches=["pass"]
+        )
+        # After revision, approve with substantive=True
+        good_result = VerificationResult(
+            exists=True, substantive=True, wired=True, stub_matches=[]
+        )
+        mock_verifier_instance = MagicMock()
+        mock_verifier_instance.verify = AsyncMock(
+            side_effect=[stub_result, good_result]
+        )
+        mock_verifier_cls = MagicMock(return_value=mock_verifier_instance)
+
+        with (
+            patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer),
+            patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
+            patch(f"{_ORCH}.review_output", _approved_review_mock()),
+            patch(f"{_ORCH}.TaskVerifier", mock_verifier_cls),
+        ):
+            orch = Orchestrator(
+                state_manager=state_mgr,
+                repo_path=str(tmp_path),
+                max_revisions=2,
+            )
+            await orch.run("Build feature")
+
+        assert captured_clients, "ACPClient was never instantiated"
+        client = captured_clients[0]
+        # send() should have been called at least twice: initial + revision for stub
+        assert client.send.call_count >= 2, (
+            f"Expected at least 2 send calls (initial + stub revision), got {client.send.call_count}"
+        )
+        # The revision message should mention stub
+        all_sends = [call.args[0] for call in client.send.call_args_list]
+        stub_messages = [m for m in all_sends if "stub" in m.lower() or "placeholder" in m.lower()]
+        assert stub_messages, (
+            f"Expected a message mentioning 'stub' or 'placeholder', got: {all_sends}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_unwired_file_still_completes(self, tmp_path):
+        """When verifier reports wired=False but substantive=True, task completes (warning only)."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.orchestrator.verifier import VerificationResult
+
+        tasks = [_make_task_spec("t1", "src/a.py")]
+        plan = _make_plan(tasks)
+        state_mgr = _make_state_manager()
+
+        completed_reviews: list[str] = []
+
+        def _track_mutate(fn):
+            from conductor.state.models import ConductorState, Task
+            dummy = ConductorState(
+                tasks=[Task(id="t1", title="T1", description="D1")]
+            )
+            fn(dummy)
+            for task in dummy.tasks:
+                if task.status == "completed":
+                    completed_reviews.append(task.review_status or "none")
+            return None
+
+        state_mgr.mutate = _track_mutate
+
+        mock_decomposer = AsyncMock()
+        mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        # Pre-create the target file
+        (tmp_path / "src").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "src" / "a.py").write_text("# real implementation\n" * 15)
+
+        def _acp_factory(**kwargs):
+            return _make_mock_acp_client_with_result("Done")
+
+        # Unwired but substantive — should complete
+        unwired_result = VerificationResult(
+            exists=True, substantive=True, wired=False, stub_matches=[]
+        )
+        mock_verifier_instance = MagicMock()
+        mock_verifier_instance.verify = AsyncMock(return_value=unwired_result)
+        mock_verifier_cls = MagicMock(return_value=mock_verifier_instance)
+
+        with (
+            patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer),
+            patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
+            patch(f"{_ORCH}.review_output", _approved_review_mock()),
+            patch(f"{_ORCH}.TaskVerifier", mock_verifier_cls),
+        ):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            await orch.run("Build feature")
+
+        # Task must be completed with APPROVED status despite wired=False
+        assert completed_reviews, "No COMPLETED mutation observed"
+        assert completed_reviews[-1] == "approved", (
+            f"Expected 'approved' review_status even with wired=False, got {completed_reviews[-1]}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_fully_verified_completes(self, tmp_path):
+        """When verifier reports exists=True, substantive=True, wired=True, task completes normally."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.orchestrator.verifier import VerificationResult
+
+        tasks = [_make_task_spec("t1", "src/a.py")]
+        plan = _make_plan(tasks)
+        state_mgr = _make_state_manager()
+
+        completed_reviews: list[str] = []
+
+        def _track_mutate(fn):
+            from conductor.state.models import ConductorState, Task
+            dummy = ConductorState(
+                tasks=[Task(id="t1", title="T1", description="D1")]
+            )
+            fn(dummy)
+            for task in dummy.tasks:
+                if task.status == "completed":
+                    completed_reviews.append(task.review_status or "none")
+            return None
+
+        state_mgr.mutate = _track_mutate
+
+        mock_decomposer = AsyncMock()
+        mock_decomposer.decompose = AsyncMock(return_value=plan)
+
+        # Pre-create the target file
+        (tmp_path / "src").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "src" / "a.py").write_text("# real full implementation\n" * 20)
+
+        def _acp_factory(**kwargs):
+            return _make_mock_acp_client_with_result("Done")
+
+        # Fully verified result
+        full_result = VerificationResult(
+            exists=True, substantive=True, wired=True, stub_matches=[]
+        )
+        mock_verifier_instance = MagicMock()
+        mock_verifier_instance.verify = AsyncMock(return_value=full_result)
+        mock_verifier_cls = MagicMock(return_value=mock_verifier_instance)
+
+        with (
+            patch(f"{_ORCH}.TaskDecomposer", return_value=mock_decomposer),
+            patch(f"{_ORCH}.ACPClient", side_effect=_acp_factory),
+            patch(f"{_ORCH}.review_output", _approved_review_mock()),
+            patch(f"{_ORCH}.TaskVerifier", mock_verifier_cls),
+        ):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            await orch.run("Build feature")
+
+        assert completed_reviews, "No COMPLETED mutation observed"
+        assert completed_reviews[-1] == "approved", (
+            f"Expected 'approved', got {completed_reviews[-1]}"
+        )
+        # verify() called exactly once (no retries needed)
+        assert mock_verifier_instance.verify.call_count == 1, (
+            f"Expected verify called once, got {mock_verifier_instance.verify.call_count}"
+        )
