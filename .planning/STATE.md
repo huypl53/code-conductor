@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Task Verification & Build Safety
-status: complete
+milestone: v1.3
+milestone_name: Orchestrator Intelligence
+status: in_progress
 stopped_at: null
 last_updated: "2026-03-11"
-last_activity: "2026-03-11 — All 3 phases complete (23-25), 448 tests passing"
+last_activity: "2026-03-11 — Milestone v1.3 started"
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
-  percent: 100
+  total_phases: 5
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** A product owner describes a feature, and a self-organizing team of AI coding agents delivers quality, reviewed, tested code — with the human staying in control when they want to be.
-**Current focus:** v1.2 milestone complete
+**Current focus:** Phase 26 — Models & Scheduler Infrastructure
 
 ## Current Position
 
-Phase: 25 of 25 (all complete)
-Plan: All plans executed
-Status: Complete
-Last activity: 2026-03-11 - Completed quick task 1: Fix ANSI escape code rendering in TUI
+Phase: 26 of 30
+Plan: Not started
+Status: Planning
+Last activity: 2026-03-11 — Milestone v1.3 started
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0%
 
 ## Accumulated Context
 
@@ -41,11 +41,6 @@ Progress: [██████████] 100%
 - Post-run build command is a final report, not a gate — does not block task completion
 - Build command configurable via `--build-command` CLI flag and `.conductor/config.json`
 - Config loading in run.py, not inside Orchestrator (orchestrator is pure execution engine)
-- CLI flag overrides config.json value
-- Used _track_mutate pattern to verify APPROVED state mutations in review_only exception fallback
-- File existence gate placed between final_verdict assignment and verdict.approved check — both verdict AND final_verdict overridden to propagate NEEDS_REVISION
-- Build failures logged at ERROR level and never raised — orchestration always completes cleanly
-- resume() early-exit path calls _post_run_build_check() so build runs even when all tasks already completed
 
 ### Pending Todos
 
@@ -64,5 +59,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Milestone v1.2 complete
+Stopped at: Starting Phase 26
 Resume file: None

@@ -4,15 +4,17 @@
 
 Conductor is an open-source multi-agent coding orchestration framework. You describe what to build, and Conductor's orchestrator — itself a Claude Code agent with orchestration skills — breaks the work down, spins up a dynamic team of ACP-compatible coding agents, manages their work in real-time, reviews output, and delivers coherent code. It ships with both a CLI and a web dashboard for full visibility into agent activity.
 
-## Current Milestone: v1.2 Task Verification & Build Safety
+## Current Milestone: v1.3 Orchestrator Intelligence
 
-**Goal:** Ensure Conductor validates task output before marking tasks complete, with structured review cycles and hardened resume support.
+**Goal:** Make Conductor's orchestrator smarter — wave-based parallel execution, model routing for cost control, structured agent communication, goal-backward verification, and complexity-informed task decomposition.
 
 **Target features:**
-- Per-task file existence gate — verify target file exists on disk before marking COMPLETED
-- Post-run build command — optional build verification (e.g. `npx tsc --noEmit`) after all tasks finish
-- Quality review loops — structured revise → re-review → approve feedback cycles
-- Resume support hardening — fixes from real-world integration testing (calendar-app)
+- Wave-based parallel execution — pre-computed dependency waves for maximum concurrency
+- Model routing — different models per role (opus for planning, haiku for verification)
+- Structured agent status protocol — DONE/BLOCKED/NEEDS_CONTEXT with programmatic routing
+- Goal-backward verification — stub detection + wiring checks beyond file existence
+- Two-stage review — spec compliance then code quality
+- Smart decomposition — complexity scoring with selective task expansion
 
 ## Core Value
 

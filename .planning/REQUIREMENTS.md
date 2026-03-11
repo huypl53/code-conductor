@@ -3,84 +3,90 @@
 **Defined:** 2026-03-11
 **Core Value:** A product owner describes a feature, and a self-organizing team of AI coding agents delivers quality, reviewed, tested code — with the human staying in control when they want to be.
 
-## v1.2 Requirements
+## v1.3 Requirements
 
-Requirements for the Task Verification & Build Safety milestone. Each maps to roadmap phases.
-
-### Task Verification
-
-- [x] **VRFY-01**: When a task has `target_file` set and the file does not exist on disk after review, the orchestrator retries via the revision loop instead of marking COMPLETED
-- [ ] **VRFY-02**: After all tasks complete, if `build_command` is configured, the orchestrator runs it and reports pass/fail with stderr output
-- [ ] **VRFY-03**: User can set `build_command` via `--build-command` CLI flag or `.conductor/config.json`
-
-### Quality Assurance
-
-- [x] **QUAL-01**: Reviewer returns structured feedback; agent receives revision instructions and resubmits within a configurable maximum number of rounds
-- [x] **QUAL-02**: When revision attempts are exhausted, the task is marked NEEDS_REVISION with the reason, not silently completed
-
-### Resume Robustness
-
-- [x] **RESM-01**: When `review_only` review fails with an exception, the orchestrator falls back to best-effort approval instead of crashing
-- [x] **RESM-02**: The resume spawn loop correctly handles completed tasks from `get_ready()`, retrieves task exceptions, and uses `marked_done` flag to avoid premature loop exit
-
-## v1.1 Requirements (Completed)
-
-All 19 requirements delivered. See `.planning/milestones/v1.1-REQUIREMENTS.md` for details.
-
-### Chat Interface — CHAT-01 through CHAT-08 (8 requirements)
-### Smart Delegation — DELG-01 through DELG-04 (4 requirements)
-### Session Management — SESS-01 through SESS-05 (5 requirements)
-### Sub-Agent Visibility — VISB-01, VISB-02 (2 requirements)
-
-## v1.3+ Requirements
-
-Deferred to future release. Tracked but not in current roadmap.
-
-### Concurrency
-
-- **CONC-01**: Multiple concurrent chat sessions with session-scoped state namespacing
-
-### Enhanced Display
-
-- **DISP-01**: Inline diff review in TUI for file changes
-- **DISP-02**: Per-task GSD scope flexibility display in chat
-
-### Input
-
-- **INPT-01**: Voice input support
+Requirements for the Orchestrator Intelligence milestone. Each maps to roadmap phases.
 
 ### Infrastructure
 
-- **INFR-01**: Git worktree isolation per agent for large parallel workloads
-- **INFR-02**: CI integration — auto-fix failing builds by spawning agents
+- [ ] **INFRA-01**: Scheduler exposes `compute_waves()` returning pre-computed dependency wave groups
+- [ ] **INFRA-02**: `OrchestratorConfig` model with configurable iteration limits (max_revisions, max_decomposition_retries) replaces hardcoded defaults
+- [ ] **MODEL-01**: `ModelProfile` model maps roles (decomposer, reviewer, executor, verifier) to model names with quality/balanced/budget presets
+
+### Execution Pipeline
+
+- [ ] **WAVE-01**: Orchestrator executes tasks in pre-computed waves — all tasks in a wave spawn concurrently, next wave starts when current completes
+- [ ] **ROUTE-01**: ACPClient accepts model selection parameter; orchestrator routes model per role using active ModelProfile
+- [ ] **LEAN-01**: Agent system prompts pass file paths only (not content), letting agents read their own context for fresh 200k windows
+
+### Agent Communication
+
+- [ ] **STAT-01**: Agents report structured `AgentReport` with status enum (DONE, DONE_WITH_CONCERNS, BLOCKED, NEEDS_CONTEXT), files_changed list, and concerns
+- [ ] **STAT-02**: Orchestrator routes based on agent status — DONE proceeds to review, BLOCKED retries with more context or escalates, NEEDS_CONTEXT provides additional info
+- [ ] **DEVN-01**: Agent system prompts include deviation classification rules (auto-fix bugs/missing-critical, escalate architectural changes)
+
+### Verification Pipeline
+
+- [ ] **VERI-01**: `TaskVerifier` checks file content is substantive — detects stubs (pass-only, NotImplementedError, TODO markers, empty returns) via regex patterns
+- [ ] **VERI-02**: `TaskVerifier` checks wiring — target file is imported/referenced by at least one other file in the project
+- [ ] **RVEW-01**: Two-stage review: Stage 1 checks spec compliance (did we build the right thing?), Stage 2 checks code quality (only if Stage 1 passes)
+
+### Smart Decomposition
+
+- [ ] **DCMP-01**: Decomposer scores each task's complexity (1-10) with reasoning and recommended subtask count
+- [ ] **DCMP-02**: Tasks scoring above threshold are selectively expanded into sub-tasks with task-specific guidance prompts
+
+## v1.2 Requirements (Completed)
+
+All 7 requirements delivered.
+
+- ✓ **VRFY-01**: File existence gate in revision loop — Phase 24
+- ✓ **VRFY-02**: Post-run build command — Phase 25
+- ✓ **VRFY-03**: Build command via CLI flag and config.json — Phase 25
+- ✓ **QUAL-01**: Structured revision feedback — Phase 24
+- ✓ **QUAL-02**: NEEDS_REVISION on exhausted retries — Phase 24
+- ✓ **RESM-01**: Review-only exception fallback — Phase 23
+- ✓ **RESM-02**: Resume spawn loop hardening — Phase 23
+
+## v1.1 Requirements (Completed)
+
+All 19 requirements delivered. See `.planning/milestones/v1.1-REQUIREMENTS.md`.
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Automatic error remediation from build output | Future enhancement — v1.2 reports errors, does not auto-fix |
-| Per-file syntax checking | Language-specific, complex; build command covers this |
-| Integration/runtime testing | Beyond scope of file existence + build verification |
-| Parsing build output to map errors to tasks | Future enhancement for targeted remediation |
+| Agent-to-agent direct communication | Orchestrator mediates all coordination |
+| Custom LLM provider support | ACP-compatible agents only |
+| Cost tracking / budget controls | Future enhancement — need token counting infrastructure |
+| Prompt template system | Future enhancement — externalized prompt management |
+| Pre-decomposition discussion phase | Future enhancement — interactive requirement clarification |
+| Failure journal | Future enhancement — structured failure persistence |
 
 ## Traceability
 
-Which phases cover which requirements. Updated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VRFY-01 | Phase 24 | Complete |
-| VRFY-02 | Phase 25 | Pending |
-| VRFY-03 | Phase 25 | Pending |
-| QUAL-01 | Phase 24 | Complete |
-| QUAL-02 | Phase 24 | Complete |
-| RESM-01 | Phase 23 | Complete |
-| RESM-02 | Phase 23 | Complete |
+| INFRA-01 | Phase 26 | Pending |
+| INFRA-02 | Phase 26 | Pending |
+| MODEL-01 | Phase 26 | Pending |
+| WAVE-01 | Phase 27 | Pending |
+| ROUTE-01 | Phase 27 | Pending |
+| LEAN-01 | Phase 27 | Pending |
+| STAT-01 | Phase 28 | Pending |
+| STAT-02 | Phase 28 | Pending |
+| DEVN-01 | Phase 28 | Pending |
+| VERI-01 | Phase 29 | Pending |
+| VERI-02 | Phase 29 | Pending |
+| RVEW-01 | Phase 29 | Pending |
+| DCMP-01 | Phase 30 | Pending |
+| DCMP-02 | Phase 30 | Pending |
 
 **Coverage:**
-- v1.2 requirements: 7 total
-- Mapped to phases: 7
-- Unmapped: 0
+- v1.3 requirements: 14 total
+- Mapped to phases: 14
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-11*
+*Last updated: 2026-03-11 after v1.3 milestone started*

@@ -4,7 +4,8 @@
 
 - ✅ **v1.0 MVP** — Phases 1-17 (shipped 2026-03-11)
 - ✅ **v1.1 Interactive Chat TUI** — Phases 18-22 (completed 2026-03-11)
-- 🔄 **v1.2 Task Verification & Build Safety** — Phases 23-25 (in progress)
+- ✅ **v1.2 Task Verification & Build Safety** — Phases 23-25 (completed 2026-03-11)
+- 🔄 **v1.3 Orchestrator Intelligence** — Phases 26-30 (in progress)
 
 ## Phases
 
@@ -52,7 +53,79 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 - [x] **Phase 24: Task Verification and Quality Loops** — File existence gate forces re-runs when target files are missing; structured review cycles with configurable max rounds and explicit NEEDS_REVISION on exhaustion (completed 2026-03-11)
 - [x] **Phase 25: Post-Run Build Verification** — Orchestrator runs a user-configured build command after all tasks complete and reports pass/fail with stderr output (completed 2026-03-11)
 
+### v1.3 Orchestrator Intelligence
+
+**Milestone Goal:** Make Conductor's orchestrator smarter — wave-based parallel execution, model routing for cost control, structured agent communication, goal-backward verification, and complexity-informed task decomposition.
+
+- [ ] **Phase 26: Models & Scheduler Infrastructure** — Add foundational models (OrchestratorConfig, ModelProfile, AgentReport) and compute_waves() to scheduler
+- [ ] **Phase 27: Execution & Routing Pipeline** — Wave-based spawn loop, model routing through ACPClient, context-lean agent prompts
+- [ ] **Phase 28: Agent Communication Protocol** — Structured AgentReport status protocol, status-based routing, deviation classification rules
+- [ ] **Phase 29: Verification & Review Pipeline** — TaskVerifier with stub detection and wiring checks, two-stage review (spec then quality)
+- [ ] **Phase 30: Smart Decomposition** — Complexity scoring per task, selective expansion of high-complexity tasks
+
 ## Phase Details
+
+### Phase 26: Models & Scheduler Infrastructure
+**Goal**: Add foundational data models and scheduler capabilities that all subsequent phases depend on
+**Depends on**: Phase 25 (v1.2 complete)
+**Requirements**: INFRA-01, INFRA-02, MODEL-01
+**Success Criteria** (what must be TRUE):
+  1. `scheduler.compute_waves()` returns a list of lists where each inner list contains task IDs that can execute concurrently
+  2. `OrchestratorConfig` model exists with `max_review_iterations`, `max_decomposition_retries` fields and the orchestrator reads from it instead of hardcoded defaults
+  3. `ModelProfile` model exists with role-to-model mapping and at least three presets (quality, balanced, budget)
+  4. All existing tests still pass after adding new models
+**Plans**: TBD
+
+### Phase 27: Execution & Routing Pipeline
+**Goal**: Orchestrator spawns tasks in waves for maximum parallelism, routes model selection per agent role, and uses lean prompts to preserve agent context
+**Depends on**: Phase 26
+**Requirements**: WAVE-01, ROUTE-01, LEAN-01
+**Success Criteria** (what must be TRUE):
+  1. The orchestrator's run() method spawns all tasks in a wave concurrently and waits for the wave to complete before starting the next
+  2. ACPClient constructor accepts an optional `model` parameter that gets passed to the underlying SDK
+  3. The orchestrator passes the active ModelProfile's role-specific model to each ACPClient instance
+  4. Agent system prompts contain file paths to read, not file content — keeping prompts under 500 tokens
+  5. All existing tests still pass; new tests cover wave execution and model routing
+**Plans**: TBD
+
+### Phase 28: Agent Communication Protocol
+**Goal**: Agents report structured status (DONE/BLOCKED/NEEDS_CONTEXT) that the orchestrator parses and routes programmatically, with deviation rules preventing unplanned scope creep
+**Depends on**: Phase 27
+**Requirements**: STAT-01, STAT-02, DEVN-01
+**Success Criteria** (what must be TRUE):
+  1. Agent system prompt instructs agents to output a JSON status block with status, summary, files_changed, and concerns fields
+  2. The orchestrator parses AgentReport from agent output and routes based on status enum
+  3. BLOCKED status triggers retry with additional context or escalation to human
+  4. NEEDS_CONTEXT status triggers context provision and retry
+  5. Agent prompts include deviation rules: auto-fix for bugs/missing-critical (Rules 1-3), escalate for architectural changes (Rule 4)
+**Plans**: TBD
+
+### Phase 29: Verification & Review Pipeline
+**Goal**: Every completed task is independently verified for substance and wiring (not just file existence), and review is split into spec compliance and code quality stages for faster, more focused feedback
+**Depends on**: Phase 28
+**Requirements**: VERI-01, VERI-02, RVEW-01
+**Success Criteria** (what must be TRUE):
+  1. `TaskVerifier.verify()` returns a three-level result: exists, substantive (not a stub), wired (imported by other files)
+  2. Stub detection catches common patterns: pass-only functions, NotImplementedError, TODO markers, empty returns
+  3. Wiring check confirms target file is imported/referenced by at least one other project file
+  4. `review_spec_compliance()` checks output against task description independently from code quality
+  5. `review_code_quality()` only runs after spec compliance passes — failing spec skips quality review
+  6. All existing tests pass; new tests cover verifier and two-stage review
+**Plans**: TBD
+
+### Phase 30: Smart Decomposition
+**Goal**: The decomposer produces better task plans by scoring complexity and selectively expanding only high-complexity tasks, giving each sub-task AI-specific guidance
+**Depends on**: Phase 26 (needs models only)
+**Requirements**: DCMP-01, DCMP-02
+**Success Criteria** (what must be TRUE):
+  1. `decompose()` returns tasks with a `complexity_score` (1-10) and `reasoning` field
+  2. Tasks with `complexity_score > 5` are automatically expanded into sub-tasks
+  3. Each expansion includes a task-specific `expansion_prompt` that guides the sub-task decomposition
+  4. Low-complexity tasks (score <= 5) pass through unchanged
+  5. The expanded task plan maintains correct dependency relationships
+**Plans**: TBD
+
+
 
 ### Phase 18: CLI Foundation and Input Layer
 **Goal**: Users can open an interactive chat session by running `conductor` with no arguments, type and submit prompts with full input control (history, multiline, interrupt), and use basic slash commands to navigate
@@ -147,7 +220,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 23 → 24 → 25
+Phases execute in numeric order: 26 → 27 → 28 → 29 → 30 (Phase 30 can run after 26)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -176,3 +249,8 @@ Phases execute in numeric order: 23 → 24 → 25
 | 23. Resume Robustness | 1/1 | Complete   | 2026-03-11 | - |
 | 24. Task Verification and Quality Loops | 1/1 | Complete   | 2026-03-11 | - |
 | 25. Post-Run Build Verification | v1.2 | 1/1 | Complete | 2026-03-11 |
+| 26. Models & Scheduler Infrastructure | v1.3 | 0/0 | Pending | - |
+| 27. Execution & Routing Pipeline | v1.3 | 0/0 | Pending | - |
+| 28. Agent Communication Protocol | v1.3 | 0/0 | Pending | - |
+| 29. Verification & Review Pipeline | v1.3 | 0/0 | Pending | - |
+| 30. Smart Decomposition | v1.3 | 0/0 | Pending | - |
