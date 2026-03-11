@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: Textual TUI Redesign
-status: completed
-stopped_at: Completed 38-01-PLAN.md
-last_updated: "2026-03-11T15:29:55.470Z"
-last_activity: 2026-03-11 — Phase 36 Plan 02 Wire escalation queue to modal overlays (2 new tests, 622 total)
+milestone: v2.1
+milestone_name: UX Polish
+status: active
+stopped_at: null
+last_updated: "2026-03-11"
+last_activity: 2026-03-11 — Milestone v2.1 started
 progress:
-  total_phases: 13
-  completed_phases: 11
-  total_plans: 14
-  completed_plans: 16
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** A product owner describes a feature, and a self-organizing team of AI coding agents delivers quality, reviewed, tested code — with the human staying in control when they want to be.
-**Current focus:** v2.0 Textual TUI Redesign — Phase 36: Approval Modals
+**Current focus:** v2.1 UX Polish
 
 ## Current Position
 
-Phase: 36 of 38 (Approval Modals)
-Plan: 2 of 2
-Status: Phase 36 complete (all plans done)
-Last activity: 2026-03-11 — Phase 36 Plan 02 Wire escalation queue to modal overlays (2 new tests, 622 total)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-11 — Milestone v2.1 started
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0%
 
 ## Accumulated Context
 

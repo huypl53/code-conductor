@@ -10,19 +10,20 @@ Conductor is an open-source multi-agent coding orchestration framework. You desc
 
 **Goal:** Make Conductor's orchestrator smarter — wave-based parallel execution, model routing for cost control, structured agent communication, goal-backward verification, and complexity-informed task decomposition.
 
-### v2.0 Textual TUI Redesign (parallel track)
+### v2.0 Textual TUI Redesign (complete)
 
 **Goal:** Replace prompt_toolkit + Rich with a full Textual-based TUI inspired by Codex CLI — cell-based transcript, modal approval overlays, inline agent monitoring, syntax-highlighted output, and a polished terminal experience.
 
+### v2.1 UX Polish (in progress)
+
+**Goal:** Refine the Textual TUI to feel native and polished in the terminal — auto-focus, full alt-screen mode, borderless design, smooth animations, and external editor support.
+
 **Target features:**
-- Full Textual TUI framework — widget-based layout with CSS styling, reactive state
-- Cell-based transcript — streaming responses, immutable history cells, markdown rendering
-- Modal approval overlays — approve/deny agent file changes and command execution
-- Dashboard-in-terminal — inline agent status panels with progress, tool use, streaming output
-- Rich output — syntax-highlighted diffs, code blocks, shimmer spinners, adaptive colors
-- Status footer — model, mode, token usage, rate limits
-- Slash command autocomplete — popup for `/` commands with tab completion
-- Web dashboard coexistence — both TUI and web dashboard remain functional
+- Auto-focus input on TUI start
+- Full alt-screen mode with clean entry/exit
+- Borderless/minimal chrome design — content flows naturally
+- Smooth animations and transitions
+- Ctrl-G to open input in external editor (vim) for multiline composition
 
 ## Core Value
 
@@ -60,14 +61,21 @@ A product owner describes a feature, and a self-organizing team of AI coding age
 - [ ] Two-stage review (spec compliance then code quality)
 - [ ] Smart decomposition with complexity scoring
 
-**v2.0 — Textual TUI Redesign:**
-- [ ] Textual-based TUI replacing prompt_toolkit + Rich
-- [ ] Cell-based transcript with streaming and markdown rendering
-- [ ] Modal approval overlays for agent actions
-- [ ] Inline agent monitoring panels in TUI
-- [ ] Syntax-highlighted diffs and code blocks
-- [ ] Status footer with model/tokens/mode
-- [ ] Slash command autocomplete popup
+**v2.0 — Textual TUI Redesign (complete):**
+- [x] Textual-based TUI replacing prompt_toolkit + Rich
+- [x] Cell-based transcript with streaming and markdown rendering
+- [x] Modal approval overlays for agent actions
+- [x] Inline agent monitoring panels in TUI
+- [x] Syntax-highlighted diffs and code blocks
+- [x] Status footer with model/tokens/mode
+- [x] Slash command autocomplete popup
+
+**v2.1 — UX Polish:**
+- [ ] Auto-focus input on TUI start
+- [ ] Full alt-screen mode with clean entry/exit
+- [ ] Borderless/minimal chrome design
+- [ ] Smooth animations and transitions
+- [ ] Ctrl-G external editor (vim) for multiline input
 
 ### Out of Scope
 
@@ -85,7 +93,8 @@ Current TUI: prompt_toolkit for input + Rich for output — functional but basic
 Distribution: `pip install conductor-ai` + `npm install -g conductor-dashboard`.
 30 phases completed across v1.0-v1.2.
 
-v2.0 TUI reference: OpenAI Codex CLI (Ratatui/Rust) — cell-based transcript, modal approval overlays, shimmer animations, syntax-highlighted diffs, slash command autocomplete, status footer. Conductor will use Textual (Python) to achieve similar UX while staying in the Python ecosystem.
+v2.0 TUI shipped with Textual (Python): cell-based transcript, modal approval overlays, shimmer animations, syntax-highlighted diffs, slash command autocomplete, status footer. 8 phases (31-38), 641 tests passing.
+v2.1 polishing TUI to match Codex-level terminal integration: alt-screen, borderless chrome, smooth animations, external editor.
 
 Known tech debt:
 - `get_server_info()` wrapped in broad `except Exception` — session_id persistence silently fails
@@ -116,4 +125,4 @@ Known tech debt:
 | v2.0 TUI as parallel worktree to v1.3 | Unblocks UI work without pausing orchestrator intelligence improvements | — Pending |
 
 ---
-*Last updated: 2026-03-11 after v2.0 TUI milestone started*
+*Last updated: 2026-03-11 after v2.1 UX Polish milestone started*
