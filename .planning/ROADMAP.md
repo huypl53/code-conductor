@@ -214,6 +214,10 @@ Plans:
   1. ACPClient sessions use EscalationRouter as their permission_handler
   2. CLI `pause` command invokes pause_for_human_decision on the orchestrator
   3. Dashboard InterventionPanel has a "Pause" action that triggers pause_for_human_decision
+**Plans:** 2 plans
+Plans:
+- [ ] 13-01-PLAN.md — Wire EscalationRouter into ACPClient + pause command in CLI and dashboard backend
+- [ ] 13-02-PLAN.md — Add Pause button to dashboard frontend InterventionPanel
 
 ### Phase 14: Fix Getting-Started Guide .env Claim
 **Goal:** Getting-started guide is accurate — either .env auto-loading works or the claim is removed
@@ -243,5 +247,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 10. Dashboard Frontend | 3/3 | Complete    | 2026-03-10 |
 | 11. Packaging and Distribution | 2/2 | Complete    | 2026-03-10 |
 | 12. Fix CLI Cancel/Redirect Signatures | 1/1 | Complete    | 2026-03-11 |
-| 13. Wire Escalation Router + Pause Surface | 0/0 | Pending | |
+| 13. Wire Escalation Router + Pause Surface | 0/2 | Pending | |
 | 14. Fix Getting-Started Guide .env Claim | 0/0 | Pending | |
