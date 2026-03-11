@@ -62,7 +62,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Packaging
 
 - [x] **PKG-01**: Python core distributed as pip package (orchestration, ACP communication, state management)
-- [ ] **PKG-02**: Node.js dashboard distributed as npm package (web UI)
+- [x] **PKG-02**: Node.js dashboard distributed as npm package (web UI)
 - [x] **PKG-03**: Monorepo structure with Python core + Node.js dashboard
 - [x] **PKG-04**: Installation instructions and getting-started guide
 
@@ -156,7 +156,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DASH-06 | Phase 15: Fix Dashboard Server Cancel Type Mismatch | Complete |
 | DASH-01 | Phase 16: Fix Agent Status Lifecycle | Complete |
 | DASH-04 | Phase 16: Fix Agent Status Lifecycle | Complete |
-| PKG-02 | Phase 17: Fix Production WebSocket URL | Pending |
+| PKG-02 | Phase 17: Fix Production WebSocket URL | Complete |
 
 **Coverage:**
 - v1 requirements: 30 total (note: DASH-04 split from other DASH requirements — backend vs. frontend boundary)

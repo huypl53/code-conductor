@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 16-01-PLAN.md (fix agent status lifecycle mutations)
-last_updated: "2026-03-11T03:53:42.836Z"
+stopped_at: Completed 17-01-PLAN.md (runtime backend URL config for production WebSocket)
+last_updated: "2026-03-11T03:57:30.222Z"
 last_activity: "2026-03-10 — Phase 2 Plan 1 complete: Pydantic v2 state models, enums, and error hierarchy"
 progress:
   total_phases: 17
-  completed_phases: 16
+  completed_phases: 17
   total_plans: 32
-  completed_plans: 31
+  completed_plans: 32
   percent: 10
 ---
 
@@ -81,6 +81,7 @@ Progress: [█░░░░░░░░░] 10%
 | Phase 14-fix-getting-started-env P01 | 1 | 1 tasks | 1 files |
 | Phase 15-fix-dashboard-cancel-type P01 | 55 | 2 tasks | 2 files |
 | Phase 16-fix-agent-status-lifecycle P01 | 8 | 3 tasks | 2 files |
+| Phase 17 P01 | 126 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -175,6 +176,8 @@ Recent decisions affecting current work:
 - [Phase 15-fix-dashboard-cancel-type]: dashboard cancel branch calls cancel_agent(agent_id) with no second argument; redirect branch passes string via new_instructions= keyword
 - [Phase 16-fix-agent-status-lifecycle]: _make_complete_task_fn takes agent_id as positional parameter for natural call site
 - [Phase 16-fix-agent-status-lifecycle]: _make_set_agent_status_fn added as reusable static helper consistent with existing _make_*_fn patterns
+- [Phase 17-fix-production-ws-url]: getWsUrl() called per-render instead of module-level constant — allows test isolation for window.__CONDUCTOR_BACKEND_URL__ without module re-import
+- [Phase 17-fix-production-ws-url]: JSON.stringify() used in script tag injection for safe URL encoding in bin script HTML injection
 
 ### Pending Todos
 
@@ -187,6 +190,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T03:51:25.501Z
-Stopped at: Completed 16-01-PLAN.md (fix agent status lifecycle mutations)
+Last session: 2026-03-11T03:57:30.218Z
+Stopped at: Completed 17-01-PLAN.md (runtime backend URL config for production WebSocket)
 Resume file: None
