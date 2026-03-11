@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any
 
 from textual.app import App, ComposeResult
-from textual.widgets import Label
 
 logger = logging.getLogger("conductor.tui")
 
@@ -44,11 +43,24 @@ class ConductorApp(App):
         self._background_tasks = set()
 
     def compose(self) -> ComposeResult:
-        """Phase 31: placeholder label — replaced by full layout in Phase 32."""
-        yield Label(
-            "Conductor TUI — Phase 31 Foundation (layout coming in Phase 32)",
-            id="placeholder-label",
-        )
+        """Phase 32: two-column layout — TranscriptPane + AgentMonitorPane + CommandInput + StatusFooter."""
+        from textual.containers import Horizontal
+        from conductor.tui.widgets.transcript import TranscriptPane
+        from conductor.tui.widgets.agent_monitor import AgentMonitorPane
+        from conductor.tui.widgets.command_input import CommandInput
+        from conductor.tui.widgets.status_footer import StatusFooter
+
+        with Horizontal(id="app-body"):
+            yield TranscriptPane(id="transcript")
+            yield AgentMonitorPane(id="agent-monitor")
+        yield CommandInput(id="command-input")
+        yield StatusFooter(id="status-footer")
+
+    async def on_user_submitted(self, event: "UserSubmitted") -> None:
+        """Route user message to the transcript pane."""
+        from conductor.tui.widgets.transcript import TranscriptPane
+        pane = self.query_one(TranscriptPane)
+        await pane.add_user_message(event.text)
 
     async def on_mount(self) -> None:
         """Launch all async subsystems on Textual's event loop.

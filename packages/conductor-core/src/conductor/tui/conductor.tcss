@@ -1,5 +1,4 @@
-/* Conductor TUI — layout skeleton for Phase 31 */
-/* Full layout established in Phase 32 */
+/* Conductor TUI — Phase 32 two-column layout */
 
 Screen {
     layers: base overlay;
@@ -8,12 +7,13 @@ Screen {
 
 #app-body {
     width: 1fr;
+    /* Height accounts for CommandInput (3) and StatusFooter (1) */
     height: 1fr;
+    layout: horizontal;
 }
 
-#placeholder-label {
-    content-align: center middle;
-    width: 1fr;
-    height: 1fr;
-    color: $text-muted;
-}
+/* TranscriptPane takes remaining width after AgentMonitorPane */
+/* TranscriptPane DEFAULT_CSS handles its own sizing */
+
+/* CommandInput DEFAULT_CSS handles height: 3, dock is positional (not docked) */
+/* StatusFooter DEFAULT_CSS handles dock: bottom, height: 1 */
