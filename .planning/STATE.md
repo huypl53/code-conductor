@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: UX Polish
-status: planning
-stopped_at: Completed 39-01-PLAN.md
-last_updated: "2026-03-11T16:31:24.487Z"
-last_activity: 2026-03-11 — Roadmap created for v2.1 UX Polish
+status: executing
+stopped_at: Completed 40-01-PLAN.md
+last_updated: "2026-03-11T16:38:16Z"
+last_activity: 2026-03-11 — Phase 40 Plan 01 borderless design complete
 progress:
   total_phases: 17
   completed_phases: 12
@@ -21,32 +21,30 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** A product owner describes a feature, and a self-organizing team of AI coding agents delivers quality, reviewed, tested code — with the human staying in control when they want to be.
-**Current focus:** v2.1 UX Polish — Phase 39 (Auto-Focus & Alt-Screen)
+**Current focus:** v2.1 UX Polish — Phase 40 (Borderless Design)
 
 ## Current Position
 
-Phase: 39 of 42 (Auto-Focus & Alt-Screen)
-Plan: —
-Status: Ready to plan
-Last activity: 2026-03-11 — Roadmap created for v2.1 UX Polish
+Phase: 40 of 42 (Borderless Design)
+Plan: 1 of 1 complete
+Status: Phase 40 complete
+Last activity: 2026-03-11 — Phase 40 Plan 01 borderless design complete
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [==........] 25%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: —
-- Total execution time: —
+- Total plans completed: 1
+- Average duration: 1min
+- Total execution time: 1min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
-
-*Updated after each plan completion*
 | Phase 39 P01 | 2min | 2 tasks | 3 files |
+| Phase 40 P01 | 1min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -58,6 +56,7 @@ Progress: [░░░░░░░░░░] 0%
 - [v2.0 Architecture]: Token buffering at 20fps via set_interval — never call widget.update() per-token
 - [v2.0 Architecture]: Textual owns the event loop — ConductorApp.run() is sole entry point
 - [Phase 39]: AUTO_FOCUS = 'CommandInput Input' for immediate input focus on app launch
+- [Phase 40]: solid border-left at 40% opacity replaces thick for subtle accent lines; border-top removed entirely for cleanest approach
 
 ### Pending Todos
 
@@ -71,6 +70,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T16:31:24.484Z
-Stopped at: Completed 39-01-PLAN.md
+Last session: 2026-03-11T16:38:16Z
+Stopped at: Completed 40-01-PLAN.md
 Resume file: None

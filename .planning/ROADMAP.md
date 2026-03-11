@@ -86,7 +86,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 **Milestone Goal:** Refine the Textual TUI to feel native and polished in the terminal — auto-focus, full alt-screen mode, borderless design, smooth animations, and external editor support — bringing the TUI to parity with OpenAI Codex CLI's terminal integration quality.
 
 - [x] **Phase 39: Auto-Focus & Alt-Screen** — Input auto-focuses on start; TUI fully owns the terminal with clean entry/exit on all exit paths (completed 2026-03-11)
-- [ ] **Phase 40: Borderless Design** — CSS-only redesign removes visible box borders on layout containers and replaces thick cell borders with subtle accent lines
+- [x] **Phase 40: Borderless Design** — CSS-only redesign removes visible box borders on layout containers and replaces thick cell borders with subtle accent lines (completed 2026-03-11)
 - [ ] **Phase 41: Smooth Cell Animations** — New cells fade in via opacity animation on mount; env var toggle disables animations for CI/SSH
 - [ ] **Phase 42: Ctrl-G External Editor** — Ctrl-G suspends TUI, opens $VISUAL/$EDITOR with current input pre-populated, reads result back into CommandInput
 
@@ -374,6 +374,6 @@ Phases execute in numeric order: 39 → 40 → 41 → 42
 | 37. Slash Commands & Dashboard Coexistence | v2.0 | 1/1 | Complete | 2026-03-11 |
 | 38. Session Persistence & Polish | v2.0 | 1/1 | Complete | 2026-03-11 |
 | 39. Auto-Focus & Alt-Screen | 1/1 | Complete   | 2026-03-11 | - |
-| 40. Borderless Design | v2.1 | 0/TBD | Not started | - |
+| 40. Borderless Design | 1/1 | Complete   | 2026-03-11 | - |
 | 41. Smooth Cell Animations | v2.1 | 0/TBD | Not started | - |
 | 42. Ctrl-G External Editor | v2.1 | 0/TBD | Not started | - |
