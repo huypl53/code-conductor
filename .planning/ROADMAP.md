@@ -288,6 +288,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 12. Fix CLI Cancel/Redirect Signatures | 1/1 | Complete    | 2026-03-11 |
 | 13. Wire Escalation Router + Pause Surface | 2/2 | Complete    | 2026-03-11 |
 | 14. Fix Getting-Started Guide .env Claim | 1/1 | Complete    | 2026-03-11 |
-| 15. Fix Dashboard Server Cancel Type Mismatch | 1/1 | Complete   | 2026-03-11 |
+| 15. Fix Dashboard Server Cancel Type Mismatch | 1/1 | Complete    | 2026-03-11 |
 | 16. Fix Agent Status Lifecycle | 0/0 | Not Started |  |
 | 17. Fix Production WebSocket URL | 0/0 | Not Started |  |
