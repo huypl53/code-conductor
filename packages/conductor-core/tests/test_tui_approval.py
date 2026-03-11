@@ -5,9 +5,11 @@ All three are ModalScreen subclasses that dismiss with typed return values.
 
 IMPORTANT: Keep run_test() inline in each test function -- never in fixtures.
 (Textual contextvars/pytest-asyncio incompatibility -- GitHub #4998)
-"""
 
-import pytest
+Test pattern: push_screen() with a callback to capture the dismiss result,
+since push_screen_wait() requires a worker context.
+Use app.screen to query widgets on the currently active (modal) screen.
+"""
 
 from textual.app import App, ComposeResult
 from textual.widgets import Input
@@ -31,13 +33,10 @@ async def test_file_approval_approve():
     async with app.run_test() as pilot:
         result_container: list[bool] = []
 
-        async def show_modal():
-            result = await app.push_screen_wait(
-                FileApprovalModal("/path/to/file.py")
-            )
-            result_container.append(result)
-
-        app.call_later(show_modal)
+        app.push_screen(
+            FileApprovalModal("/path/to/file.py"),
+            callback=lambda r: result_container.append(r),
+        )
         await pilot.pause()
         await pilot.click("#approve")
         await pilot.pause()
@@ -53,13 +52,10 @@ async def test_file_approval_deny():
     async with app.run_test() as pilot:
         result_container: list[bool] = []
 
-        async def show_modal():
-            result = await app.push_screen_wait(
-                FileApprovalModal("/path/to/file.py")
-            )
-            result_container.append(result)
-
-        app.call_later(show_modal)
+        app.push_screen(
+            FileApprovalModal("/path/to/file.py"),
+            callback=lambda r: result_container.append(r),
+        )
         await pilot.pause()
         await pilot.click("#deny")
         await pilot.pause()
@@ -75,13 +71,10 @@ async def test_file_approval_escape():
     async with app.run_test() as pilot:
         result_container: list[bool] = []
 
-        async def show_modal():
-            result = await app.push_screen_wait(
-                FileApprovalModal("/path/to/file.py")
-            )
-            result_container.append(result)
-
-        app.call_later(show_modal)
+        app.push_screen(
+            FileApprovalModal("/path/to/file.py"),
+            callback=lambda r: result_container.append(r),
+        )
         await pilot.pause()
         await pilot.press("escape")
         await pilot.pause()
@@ -100,13 +93,10 @@ async def test_command_approval_approve():
     async with app.run_test() as pilot:
         result_container: list[bool] = []
 
-        async def show_modal():
-            result = await app.push_screen_wait(
-                CommandApprovalModal("rm -rf /tmp/build")
-            )
-            result_container.append(result)
-
-        app.call_later(show_modal)
+        app.push_screen(
+            CommandApprovalModal("rm -rf /tmp/build"),
+            callback=lambda r: result_container.append(r),
+        )
         await pilot.pause()
         await pilot.click("#approve")
         await pilot.pause()
@@ -122,13 +112,10 @@ async def test_command_approval_deny():
     async with app.run_test() as pilot:
         result_container: list[bool] = []
 
-        async def show_modal():
-            result = await app.push_screen_wait(
-                CommandApprovalModal("rm -rf /tmp/build")
-            )
-            result_container.append(result)
-
-        app.call_later(show_modal)
+        app.push_screen(
+            CommandApprovalModal("rm -rf /tmp/build"),
+            callback=lambda r: result_container.append(r),
+        )
         await pilot.pause()
         await pilot.click("#deny")
         await pilot.pause()
@@ -147,17 +134,14 @@ async def test_escalation_modal_submit():
     async with app.run_test() as pilot:
         result_container: list[str] = []
 
-        async def show_modal():
-            result = await app.push_screen_wait(
-                EscalationModal("What should I do?", agent_id="agent-1")
-            )
-            result_container.append(result)
-
-        app.call_later(show_modal)
+        app.push_screen(
+            EscalationModal("What should I do?", agent_id="agent-1"),
+            callback=lambda r: result_container.append(r),
+        )
         await pilot.pause()
 
-        # Type a reply into the Input widget
-        reply_input = app.query_one("#reply-input", Input)
+        # Type a reply into the Input widget on the active (modal) screen
+        reply_input = app.screen.query_one("#reply-input", Input)
         reply_input.value = "test reply"
 
         await pilot.click("#submit")
@@ -174,17 +158,14 @@ async def test_escalation_modal_input_submitted():
     async with app.run_test() as pilot:
         result_container: list[str] = []
 
-        async def show_modal():
-            result = await app.push_screen_wait(
-                EscalationModal("What should I do?", agent_id="agent-1")
-            )
-            result_container.append(result)
-
-        app.call_later(show_modal)
+        app.push_screen(
+            EscalationModal("What should I do?", agent_id="agent-1"),
+            callback=lambda r: result_container.append(r),
+        )
         await pilot.pause()
 
         # Set value and press Enter
-        reply_input = app.query_one("#reply-input", Input)
+        reply_input = app.screen.query_one("#reply-input", Input)
         reply_input.value = "enter reply"
         await pilot.press("enter")
         await pilot.pause()
@@ -200,13 +181,10 @@ async def test_escalation_modal_empty_reply_defaults():
     async with app.run_test() as pilot:
         result_container: list[str] = []
 
-        async def show_modal():
-            result = await app.push_screen_wait(
-                EscalationModal("What should I do?")
-            )
-            result_container.append(result)
-
-        app.call_later(show_modal)
+        app.push_screen(
+            EscalationModal("What should I do?"),
+            callback=lambda r: result_container.append(r),
+        )
         await pilot.pause()
         # Click submit with empty input
         await pilot.click("#submit")
@@ -223,13 +201,10 @@ async def test_escalation_escape():
     async with app.run_test() as pilot:
         result_container: list[str] = []
 
-        async def show_modal():
-            result = await app.push_screen_wait(
-                EscalationModal("What should I do?")
-            )
-            result_container.append(result)
-
-        app.call_later(show_modal)
+        app.push_screen(
+            EscalationModal("What should I do?"),
+            callback=lambda r: result_container.append(r),
+        )
         await pilot.pause()
         await pilot.press("escape")
         await pilot.pause()

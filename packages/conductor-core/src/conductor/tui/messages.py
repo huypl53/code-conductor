@@ -70,3 +70,12 @@ class AgentStateUpdated(Message):
     def __init__(self, state: "ConductorState") -> None:
         self.state = state
         super().__init__()
+
+
+class EscalationRequest(Message):
+    """An agent escalation question ready for the approval modal."""
+
+    def __init__(self, question: str, agent_id: str = "") -> None:
+        self.question = question
+        self.agent_id = agent_id
+        super().__init__()
