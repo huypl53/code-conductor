@@ -81,35 +81,13 @@ async def handle_intervention(data: str, orchestrator: Orchestrator) -> None:
 
     try:
         if action == "cancel":
-            from conductor.orchestrator.models import TaskSpec
-
-            await orchestrator.cancel_agent(
-                agent_id,
-                TaskSpec(
-                    id=agent_id,
-                    title="Cancelled from dashboard",
-                    description="",
-                    role="",
-                    target_file="",
-                ),
-            )
+            await orchestrator.cancel_agent(agent_id)
         elif action == "feedback":
             message = command.get("message", "")
             await orchestrator.inject_guidance(agent_id, message)
         elif action == "redirect":
-            from conductor.orchestrator.models import TaskSpec
-
             message = command.get("message", "")
-            await orchestrator.cancel_agent(
-                agent_id,
-                TaskSpec(
-                    id=agent_id,
-                    title="Redirected from dashboard",
-                    description=message,
-                    role="",
-                    target_file="",
-                ),
-            )
+            await orchestrator.cancel_agent(agent_id, new_instructions=message)
         elif action == "pause":
             question = command.get("message", "pause requested from dashboard")
             if orchestrator._human_out is not None and orchestrator._human_in is not None:
