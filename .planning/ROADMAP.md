@@ -307,7 +307,7 @@ Plans:
   2. The fade-in uses opacity animation, not tint or tween hacks — existing shimmer behavior on streaming cells is unchanged
   3. Setting `CONDUCTOR_NO_ANIMATIONS=1` in the environment disables all fade-in calls — cells appear instantly without any animation
   4. The animation disable path works without code changes or restarts — environment variable is read at startup and respected throughout the session
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
 - [ ] 41-01-PLAN.md — on_mount opacity fade-in in UserCell/AssistantCell, CONDUCTOR_NO_ANIMATIONS guard
@@ -375,5 +375,5 @@ Phases execute in numeric order: 39 → 40 → 41 → 42
 | 38. Session Persistence & Polish | v2.0 | 1/1 | Complete | 2026-03-11 |
 | 39. Auto-Focus & Alt-Screen | 1/1 | Complete   | 2026-03-11 | - |
 | 40. Borderless Design | 1/1 | Complete   | 2026-03-11 | - |
-| 41. Smooth Cell Animations | v2.1 | 0/TBD | Not started | - |
+| 41. Smooth Cell Animations | v2.1 | 0/1 | Not started | - |
 | 42. Ctrl-G External Editor | v2.1 | 0/TBD | Not started | - |
