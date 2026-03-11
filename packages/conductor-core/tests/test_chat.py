@@ -5,6 +5,9 @@ Covers:
 - Input history tracking
 - Ctrl+C state machine (idle vs running)
 - ChatSession lifecycle
+
+Updated for Phase 19: _handle_slash_command is now async,
+_process_message now uses SDK (tested in test_chat_phase19.py).
 """
 
 from __future__ import annotations
@@ -29,33 +32,39 @@ class TestSlashCommands:
         console = MagicMock()
         return ChatSession(console=console)
 
-    def test_help_returns_false(self) -> None:
+    @pytest.mark.asyncio
+    async def test_help_returns_false(self) -> None:
         session = self._make_session()
-        assert session._handle_slash_command("/help") is False
+        assert await session._handle_slash_command("/help") is False
 
-    def test_help_prints_all_commands(self) -> None:
+    @pytest.mark.asyncio
+    async def test_help_prints_all_commands(self) -> None:
         session = self._make_session()
-        session._handle_slash_command("/help")
+        await session._handle_slash_command("/help")
         # Should have printed header + one line per command
         calls = session._console.print.call_args_list
         # At least one call per command + header
         assert len(calls) >= len(SLASH_COMMANDS) + 1
 
-    def test_exit_returns_true(self) -> None:
+    @pytest.mark.asyncio
+    async def test_exit_returns_true(self) -> None:
         session = self._make_session()
-        assert session._handle_slash_command("/exit") is True
+        assert await session._handle_slash_command("/exit") is True
 
-    def test_status_returns_false(self) -> None:
+    @pytest.mark.asyncio
+    async def test_status_returns_false(self) -> None:
         session = self._make_session()
-        assert session._handle_slash_command("/status") is False
+        assert await session._handle_slash_command("/status") is False
 
-    def test_unknown_command_returns_false(self) -> None:
+    @pytest.mark.asyncio
+    async def test_unknown_command_returns_false(self) -> None:
         session = self._make_session()
-        assert session._handle_slash_command("/foobar") is False
+        assert await session._handle_slash_command("/foobar") is False
 
-    def test_unknown_command_prints_error(self) -> None:
+    @pytest.mark.asyncio
+    async def test_unknown_command_prints_error(self) -> None:
         session = self._make_session()
-        session._handle_slash_command("/foobar")
+        await session._handle_slash_command("/foobar")
         printed = str(session._console.print.call_args)
         assert "Unknown command" in printed
 
@@ -155,28 +164,6 @@ class TestChatSessionRun:
             await session.run()
 
     @pytest.mark.asyncio
-    async def test_regular_input_echoes(self) -> None:
-        """Regular text should be echoed back (placeholder)."""
-        console = MagicMock()
-        session = ChatSession(console=console)
-
-        responses = iter(["hello world", "/exit"])
-
-        async def _fake_prompt(*args: object, **kwargs: object) -> str:
-            return next(responses)
-
-        with patch.object(
-            session._prompt_session,
-            "prompt_async",
-            new=_fake_prompt,
-        ):
-            await session.run()
-
-        # Check that echo output was printed
-        all_printed = " ".join(str(c) for c in console.print.call_args_list)
-        assert "hello world" in all_printed
-
-    @pytest.mark.asyncio
     async def test_empty_input_ignored(self) -> None:
         """Empty/whitespace input should be ignored, not processed."""
         console = MagicMock()
@@ -220,20 +207,3 @@ class TestChatSessionRun:
             new=AsyncMock(side_effect=KeyboardInterrupt),
         ):
             await session.run()  # should return
-
-
-# ---------------------------------------------------------------------------
-# Process message placeholder
-# ---------------------------------------------------------------------------
-
-
-class TestProcessMessage:
-    """Tests for the placeholder message processor."""
-
-    @pytest.mark.asyncio
-    async def test_process_message_prints_echo(self) -> None:
-        console = MagicMock()
-        session = ChatSession(console=console)
-        await session._process_message("test input")
-        printed = str(console.print.call_args)
-        assert "test input" in printed
