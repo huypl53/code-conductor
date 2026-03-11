@@ -2219,3 +2219,163 @@ class TestReviewOnlyFallback:
         assert review_status == "approved", (
             f"Expected review_status='approved', got '{review_status}'"
         )
+
+
+# ---------------------------------------------------------------------------
+# RESM-02 tests: resume spawn loop edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestResumeSpawnLoop:
+    """RESM-02: Resume spawn loop handles pre-completed, all-completed, and
+    failed-future edge cases correctly."""
+
+    @pytest.mark.asyncio
+    async def test_resume_marked_done_guard_allows_pending_task(self, tmp_path):
+        """When state has one COMPLETED task (no deps) and one PENDING task that
+        requires the completed one, resume() calls _run_agent_loop exactly once —
+        for the pending task only."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import (
+            AgentRecord,
+            AgentStatus,
+            ConductorState,
+            Task,
+            TaskStatus,
+        )
+
+        state_mgr = _make_state_manager()
+
+        completed_task = Task(
+            id="task-done",
+            title="Completed Task",
+            description="Already done",
+            status=TaskStatus.COMPLETED,
+            target_file=str(tmp_path / "done.py"),
+        )
+        pending_task = Task(
+            id="task-pending",
+            title="Pending Task",
+            description="Waiting for task-done",
+            status=TaskStatus.PENDING,
+            target_file=str(tmp_path / "pending.py"),
+            requires=["task-done"],
+        )
+        agent_record = AgentRecord(
+            id="agent-done-abc",
+            name="agent-done-abc",
+            role="developer",
+            current_task_id="task-done",
+            status=AgentStatus.DONE,
+        )
+        mock_state = ConductorState(
+            tasks=[completed_task, pending_task],
+            agents=[agent_record],
+        )
+        state_mgr.read_state = MagicMock(return_value=mock_state)
+
+        spawned_ids: list[str] = []
+
+        async def _capture_loop(task_spec, sem, **kwargs):
+            spawned_ids.append(task_spec.id)
+
+        orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+        orch._run_agent_loop = _capture_loop
+        await orch.resume()
+
+        assert spawned_ids == ["task-pending"], (
+            f"Expected only 'task-pending' to be spawned, got {spawned_ids}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_resume_all_completed_exits_immediately(self, tmp_path):
+        """When all tasks in state are COMPLETED, resume() calls _run_agent_loop
+        zero times and returns cleanly."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import ConductorState, Task, TaskStatus
+
+        state_mgr = _make_state_manager()
+
+        mock_state = ConductorState(tasks=[
+            Task(
+                id="task-a",
+                title="Task A",
+                description="Done A",
+                status=TaskStatus.COMPLETED,
+                target_file=str(tmp_path / "a.py"),
+            ),
+            Task(
+                id="task-b",
+                title="Task B",
+                description="Done B",
+                status=TaskStatus.COMPLETED,
+                target_file=str(tmp_path / "b.py"),
+            ),
+        ])
+        state_mgr.read_state = MagicMock(return_value=mock_state)
+
+        spawned_ids: list[str] = []
+
+        async def _capture_loop(task_spec, sem, **kwargs):
+            spawned_ids.append(task_spec.id)
+
+        orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+        orch._run_agent_loop = _capture_loop
+        await orch.resume()
+
+        assert spawned_ids == [], (
+            f"Expected no tasks spawned for all-completed state, got {spawned_ids}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_resume_failed_future_exception_retrieved(self, tmp_path, caplog):
+        """When a spawned task future raises an exception, resume() retrieves it
+        (no 'Task exception was never retrieved' warning) and completes without
+        crashing. The exception is logged at ERROR level."""
+        import logging
+
+        from conductor.orchestrator.orchestrator import Orchestrator
+        from conductor.state.models import (
+            AgentRecord,
+            AgentStatus,
+            ConductorState,
+            Task,
+            TaskStatus,
+        )
+
+        state_mgr = _make_state_manager()
+
+        in_progress_task = Task(
+            id="task-failing",
+            title="Failing Task",
+            description="This task will fail",
+            status=TaskStatus.IN_PROGRESS,
+            assigned_agent="agent-failing-xyz",
+            target_file=str(tmp_path / "missing.py"),  # file does NOT exist
+        )
+        agent_record = AgentRecord(
+            id="agent-failing-xyz",
+            name="agent-failing-xyz",
+            role="developer",
+            current_task_id="task-failing",
+            status=AgentStatus.WORKING,
+        )
+        mock_state = ConductorState(
+            tasks=[in_progress_task],
+            agents=[agent_record],
+        )
+        state_mgr.read_state = MagicMock(return_value=mock_state)
+
+        async def _failing_loop(task_spec, sem, **kwargs):
+            raise RuntimeError("agent failed during resume")
+
+        with caplog.at_level(logging.ERROR, logger="conductor.orchestrator"):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            orch._run_agent_loop = _failing_loop
+            # Must NOT raise — exception should be retrieved and logged
+            await orch.resume()
+
+        assert any(
+            "failed during resume" in record.message
+            for record in caplog.records
+        ), f"Expected 'failed during resume' in ERROR log. Records: {[r.message for r in caplog.records]}"
