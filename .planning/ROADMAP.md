@@ -94,7 +94,7 @@ Full details: `.planning/milestones/v2.1-ROADMAP.md`
 
 </details>
 
-### 🚧 v2.2 Agent Visibility (In Progress)
+### v2.2 Agent Visibility (In Progress)
 
 **Milestone Goal:** Surface real-time agent activity in the TUI transcript — labeled per-agent cells with name, role, and status; orchestrator status during planning/delegation; tool-use event interception from SDK stream; and state.json agent updates feeding the transcript.
 
@@ -115,7 +115,9 @@ Full details: `.planning/milestones/v2.1-ROADMAP.md`
   3. AgentCell.finalize() works correctly whether or not streaming was ever started (defensive finalize)
   4. OrchestratorStatusCell can be created, updated, and finalized as an ephemeral status cell
   5. Multiple AgentCells with different agent_id values render independently with no CSS ID collisions (sanitized IDs with distinct prefixes)
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 43-01-PLAN.md — TDD: AgentCell + OrchestratorStatusCell widgets
 
 ### Phase 44: TranscriptPane Extensions and State Bridge
 **Goal**: TranscriptPane receives AgentStateUpdated messages from the state.json watcher and mounts AgentCells for new WORKING agents, updating and finalizing them as state transitions occur
@@ -197,7 +199,7 @@ Full details: `.planning/milestones/v2.1-ROADMAP.md`
 | 40. Borderless Design | v2.1 | 1/1 | Complete | 2026-03-11 |
 | 41. Smooth Cell Animations | v2.1 | 1/1 | Complete | 2026-03-11 |
 | 42. Ctrl-G External Editor | v2.1 | 1/1 | Complete | 2026-03-12 |
-| 43. Agent Cell Widgets | v2.2 | 0/? | Not started | - |
+| 43. Agent Cell Widgets | v2.2 | 0/1 | In progress | - |
 | 44. TranscriptPane Extensions and State Bridge | v2.2 | 0/? | Not started | - |
 | 45. SDK Stream Interception and Orchestrator Status | v2.2 | 0/? | Not started | - |
 | 46. Visual Polish and Verification | v2.2 | 0/? | Not started | - |
