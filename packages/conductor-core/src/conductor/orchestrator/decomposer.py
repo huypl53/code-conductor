@@ -75,7 +75,8 @@ class TaskDecomposer:
                         "retry limit reached"
                     )
                 result = message
-                break  # first ResultMessage is the final result
+                # Don't break — consume entire stream to avoid anyio
+                # cancel scope cleanup issues
 
         if result is None:
             raise DecompositionError(

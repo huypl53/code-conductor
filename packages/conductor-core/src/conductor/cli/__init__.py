@@ -1,8 +1,14 @@
 """Conductor CLI entry point."""
 
 import asyncio
+import os
 
 import typer
+
+# Unset CLAUDECODE so the SDK can spawn nested Claude Code sessions.
+# Conductor is designed to run *inside* a Claude Code session (or standalone)
+# and needs to launch sub-agents as child processes.
+os.environ.pop("CLAUDECODE", None)
 
 from conductor.cli.commands.run import run
 from conductor.cli.commands.status import status

@@ -28,6 +28,7 @@ from typing import Any
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import InMemoryHistory
+from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 
@@ -72,7 +73,7 @@ def pick_session(cwd: str | None = None, console: Console | None = None) -> str 
 
     Returns the selected session_id, or None if no sessions or cancelled.
     """
-    _console = console or Console()
+    _console = console or Console(force_terminal=True)
     working_dir = cwd or os.getcwd()
     conductor_dir = Path(working_dir) / ".conductor"
 
@@ -146,12 +147,24 @@ class ChatSession:
         cwd: str | None = None,
         resume_session_id: str | None = None,
     ) -> None:
-        self._console = console or Console()
+        # force_terminal=True so Rich ANSI output works inside patch_stdout()
+        self._console = console or Console(force_terminal=True)
         self._history = InMemoryHistory()
+
+        # Vim mode + Ctrl+G to open $EDITOR (like Claude Code)
+        kb = KeyBindings()
+
+        @kb.add("c-g")
+        def _open_editor(event: Any) -> None:
+            """Open current input in $EDITOR via Ctrl+G."""
+            event.current_buffer.open_in_editor()
+
         self._prompt_session: PromptSession[str] = PromptSession(
             history=self._history,
             multiline=False,
-            enable_open_in_editor=False,
+            vi_mode=True,
+            enable_open_in_editor=True,
+            key_bindings=kb,
         )
         self._state = _CtrlCState.IDLE
         self._running_task: asyncio.Task[Any] | None = None

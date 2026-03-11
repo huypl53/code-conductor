@@ -120,9 +120,12 @@ async def review_output(
         max_turns=_MAX_TURNS,
     )
 
+    result: ResultMessage | None = None
     async for message in sdk_query(prompt=prompt, options=options):
-        if isinstance(message, ResultMessage):
-            if message.structured_output:
-                return ReviewVerdict.model_validate(message.structured_output)
+        if isinstance(message, ResultMessage) and message.structured_output:
+            result = message
 
-    raise ReviewError("Review query returned no structured output")
+    if result is None or result.structured_output is None:
+        raise ReviewError("Review query returned no structured output")
+
+    return ReviewVerdict.model_validate(result.structured_output)
