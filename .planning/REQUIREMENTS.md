@@ -39,8 +39,8 @@ Requirements for the Textual TUI Redesign milestone. Each maps to roadmap phases
 ### Status & Polish
 
 - [x] **STAT-01**: A status footer displays current model, mode, token usage, and session info
-- [ ] **STAT-02**: In-progress cells show a shimmer/spinner animation
-- [ ] **STAT-03**: Resumed sessions replay previous conversation history in the transcript before the input activates
+- [x] **STAT-02**: In-progress cells show a shimmer/spinner animation
+- [x] **STAT-03**: Resumed sessions replay previous conversation history in the transcript before the input activates
 
 ## Previous Milestone Requirements
 
@@ -130,8 +130,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | APRV-02 | Phase 36 | Pending |
 | APRV-03 | Phase 36 | Pending |
 | APRV-04 | Phase 37 | Pending |
-| STAT-02 | Phase 38 | Pending |
-| STAT-03 | Phase 38 | Pending |
+| STAT-02 | Phase 38 | Complete |
+| STAT-03 | Phase 38 | Complete |
 
 **Coverage:**
 - v2.0 requirements: 20 total

@@ -77,7 +77,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 - [ ] **Phase 35: Agent Monitoring** - Live collapsible per-agent panels wired to state.json file watcher, showing task/status/tool activity with reactive updates
 - [ ] **Phase 36: Approval Modals** - ModalScreen overlays for file change approvals, command execution approvals, and escalation questions from sub-agents
 - [ ] **Phase 37: Slash Commands & Dashboard Coexistence** - Slash command autocomplete popup, all existing slash commands routed, uvicorn dashboard running alongside TUI in one process
-- [ ] **Phase 38: Session Persistence & Polish** - Session history replayed on resume, shimmer animation on active cells, final v2.0 polish pass
+- [x] **Phase 38: Session Persistence & Polish** - Session history replayed on resume, shimmer animation on active cells, final v2.0 polish pass (completed 2026-03-11)
 
 ## Phase Details
 
@@ -310,4 +310,4 @@ Phases execute in numeric order: 31 → 32 → 33 → 34 → 35 → 36 → 37 �
 | 35. Agent Monitoring | v2.0 | 0/1 | In Progress | - |
 | 36. Approval Modals | v2.0 | 0/2 | Not started | - |
 | 37. Slash Commands & Dashboard Coexistence | v2.0 | 0/1 | Not started | - |
-| 38. Session Persistence & Polish | v2.0 | 0/1 | Not started | - |
+| 38. Session Persistence & Polish | 1/1 | Complete   | 2026-03-11 | - |
