@@ -69,18 +69,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VRFY-01 | TBD | Pending |
-| VRFY-02 | TBD | Pending |
-| VRFY-03 | TBD | Pending |
-| QUAL-01 | TBD | Pending |
-| QUAL-02 | TBD | Pending |
-| RESM-01 | TBD | Pending |
-| RESM-02 | TBD | Pending |
+| VRFY-01 | Phase 24 | Pending |
+| VRFY-02 | Phase 25 | Pending |
+| VRFY-03 | Phase 25 | Pending |
+| QUAL-01 | Phase 24 | Pending |
+| QUAL-02 | Phase 24 | Pending |
+| RESM-01 | Phase 23 | Pending |
+| RESM-02 | Phase 23 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 7 total
-- Mapped to phases: 0
-- Unmapped: 7
+- Mapped to phases: 7
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-11*

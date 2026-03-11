@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Task Verification & Build Safety
-status: defining_requirements
+status: ready_to_plan
 stopped_at: null
 last_updated: "2026-03-11"
-last_activity: "2026-03-11 — Milestone v1.2 started"
+last_activity: "2026-03-11 — Roadmap created, 3 phases mapped (23-25)"
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** A product owner describes a feature, and a self-organizing team of AI coding agents delivers quality, reviewed, tested code — with the human staying in control when they want to be.
-**Current focus:** Defining requirements for v1.2
+**Current focus:** Phase 23 — Resume Robustness
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-11 — Milestone v1.2 started
+Phase: 23 of 25 (Resume Robustness)
+Plan: — (not yet planned)
+Status: Ready to plan
+Last activity: 2026-03-11 — Roadmap created for v1.2
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -43,6 +43,7 @@ Recent decisions affecting v1.2:
 - Missing file treated same as failed review — reuses existing revision loop
 - Post-run build command is a final report, not a gate — does not block task completion
 - Build command configurable via `--build-command` CLI flag and `.conductor/config.json`
+- RESM-01/RESM-02 code partially exists in orchestrator.py — Phase 23 adds tests and hardens edge cases
 
 ### Pending Todos
 
@@ -50,10 +51,10 @@ None.
 
 ### Blockers/Concerns
 
-- Review loop structured feedback needs design — how many revision rounds, what triggers escalation vs. retry
+None.
 
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Defining requirements for v1.2
+Stopped at: Roadmap created — ready to plan Phase 23
 Resume file: None

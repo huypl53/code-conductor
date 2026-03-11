@@ -4,6 +4,7 @@
 
 - ✅ **v1.0 MVP** — Phases 1-17 (shipped 2026-03-11)
 - ✅ **v1.1 Interactive Chat TUI** — Phases 18-22 (completed 2026-03-11)
+- 🔄 **v1.2 Task Verification & Build Safety** — Phases 23-25 (in progress)
 
 ## Phases
 
@@ -32,15 +33,24 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
 </details>
 
-### ✅ v1.1 Interactive Chat TUI (Completed 2026-03-11)
+<details>
+<summary>✅ v1.1 Interactive Chat TUI (Phases 18-22) — COMPLETED 2026-03-11</summary>
 
-**Milestone Goal:** Add an interactive conversational TUI so users can chat with the orchestrator like a coding agent CLI — direct tool use for simple tasks, smart sub-agent delegation for complex work, accessible via `conductor` with no arguments.
+- [x] **Phase 18: CLI Foundation and Input Layer** — completed 2026-03-11
+- [x] **Phase 19: Streaming Display and Session Lifecycle** — completed 2026-03-11
+- [x] **Phase 20: Session Resumption** — completed 2026-03-11
+- [x] **Phase 21: Smart Delegation and Orchestrator Integration** — completed 2026-03-11
+- [x] **Phase 22: Sub-Agent Visibility and Escalation Bridge** — completed 2026-03-11
 
-- [x] **Phase 18: CLI Foundation and Input Layer** — Fix entry point, adopt prompt_toolkit, wire safe terminal lifecycle — completed 2026-03-11
-- [x] **Phase 19: Streaming Display and Session Lifecycle** — Stream tokens, show tool activity, persist chat history, warn on context exhaustion — completed 2026-03-11
-- [x] **Phase 20: Session Resumption** — Resume prior sessions by timestamp selection via `conductor --resume` — completed 2026-03-11
-- [x] **Phase 21: Smart Delegation and Orchestrator Integration** — Direct tool use for simple tasks, sub-agent spawning for complex work, visible delegation decisions — completed 2026-03-11
-- [x] **Phase 22: Sub-Agent Visibility and Escalation Bridge** — Live per-agent status lines during delegation, escalation questions surfaced in chat — completed 2026-03-11
+</details>
+
+### v1.2 Task Verification & Build Safety
+
+**Milestone Goal:** Ensure Conductor validates task output before marking tasks complete, with structured review cycles and hardened resume support.
+
+- [ ] **Phase 23: Resume Robustness** — Harden resume path so exceptions in review_only mode and spawn loop edge cases never crash the orchestrator
+- [ ] **Phase 24: Task Verification and Quality Loops** — File existence gate forces re-runs when target files are missing; structured review cycles with configurable max rounds and explicit NEEDS_REVISION on exhaustion
+- [ ] **Phase 25: Post-Run Build Verification** — Orchestrator runs a user-configured build command after all tasks complete and reports pass/fail with stderr output
 
 ## Phase Details
 
@@ -100,10 +110,44 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
   3. When a sub-agent escalates a question, it appears in the chat prefixed with the agent ID and the input field activates immediately so the user can reply without any additional steps
 **Plans**: TBD
 
+### Phase 23: Resume Robustness
+**Goal**: The resume path never crashes — review_only exceptions fall back gracefully, and the spawn loop correctly handles all completed-task edge cases so runs always reach a clean terminal state
+**Depends on**: Phase 22 (v1.1 complete)
+**Requirements**: RESM-01, RESM-02
+**Success Criteria** (what must be TRUE):
+  1. When a review_only review raises an exception, the task is approved with a warning log instead of crashing the orchestrator process
+  2. When resuming a run where some tasks are already complete, the spawn loop does not exit prematurely — it processes all remaining ready tasks to completion
+  3. Task exceptions surfaced from `get_ready()` are retrieved and logged without causing the resume loop to hang or crash
+  4. The `marked_done` flag correctly tracks task completion so the loop exits only when all tasks have been handled
+**Plans**: TBD
+
+### Phase 24: Task Verification and Quality Loops
+**Goal**: Every task that declares a target file is verified to have produced that file before being marked complete, and reviewers drive structured revision cycles with an explicit failure mode when retries are exhausted — no task silently completes with missing or unreviewed output
+**Depends on**: Phase 23
+**Requirements**: VRFY-01, QUAL-01, QUAL-02
+**Success Criteria** (what must be TRUE):
+  1. When an agent session ends and `target_file` is set but the file does not exist on disk, the orchestrator sends a revision message to the agent and re-enters the revision loop instead of marking the task COMPLETED
+  2. When the file is still missing after all revision attempts are exhausted, the task is marked NEEDS_REVISION with a reason string, not silently completed
+  3. The reviewer returns structured feedback that the agent receives as concrete revision instructions, not a raw boolean
+  4. When the maximum number of revision rounds is reached without approval, the task is marked NEEDS_REVISION with the reviewer's last reason — the orchestrator does not approve it silently
+  5. The maximum revision rounds is configurable (not hardcoded)
+**Plans**: TBD
+
+### Phase 25: Post-Run Build Verification
+**Goal**: After all tasks finish, the orchestrator optionally runs a user-specified build command and reports whether the project builds cleanly — giving users a single-line verdict and the full error output if it fails
+**Depends on**: Phase 24
+**Requirements**: VRFY-02, VRFY-03
+**Success Criteria** (what must be TRUE):
+  1. After all tasks complete, if `build_command` is configured, the orchestrator runs it and prints "Build passed" or "Build failed" with the full stderr output
+  2. A build failure does not mark any tasks as failed — it is a post-run report only
+  3. `conductor run --build-command "npx tsc --noEmit"` passes the command through to the orchestrator and runs it after task completion
+  4. The build command can be set in `.conductor/config.json` so it persists across runs without repeating the CLI flag
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 18 → 19 → 20 → 21 → 22
+Phases execute in numeric order: 23 → 24 → 25
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -129,3 +173,6 @@ Phases execute in numeric order: 18 → 19 → 20 → 21 → 22
 | 20. Session Resumption | v1.1 | 1/1 | Complete | 2026-03-11 |
 | 21. Smart Delegation and Orchestrator Integration | v1.1 | 1/1 | Complete | 2026-03-11 |
 | 22. Sub-Agent Visibility and Escalation Bridge | v1.1 | 1/1 | Complete | 2026-03-11 |
+| 23. Resume Robustness | v1.2 | 0/? | Not started | - |
+| 24. Task Verification and Quality Loops | v1.2 | 0/? | Not started | - |
+| 25. Post-Run Build Verification | v1.2 | 0/? | Not started | - |
