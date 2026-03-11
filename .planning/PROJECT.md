@@ -12,53 +12,50 @@ A product owner describes a feature, and a self-organizing team of AI coding age
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ Orchestrator agent that plans, delegates, reviews, and gives feedback to sub-agents — v1.0
+- ✓ Sub-agents that execute coding tasks via ACP (any ACP-compatible agent) — v1.0
+- ✓ Agent identity system (name, role, target, materials per agent) — v1.0
+- ✓ Shared state file (`.conductor/state.json`) as coordination backbone — v1.0
+- ✓ Shared `.memory/` folder for cross-agent knowledge persistence — v1.0
+- ✓ Repo-inherited context — agents pick up `.claude/`, `CLAUDE.md`, project config naturally — v1.0
+- ✓ Orchestrator-as-ACP-client — receives and answers sub-agent questions — v1.0
+- ✓ Escalation logic — auto mode uses best judgment; interactive mode escalates to human — v1.0
+- ✓ Multi-level intervention — cancel/reassign, inject guidance mid-stream, pause/escalate — v1.0
+- ✓ Dynamic agent scaling — orchestrator decides team size based on work — v1.0
+- ✓ Dependency management — orchestrator identifies task dependencies, decides strategy — v1.0
+- ✓ Concurrency management — file ownership prevents conflicts — v1.0
+- ✓ Two modes: `--auto` (autonomous after spec review) and interactive (can ask human) — v1.0
+- ✓ Full session persistence — agent identities, conversations, task progress survive restarts — v1.0
+- ✓ CLI interface for chatting with orchestrator and seeing agent status — v1.0
+- ✓ Web dashboard with layered visibility, live stream, smart notifications — v1.0
+- ✓ Installable as pip package (Python core) + npm package (Node.js dashboard) — v1.0
 
 ### Active
 
-- [ ] Orchestrator agent that plans, delegates, reviews, and gives feedback to sub-agents
-- [ ] Sub-agents that execute coding tasks via ACP (any ACP-compatible agent)
-- [ ] Agent identity system (name, role, target, materials per agent)
-- [ ] Shared state file (`.conductor/state.json`) as coordination backbone — task descriptions, status, outputs, interfaces, dependencies
-- [ ] Shared `.memory/` folder for cross-agent knowledge persistence
-- [ ] Repo-inherited context — agents pick up `.claude/`, `CLAUDE.md`, project config naturally
-- [ ] Orchestrator-as-ACP-client — receives and answers sub-agent questions (GSD questions, permission prompts, clarifications)
-- [ ] Escalation logic — in `--auto` mode orchestrator uses best judgment; in interactive mode escalates to human
-- [ ] Multi-level intervention — cancel/reassign, inject guidance mid-stream, pause/escalate to human
-- [ ] Dynamic agent scaling — orchestrator decides team size based on work
-- [ ] Dependency management — orchestrator identifies task dependencies, decides strategy (sequence, stubs-first, parallel)
-- [ ] Concurrency management — orchestrator plans work to avoid file conflicts, resolves them when they happen
-- [ ] Flexible GSD scope — orchestrator decides per-task whether sub-agent needs full planning or just executes instructions
-- [ ] Two modes: `--auto` (think critically on specs upfront, then fully autonomous) and interactive (can ask human)
-- [ ] Full session persistence — agent identities, conversations, task progress, shared memory survive restarts
-- [ ] CLI interface for chatting with orchestrator and seeing agent status
-- [ ] Web dashboard (v1 core) with layered visibility — summary by default, expandable detail, live stream, smart notifications
-- [ ] Installable as pip package (Python core) + npm package (Node.js dashboard)
+- [ ] Per-task GSD scope flexibility — orchestrator decides whether sub-agent runs full planning or just executes
+- [ ] Quality review loops with structured feedback cycles (revise → re-review → approve)
+- [ ] Git worktree isolation per agent for large parallel workloads
+- [ ] CI integration — auto-fix failing builds by spawning agents
 
 ### Out of Scope
 
 - Direct agent-to-agent communication (ACP peer-to-peer) — orchestrator mediates all coordination
 - Multi-user / team collaboration features — single user controlling the orchestrator for v1
 - Mobile app — web dashboard is sufficient
-- Custom LLM provider support — ACP-compatible agents only for v1
+- Custom LLM provider support — ACP-compatible agents only
 - Billing / usage management — rely on underlying agent providers
 
 ## Context
 
-**ACP (Agent Communication Protocol):**
-ACP is a bidirectional protocol (ndjson over stdio) that enables clients to interact with AI agents. It supports streaming tool calls, permission flows, session management, and real-time monitoring. The orchestrator uses ACP to both BE a client (spawning/managing sub-agents) and BE an agent (responding to the human via CLI/dashboard). Key: `@zed-industries/claude-agent-acp` package provides the adapter between Claude Agent SDK and ACP.
+Shipped v1.0 with 10,946 LOC (8,604 Python + 2,342 TypeScript).
+Tech stack: Python core (uv, Pydantic v2, asyncio, filelock) + Node.js dashboard (React, Vite, Tailwind, Vitest).
+Distribution: `pip install conductor-ai` + `npm install -g conductor-dashboard`.
+17 phases completed across 32 plans in 2 days.
 
-**Architectural insight — ACP all the way down:**
-The human talks to the orchestrator via ACP. The orchestrator talks to sub-agents via ACP. This means the orchestrator can watch sub-agent tool calls in real-time, see file edits as they happen, and intervene at any point. The same protocol powers both layers.
-
-**Shared state model:**
-`.conductor/state.json` is the single source of truth for coordination. Orchestrator writes task assignments and resolves conflicts. Sub-agents write their own status updates and outputs. All agents can read the full state to understand the team's work.
-
-**Orchestration intelligence:**
-The orchestrator gets its planning/review/delegation intelligence from installed skills and workflows (similar to how GSD skills teach Claude Code project management). These skills define how to break work down, assign roles, review output, and manage dependencies.
-
-**UX challenge:**
-Agent conversations are extremely verbose. The dashboard must handle this with layered visibility: collapsed status summaries by default, expandable to see detail, with smart notifications for events (errors, completions, intervention needs). Avoid raw conversation dumps.
+Known tech debt:
+- `get_server_info()` wrapped in broad `except Exception` — session_id persistence silently fails
+- Human verification needed for clean-environment installs (pip/npm/docs walkthrough)
+- ~10 SUMMARY frontmatter missing `requirements_completed` fields
 
 ## Constraints
 
@@ -71,13 +68,15 @@ Agent conversations are extremely verbose. The dashboard must handle this with l
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Orchestrator is a Claude Code agent via ACP | Reuses existing agent capabilities; same protocol for both layers; orchestrator can use all Claude Code tools | — Pending |
-| Shared state file over direct agent messaging | Simpler coordination model; file system is durable; all agents can read asynchronously; avoids complex message routing | — Pending |
-| Python core + Node.js dashboard monorepo | Python for orchestration logic and ACP bindings; Node.js for reactive web UI; each package plays to language strengths | — Pending |
-| Layered visibility over raw logs | Solves the verbosity UX problem; summary → detail → live stream prevents information overload | — Pending |
-| Mode-dependent escalation | `--auto` keeps flow moving (best judgment + logging); interactive respects human oversight; matches different use cases | — Pending |
-| Flexible GSD scope per sub-agent | Simple tasks don't need full planning overhead; complex tasks benefit from sub-agent reasoning; orchestrator judges | — Pending |
-| Web dashboard as v1 core | Multi-agent visibility requires more than CLI; seeing parallel agent activity needs spatial layout | — Pending |
+| Orchestrator is a Claude Code agent via ACP | Reuses existing agent capabilities; same protocol for both layers | ✓ Good — clean two-layer ACP architecture |
+| Shared state file over direct agent messaging | Simpler coordination model; file system is durable; avoids complex message routing | ✓ Good — filelock prevents corruption |
+| Python core + Node.js dashboard monorepo | Python for orchestration logic; Node.js for reactive web UI | ✓ Good — each language plays to strengths |
+| Layered visibility over raw logs | summary → detail → live stream prevents information overload | ✓ Good — dashboard UX is clean |
+| Mode-dependent escalation | `--auto` keeps flow; interactive respects human oversight | ✓ Good — both modes work |
+| Web dashboard as v1 core | Multi-agent visibility requires spatial layout beyond CLI | ✓ Good — dashboard adds real value |
+| StrEnum + ConfigDict for JSON serialization | Clean enum values in state.json without repr leaking | ✓ Good — no serialization issues |
+| asyncio.wait(FIRST_COMPLETED) for spawn loop | Ready tasks unblock as dependencies complete without waiting for whole wave | ✓ Good — efficient parallelism |
+| Watch parent directory for state changes | watchfiles misses atomic os.replace inode swaps on direct file watch | ✓ Good — solved production bug |
 
 ---
-*Last updated: 2025-03-10 after initialization*
+*Last updated: 2026-03-11 after v1.0 milestone*
