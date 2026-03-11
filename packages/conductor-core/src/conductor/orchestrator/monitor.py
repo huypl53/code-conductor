@@ -1,6 +1,10 @@
 """StreamMonitor — processes streaming messages from a sub-agent session."""
 from __future__ import annotations
 
+import json
+import logging
+import re
+
 from claude_agent_sdk import (  # noqa: F401
     AssistantMessage,
     ResultMessage,
@@ -11,6 +15,49 @@ from claude_agent_sdk.types import (
     TaskProgressMessage,
     ToolUseBlock,
 )
+
+from conductor.orchestrator.models import AgentReport
+
+logger = logging.getLogger("conductor.orchestrator")
+
+# Regex to match a fenced ```json ... ``` block (non-greedy, DOTALL)
+_FENCED_JSON_RE = re.compile(r"```json\s*\n(.*?)\n```", re.DOTALL)
+
+
+def parse_agent_report(text: str) -> AgentReport | None:
+    """Extract a structured AgentReport from agent output text.
+
+    Searches for a fenced ```json ... ``` block containing a valid AgentReport
+    JSON object. Returns None on any failure (no block found, parse error,
+    validation error) so that callers can fall back to freeform behavior.
+
+    Args:
+        text: The full result text from a sub-agent session.
+
+    Returns:
+        An :class:`AgentReport` if a valid JSON status block is found,
+        or ``None`` for freeform fallback.
+    """
+    if not text:
+        return None
+
+    # Try fenced JSON block first
+    match = _FENCED_JSON_RE.search(text)
+    if match:
+        json_str = match.group(1).strip()
+        try:
+            data = json.loads(json_str)
+        except json.JSONDecodeError:
+            return None
+        # Must have a "status" key to be an AgentReport
+        if not isinstance(data, dict) or "status" not in data:
+            return None
+        try:
+            return AgentReport.model_validate(data)
+        except Exception:  # noqa: BLE001
+            return None
+
+    return None
 
 
 class StreamMonitor:

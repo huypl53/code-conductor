@@ -66,6 +66,24 @@ class ModelProfile(BaseModel):
         )
 
 
+class AgentReportStatus(StrEnum):
+    """Status values an agent can report at the end of its work."""
+
+    DONE = "DONE"
+    DONE_WITH_CONCERNS = "DONE_WITH_CONCERNS"
+    BLOCKED = "BLOCKED"
+    NEEDS_CONTEXT = "NEEDS_CONTEXT"
+
+
+class AgentReport(BaseModel):
+    """Structured status report emitted by an agent at end of task execution."""
+
+    status: AgentReportStatus
+    summary: str
+    files_changed: list[str] = Field(default_factory=list)
+    concerns: list[str] = Field(default_factory=list)
+
+
 class TaskSpec(BaseModel):
     """Specification for a single agent task produced by decomposition."""
 
