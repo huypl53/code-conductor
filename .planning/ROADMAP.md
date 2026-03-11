@@ -247,5 +247,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 10. Dashboard Frontend | 3/3 | Complete    | 2026-03-10 |
 | 11. Packaging and Distribution | 2/2 | Complete    | 2026-03-10 |
 | 12. Fix CLI Cancel/Redirect Signatures | 1/1 | Complete    | 2026-03-11 |
-| 13. Wire Escalation Router + Pause Surface | 2/2 | Complete   | 2026-03-11 |
+| 13. Wire Escalation Router + Pause Surface | 2/2 | Complete    | 2026-03-11 |
 | 14. Fix Getting-Started Guide .env Claim | 0/0 | Pending | |
