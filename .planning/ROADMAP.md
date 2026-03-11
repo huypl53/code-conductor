@@ -290,4 +290,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 14. Fix Getting-Started Guide .env Claim | 1/1 | Complete    | 2026-03-11 |
 | 15. Fix Dashboard Server Cancel Type Mismatch | 1/1 | Complete    | 2026-03-11 |
 | 16. Fix Agent Status Lifecycle | 1/1 | Complete    | 2026-03-11 |
-| 17. Fix Production WebSocket URL | 1/1 | Complete   | 2026-03-11 |
+| 17. Fix Production WebSocket URL | 1/1 | Complete    | 2026-03-11 |
