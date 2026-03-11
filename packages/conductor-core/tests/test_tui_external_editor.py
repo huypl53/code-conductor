@@ -66,13 +66,13 @@ async def test_ctrl_g_noop_during_replay():
         # Import and call action_open_editor directly -- it should bail immediately
         from conductor.tui.app import ConductorApp
 
-        with patch("subprocess.run") as mock_run:
+        with patch("os.system") as mock_system:
             # Bind the action method to our app instance
             ConductorApp.action_open_editor(app)
             await pilot.pause()
             await pilot.pause()
             await pilot.pause()
-            mock_run.assert_not_called()
+            mock_system.assert_not_called()
 
         assert len(app.editor_messages) == 0, "No EditorContentReady should be posted during replay"
 
@@ -161,11 +161,18 @@ async def test_editor_flow_with_mock_subprocess():
     def noop_suspend():
         yield
 
-    def mock_subprocess_run(cmd, **kwargs):
+    # Track the tmp_path so mock_system can write to it
+    captured_paths = []
+
+    def mock_os_system(cmd_str):
         """Write 'edited content' into the temp file the editor received."""
-        tmp_path = cmd[1]  # [editor, tmp_path]
+        import shlex
+        parts = shlex.split(cmd_str)
+        tmp_path = parts[-1]  # last arg is the file path
+        captured_paths.append(tmp_path)
         with open(tmp_path, "w") as f:
             f.write("edited content\n")
+        return 0
 
     class EditorFlowApp(App):
         BINDINGS = []
@@ -181,7 +188,7 @@ async def test_editor_flow_with_mock_subprocess():
 
         with (
             patch.object(app, "suspend", side_effect=noop_suspend),
-            patch("subprocess.run", side_effect=mock_subprocess_run),
+            patch("os.system", side_effect=mock_os_system),
             patch.dict(os.environ, {"VISUAL": "mock-editor"}, clear=False),
         ):
             ConductorApp.action_open_editor(app)

@@ -428,15 +428,15 @@ class ConductorApp(App):
         task.add_done_callback(self._background_tasks.discard)
         return task
 
-    @work(thread=True, exit_on_error=False)
     def action_open_editor(self) -> None:
         """Open current input content in $VISUAL/$EDITOR (vim fallback).
 
-        Uses App.suspend() to hand the terminal to the editor. Must be a
-        synchronous def with @work(thread=True) -- async + asyncio subprocess
-        cannot give vim terminal control (leaves terminal in raw mode).
+        Plain sync action (no @work) so suspend() runs on the main thread.
+        Textual's suspend() calls signal.signal() internally which only works
+        from the main thread — @work(thread=True) silently breaks it.
+        Uses os.system() per Textual's own docs example for editor launch.
         """
-        import subprocess
+        import shlex
         import tempfile
         from textual.app import SuspendNotSupported
         from textual.widgets import Input
@@ -468,28 +468,19 @@ class ConductorApp(App):
 
         try:
             try:
-                with self.app.suspend():
-                    import sys
-                    subprocess.run(
-                        [editor, tmp_path],
-                        stdin=sys.stdin,
-                        stdout=sys.stdout,
-                        stderr=sys.stderr,
-                        check=False,
-                    )
+                with self.suspend():
+                    os.system(f"{shlex.quote(editor)} {shlex.quote(tmp_path)}")
                     # Read INSIDE suspend block -- documented safe pattern
                     with open(tmp_path) as fh:
                         edited_text = fh.read()
             except SuspendNotSupported:
-                self.app.call_from_thread(
-                    self.app.notify,
+                self.notify(
                     "External editor not supported in this environment",
                     severity="warning",
                 )
                 return
             except (FileNotFoundError, OSError):
-                self.app.call_from_thread(
-                    self.app.notify,
+                self.notify(
                     f"Editor not found: {editor}",
                     severity="warning",
                 )
@@ -504,9 +495,7 @@ class ConductorApp(App):
         # Post message if content changed or is non-empty
         if stripped != current_text or stripped:
             cmd_widget = self.query_one(CommandInput)
-            self.app.call_from_thread(
-                cmd_widget.post_message, EditorContentReady(stripped)
-            )
+            cmd_widget.post_message(EditorContentReady(stripped))
 
     async def action_quit(self) -> None:
         """Clean exit -- cancels background tasks, disconnects SDK, then exits."""
