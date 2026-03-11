@@ -95,7 +95,7 @@ export interface DeltaEvent {
 
 /** Intervention commands sent from dashboard to backend over WebSocket. */
 export interface InterventionCommand {
-  action: "cancel" | "redirect" | "feedback";
+  action: "cancel" | "redirect" | "feedback" | "pause";
   agent_id: string;
   message?: string;
 }

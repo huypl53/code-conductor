@@ -12,7 +12,7 @@ interface InterventionPanelProps {
   onIntervene: (command: InterventionCommand) => void;
 }
 
-type ActiveInput = "feedback" | "redirect" | null;
+type ActiveInput = "feedback" | "redirect" | "pause" | null;
 
 export function InterventionPanel({ agentId, onIntervene }: InterventionPanelProps) {
   const [activeInput, setActiveInput] = useState<ActiveInput>(null);
@@ -22,7 +22,7 @@ export function InterventionPanel({ agentId, onIntervene }: InterventionPanelPro
     onIntervene({ action: "cancel", agent_id: agentId });
   }
 
-  function handleToggle(type: "feedback" | "redirect") {
+  function handleToggle(type: "feedback" | "redirect" | "pause") {
     if (activeInput === type) {
       setActiveInput(null);
       setMessage("");
@@ -71,6 +71,17 @@ export function InterventionPanel({ agentId, onIntervene }: InterventionPanelPro
         >
           Redirect
         </button>
+        <button
+          type="button"
+          onClick={() => handleToggle("pause")}
+          className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+            activeInput === "pause"
+              ? "bg-purple-600 text-white"
+              : "bg-purple-100 text-purple-700 hover:bg-purple-200"
+          }`}
+        >
+          Pause
+        </button>
       </div>
 
       {activeInput !== null && (
@@ -82,7 +93,9 @@ export function InterventionPanel({ agentId, onIntervene }: InterventionPanelPro
             placeholder={
               activeInput === "feedback"
                 ? "Send feedback to agent..."
-                : "New instructions for agent..."
+                : activeInput === "redirect"
+                ? "New instructions for agent..."
+                : "Question for the human..."
             }
             onKeyDown={(e) => {
               if (e.key === "Enter" && message.trim()) handleSend();
