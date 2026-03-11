@@ -42,19 +42,20 @@ conductor --help
 
 Conductor reads your Anthropic API key from the environment. Set it before running any session.
 
-**Option 1: Export in your shell**
+**Option 1: Export in your shell (current session only)**
 
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
-**Option 2: Use a `.env` file in your project root**
+**Option 2: Add to your shell profile (persistent across sessions)**
 
-```
-ANTHROPIC_API_KEY=sk-ant-...
-```
+Add the export to your `~/.bashrc` or `~/.zshrc`:
 
-Conductor automatically reads `.env` files in the working directory.
+```bash
+echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.bashrc
+source ~/.bashrc
+```
 
 ---
 
@@ -184,7 +185,7 @@ Conductor could not find your API key. Set it in your shell:
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
-Or add it to a `.env` file in your project root. Verify with:
+You can also add it permanently to your shell profile (`~/.bashrc` or `~/.zshrc`). Verify with:
 
 ```bash
 echo $ANTHROPIC_API_KEY
