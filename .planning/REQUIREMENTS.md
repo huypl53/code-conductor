@@ -12,7 +12,7 @@ Requirements for the Agent Visibility milestone. Each maps to roadmap phases.
 - [ ] **ACELL-01**: User sees a labeled AgentCell in the transcript when a sub-agent starts working, showing agent name, role, and task title
 - [ ] **ACELL-02**: AgentCell updates in real-time as state.json changes (status transitions: working → waiting → done)
 - [ ] **ACELL-03**: When an agent completes, its AgentCell shows a completion summary with final status
-- [ ] **ACELL-04**: Multiple concurrent AgentCells render independently without interfering with each other
+- [x] **ACELL-04**: Multiple concurrent AgentCells render independently without interfering with each other
 
 ### Orchestrator Status
 
@@ -63,7 +63,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ACELL-01 | Phase 44 | Pending |
 | ACELL-02 | Phase 44 | Pending |
 | ACELL-03 | Phase 44 | Pending |
-| ACELL-04 | Phase 43 | Pending |
+| ACELL-04 | Phase 43 | Complete |
 | ORCH-01 | Phase 45 | Pending |
 | ORCH-02 | Phase 45 | Pending |
 | STRM-01 | Phase 45 | Pending |

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Agent Visibility
-status: ready_to_plan
-stopped_at: Roadmap created — ready to plan Phase 43
-last_updated: "2026-03-12"
+status: planning
+stopped_at: Completed 43-01-PLAN.md
+last_updated: "2026-03-11T18:53:34.951Z"
 last_activity: 2026-03-12 — v2.2 roadmap created (phases 43-46)
 progress:
   total_phases: 4
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
   percent: 0
 ---
 
@@ -51,6 +51,8 @@ Prior milestones: 42 phases shipped across v1.0–v2.1 (6 milestones, 2 days)
 - [v2.2 research]: Sub-agent live token streaming is out of scope — state.json snapshots only
 - [v2.2 research]: _agent_cells dict from Phase 44 start — single _active_cell cannot track N concurrent agents
 - [v2.2 research]: Use post_message not await mount inside stream loop — avoids blocking SDK async generator
+- [Phase 43]: AgentCell uses acell- prefix (not agent-) to avoid collision with agent_monitor.py DOM IDs
+- [Phase 43]: Static.content is the Textual 8.x API for reading widget text (not .renderable)
 
 ### Pending Todos
 
@@ -64,6 +66,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-12
-Stopped at: Roadmap created for v2.2 Agent Visibility (phases 43-46). Ready to plan Phase 43.
+Last session: 2026-03-11T18:53:34.949Z
+Stopped at: Completed 43-01-PLAN.md
 Resume file: None
