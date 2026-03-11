@@ -132,7 +132,9 @@ Plans:
   3. Each expansion includes a task-specific `expansion_prompt` that guides the sub-task decomposition
   4. Low-complexity tasks (score <= 5) pass through unchanged
   5. The expanded task plan maintains correct dependency relationships
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 30-01-PLAN.md — Complexity scoring, selective expansion, dependency rewiring
 
 
 
@@ -262,4 +264,4 @@ Phases execute in numeric order: 26 → 27 → 28 → 29 → 30 (Phase 30 can ru
 | 27. Execution & Routing Pipeline | v1.3 | 0/1 | Pending | - |
 | 28. Agent Communication Protocol | v1.3 | 0/1 | Pending | - |
 | 29. Verification & Review Pipeline | v1.3 | 0/2 | Pending | - |
-| 30. Smart Decomposition | v1.3 | 0/0 | Pending | - |
+| 30. Smart Decomposition | v1.3 | 0/1 | Pending | - |
