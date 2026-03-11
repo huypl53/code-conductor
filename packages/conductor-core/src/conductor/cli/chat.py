@@ -165,11 +165,13 @@ class ChatSession:
         self._context_tracker = ContextTracker()
 
         # Delegation manager (Phase 21: DELG-01..04, SESS-03)
+        # Phase 22: Wire escalation input via prompt_toolkit prompt_async
         from conductor.cli.delegation import DelegationManager
 
         self._delegation_manager = DelegationManager(
             console=self._console,
             repo_path=self._cwd,
+            input_fn=self._escalation_input,
         )
 
         # Chat history persistence (SESS-05 / SESS-04)
@@ -552,6 +554,16 @@ class ChatSession:
         self._console.print()
         self._console.print("[dim]--- End of history ---[/dim]")
         self._console.print()
+
+    # -- Phase 22: escalation input ----------------------------------------
+
+    async def _escalation_input(self, prompt_text: str = "  Reply> ") -> str:
+        """Collect user input for a sub-agent escalation question.
+
+        Uses the prompt_toolkit PromptSession to collect input asynchronously,
+        which works correctly within the patch_stdout() context.
+        """
+        return await self._prompt_session.prompt_async(prompt_text)
 
     # -- helpers ------------------------------------------------------------
 
