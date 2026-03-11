@@ -343,6 +343,7 @@ class TranscriptPane(VerticalScroll):
     def __init__(self, *, resume_mode: bool = False, **kwargs: object) -> None:
         super().__init__(**kwargs)
         self._resume_mode = resume_mode
+        self._agent_cells: dict[str, "AgentCell"] = {}
 
     def on_mount(self) -> None:
         """Mount a welcome cell so the pane is not blank on first launch."""
@@ -382,3 +383,32 @@ class TranscriptPane(VerticalScroll):
         await self.mount(cell)
         self.scroll_end(animate=False)  # always scroll when stream starts
         return cell
+
+    async def on_agent_state_updated(self, event: "AgentStateUpdated") -> None:
+        """Handle AgentStateUpdated: mount/update/finalize AgentCells in transcript."""
+        from conductor.state.models import AgentStatus
+
+        state = event.state
+        tasks = {t.assigned_agent: t for t in state.tasks if t.assigned_agent}
+
+        for agent in state.agents:
+            task = tasks.get(agent.id)
+            task_title = task.title if task else "(unknown task)"
+
+            if agent.id not in self._agent_cells:
+                if agent.status == AgentStatus.WORKING:
+                    cell = AgentCell(
+                        agent_id=agent.id,
+                        agent_name=agent.name,
+                        role=agent.role,
+                        task_title=task_title,
+                    )
+                    self._agent_cells[agent.id] = cell  # register BEFORE mount (pitfall)
+                    await self.mount(cell)
+                    self._maybe_scroll_end()
+            else:
+                cell = self._agent_cells[agent.id]
+                if agent.status == AgentStatus.DONE:
+                    cell.finalize()
+                else:
+                    cell.update_status(str(agent.status))

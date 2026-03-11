@@ -163,6 +163,19 @@ class ConductorApp(App):
                 f"Unknown command: `{cmd}`. Type `/help` for available commands."
             )
 
+    def on_agent_state_updated(self, event: "AgentStateUpdated") -> None:
+        """Fan-out: forward agent state to TranscriptPane (BRDG-01).
+
+        Does NOT call event.stop() so AgentMonitorPane still receives the event.
+        """
+        from conductor.tui.widgets.transcript import TranscriptPane
+        from conductor.tui.messages import AgentStateUpdated
+        try:
+            pane = self.query_one(TranscriptPane)
+            pane.post_message(AgentStateUpdated(event.state))
+        except Exception:
+            pass
+
     def on_stream_done(self, event: "StreamDone") -> None:
         """Re-enable CommandInput and restore focus after streaming completes."""
         from conductor.tui.widgets.command_input import CommandInput
