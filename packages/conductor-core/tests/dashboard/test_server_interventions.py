@@ -56,9 +56,7 @@ def test_ws_cancel_action_calls_cancel_agent(tmp_path: Path) -> None:
             # Send cancel command
             ws.send_text(json.dumps({"action": "cancel", "agent_id": "a1"}))
 
-    mock_orch.cancel_agent.assert_called_once()
-    call_args = mock_orch.cancel_agent.call_args
-    assert call_args[0][0] == "a1"
+    mock_orch.cancel_agent.assert_awaited_once_with("a1")
 
 
 # ---------------------------------------------------------------------------
@@ -112,12 +110,7 @@ def test_ws_redirect_action_calls_cancel_agent_with_new_spec(tmp_path: Path) -> 
                 )
             )
 
-    mock_orch.cancel_agent.assert_called_once()
-    call_args = mock_orch.cancel_agent.call_args
-    agent_id = call_args[0][0]
-    task_spec = call_args[0][1]
-    assert agent_id == "a1"
-    assert "new instructions here" in task_spec.description
+    mock_orch.cancel_agent.assert_awaited_once_with("a1", new_instructions="new instructions here")
 
 
 # ---------------------------------------------------------------------------
