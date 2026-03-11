@@ -17,7 +17,7 @@ Requirements for the Textual TUI Redesign milestone. Each maps to roadmap phases
 ### Transcript & Streaming
 
 - [ ] **TRNS-01**: User sees a scrollable cell-based conversation transcript with distinct user and assistant cells
-- [ ] **TRNS-02**: Assistant responses stream token-by-token into the active cell with a working/thinking indicator before first token
+- [x] **TRNS-02**: Assistant responses stream token-by-token into the active cell with a working/thinking indicator before first token
 - [ ] **TRNS-03**: Code blocks in responses render with syntax highlighting
 - [ ] **TRNS-04**: Markdown in responses renders with proper formatting (headings, bold, links, lists, blockquotes)
 - [ ] **TRNS-05**: File diffs render with syntax-highlighted additions/deletions
@@ -38,7 +38,7 @@ Requirements for the Textual TUI Redesign milestone. Each maps to roadmap phases
 
 ### Status & Polish
 
-- [ ] **STAT-01**: A status footer displays current model, mode, token usage, and session info
+- [x] **STAT-01**: A status footer displays current model, mode, token usage, and session info
 - [ ] **STAT-02**: In-progress cells show a shimmer/spinner animation
 - [ ] **STAT-03**: Resumed sessions replay previous conversation history in the transcript before the input activates
 
@@ -117,8 +117,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TUIF-03 | Phase 31 | Complete |
 | TUIF-04 | Phase 31 | Complete |
 | TRNS-01 | Phase 32 | Pending |
-| TRNS-02 | Phase 33 | Pending |
-| STAT-01 | Phase 33 | Pending |
+| TRNS-02 | Phase 33 | Complete |
+| STAT-01 | Phase 33 | Complete |
 | TRNS-03 | Phase 34 | Pending |
 | TRNS-04 | Phase 34 | Pending |
 | TRNS-05 | Phase 34 | Pending |

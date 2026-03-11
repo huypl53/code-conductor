@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Textual TUI Redesign
-status: in_progress
-stopped_at: "Completed 32-01-PLAN.md"
-last_updated: "2026-03-11"
-last_activity: "2026-03-11 — Phase 32 Static TUI Shell complete"
+status: executing
+stopped_at: "Completed 33-01-PLAN.md"
+last_updated: "2026-03-11T14:04:17Z"
+last_activity: "2026-03-11 — Phase 33 Plan 01 Streaming Widget Lifecycle complete (5 new tests, 599 total)"
 progress:
-  total_phases: 8
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
+  total_phases: 13
+  completed_phases: 5
+  total_plans: 8
+  completed_plans: 9
   percent: 25
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-03-11)
 
 ## Current Position
 
-Phase: 32 of 38 (Static TUI Shell) — COMPLETE
-Plan: 1 of 1
-Status: In progress (Phase 32 complete, Phase 33 next)
-Last activity: 2026-03-11 — Phase 32 Static TUI Shell complete (9 new tests, 594 total)
+Phase: 33 of 38 (SDK Streaming)
+Plan: 1 of 2
+Status: In progress (Plan 01 complete, Plan 02 next)
+Last activity: 2026-03-11 — Phase 33 Plan 01 Streaming Widget Lifecycle complete (5 new tests, 599 total)
 
 Progress: [██░░░░░░░░] 25%
 
@@ -50,6 +50,9 @@ Progress: [██░░░░░░░░] 25%
 - [Phase 32]: Textual routes messages by Message class name (on_user_submitted), not widget namespace (on_command_input_user_submitted)
 - [Phase 32]: Lazy imports inside compose() and handlers to avoid circular dependencies and keep tui.app import lightweight
 - [Phase 32]: Each widget owns its styling via DEFAULT_CSS class variable — conductor.tcss only handles Screen and container layout
+- [Phase 33]: MarkdownStream.write() is correct API (not append()); resolves research flag concern
+- [Phase 33]: StatusFooter uses reactive attributes + on_tokens_updated handler (hybrid: bus-consistent + auto-repaint)
+- [Phase 33]: Textual messages bubble UP not DOWN; post_message to specific widget for targeted delivery
 
 ### Pending Todos
 
@@ -57,7 +60,7 @@ None.
 
 ### Blockers/Concerns
 
-- [Phase 33 research flag]: MarkdownStream API (Textual v4) needs verification against actual release notes before coding — `Markdown.get_stream()` / `await stream.append(chunk)` may differ
+- [Phase 33 research flag]: RESOLVED — MarkdownStream API confirmed: `Markdown.get_stream()` + `stream.write()` (not `append()`). Verified in Textual 8.1.1 and passing tests.
 - [Phase 36 research flag]: asyncio.Queue bridge from DelegationManager._escalation_listener to push_screen_wait() has no direct Textual docs precedent — prototype before building full modal stack
 - [Phase 31 audit item]: Claude Agent SDK subprocess may write to inherited terminal stdout, bypassing Textual renderer — audit with test delegation run in Phase 35
 
@@ -70,5 +73,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Completed 32-01-PLAN.md
+Stopped at: Completed 33-01-PLAN.md
 Resume file: None
