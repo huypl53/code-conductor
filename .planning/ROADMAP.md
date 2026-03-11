@@ -175,7 +175,9 @@ Plans:
   3. The CommandInput widget at the bottom accepts text input and clears after submission
   4. A status footer bar is visible at the bottom of the screen (structural, not yet live-wired)
   5. An agent monitor panel area is visible on the right side (placeholder, not yet reactive)
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 32-01-PLAN.md — TranscriptPane, UserCell/AssistantCell, CommandInput, StatusFooter, AgentMonitorPane placeholder
 
 ### Phase 33: SDK Streaming
 **Goal**: Users see real Claude responses streaming token-by-token into the active transcript cell with a thinking indicator before the first token arrives, and the status footer displays live token counts
