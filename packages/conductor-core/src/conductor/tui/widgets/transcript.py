@@ -228,12 +228,18 @@ class AgentCell(Widget):
         if new_status != "working":
             self._stop_shimmer()
 
-    def finalize(self) -> None:
-        """Mark cell as complete — idempotent, safe to call before or after mount."""
+    def finalize(self, summary: str = "") -> None:
+        """Mark cell as complete — idempotent, safe to call before or after mount.
+
+        Args:
+            summary: Optional task summary text. When provided, cell-status shows
+                     "done — {summary}". When empty, shows just "done".
+        """
         self._stop_shimmer()
         self._status = "done"
+        status_text = f"done \u2014 {summary}" if summary else "done"
         try:
-            self.query_one(".cell-status", Static).update("done")
+            self.query_one(".cell-status", Static).update(status_text)
         except Exception:
             pass
 
@@ -426,6 +432,9 @@ class TranscriptPane(VerticalScroll):
             else:
                 cell = self._agent_cells[agent.id]
                 if agent.status == AgentStatus.DONE:
-                    cell.finalize()
+                    summary = ""
+                    if task is not None and isinstance(task.outputs, dict):
+                        summary = task.outputs.get("summary", "")
+                    cell.finalize(summary=summary)
                 else:
                     cell.update_status(str(agent.status))
