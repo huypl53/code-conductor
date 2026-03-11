@@ -62,3 +62,11 @@ class UserSubmitted(Message):
     def __init__(self, text: str) -> None:
         self.text = text
         super().__init__()
+
+
+class AgentStateUpdated(Message):
+    """State watcher detected a change in state.json."""
+
+    def __init__(self, state: "ConductorState") -> None:
+        self.state = state
+        super().__init__()
