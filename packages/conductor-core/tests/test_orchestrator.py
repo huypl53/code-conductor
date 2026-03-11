@@ -2135,3 +2135,87 @@ class TestResumeScheduler:
             await orch.resume()
 
         mock_loop.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# RESM-01 tests: review_only exception fallback in _run_agent_loop
+# ---------------------------------------------------------------------------
+
+
+class TestReviewOnlyFallback:
+    """RESM-01: When review_output raises during review_only, fall back to APPROVED."""
+
+    @pytest.mark.asyncio
+    async def test_review_only_exception_does_not_crash(self, tmp_path):
+        """When review_output raises RuntimeError during review_only, _run_agent_loop
+        completes normally without re-raising the exception."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        task_spec = _make_task_spec("t-resm-01", "src/resm.py")
+        sem = asyncio.Semaphore(2)
+        state_mgr = _make_state_manager()
+
+        with patch(f"{_ORCH}.review_output", side_effect=RuntimeError("review boom")):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            # Must NOT raise
+            await orch._run_agent_loop(task_spec, sem, review_only=True)
+
+    @pytest.mark.asyncio
+    async def test_review_only_exception_logs_warning(self, tmp_path, caplog):
+        """When review_output raises ValueError during review_only, a WARNING log
+        is emitted containing 'approving best-effort'."""
+        import logging
+
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        task_spec = _make_task_spec("t-resm-01", "src/resm.py")
+        sem = asyncio.Semaphore(2)
+        state_mgr = _make_state_manager()
+
+        with (
+            patch(f"{_ORCH}.review_output", side_effect=ValueError("bad review")),
+            caplog.at_level(logging.WARNING, logger="conductor.orchestrator"),
+        ):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            await orch._run_agent_loop(task_spec, sem, review_only=True)
+
+        assert any(
+            "approving best-effort" in record.message
+            for record in caplog.records
+        ), f"Expected 'approving best-effort' in log. Records: {[r.message for r in caplog.records]}"
+
+    @pytest.mark.asyncio
+    async def test_review_only_exception_sets_approved_state(self, tmp_path):
+        """When review_output raises RuntimeError during review_only, the final state
+        mutation marks the task COMPLETED with review_status='approved'."""
+        from conductor.orchestrator.orchestrator import Orchestrator
+
+        task_spec = _make_task_spec("t-resm-01", "src/resm.py")
+        sem = asyncio.Semaphore(2)
+        state_mgr = _make_state_manager()
+
+        completed_tasks: list[tuple[str, str]] = []  # (id, review_status)
+
+        def _track_mutate(fn):
+            from conductor.state.models import ConductorState, Task
+            dummy = ConductorState(
+                tasks=[Task(id="t-resm-01", title="T", description="D")]
+            )
+            fn(dummy)
+            for task in dummy.tasks:
+                if task.status == "completed":
+                    completed_tasks.append((task.id, task.review_status))
+            return None
+
+        state_mgr.mutate = _track_mutate
+
+        with patch(f"{_ORCH}.review_output", side_effect=RuntimeError("review boom")):
+            orch = Orchestrator(state_manager=state_mgr, repo_path=str(tmp_path))
+            await orch._run_agent_loop(task_spec, sem, review_only=True)
+
+        assert completed_tasks, "No COMPLETED mutation observed"
+        task_id, review_status = completed_tasks[-1]
+        assert task_id == "t-resm-01"
+        assert review_status == "approved", (
+            f"Expected review_status='approved', got '{review_status}'"
+        )
