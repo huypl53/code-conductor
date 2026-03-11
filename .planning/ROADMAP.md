@@ -248,7 +248,10 @@ Plans:
   5. `conductor run "..."` batch mode still works without launching the TUI
 **Plans**: 1 plan
 Plans:
-- [ ] 35-01-PLAN.md — AgentPanel, AgentMonitorPane StateWatchWorker, and tests
+- [ ] 37-01-PLAN.md — SlashAutocomplete widget, slash command dispatch, dashboard coexistence wiring
+
+
+
 
 ### Phase 38: Session Persistence & Polish
 **Goal**: Resumed sessions replay conversation history before input activates, in-progress cells show shimmer animation, and all v2.0 polish is complete — the TUI delivers a terminal experience credibly better than the prompt_toolkit baseline
@@ -306,5 +309,5 @@ Phases execute in numeric order: 31 → 32 → 33 → 34 → 35 → 36 → 37 �
 | 34. Rich Output | 1/1 | Complete   | 2026-03-11 | - |
 | 35. Agent Monitoring | v2.0 | 0/1 | In Progress | - |
 | 36. Approval Modals | v2.0 | 0/2 | Not started | - |
-| 37. Slash Commands & Dashboard Coexistence | v2.0 | 0/TBD | Not started | - |
+| 37. Slash Commands & Dashboard Coexistence | v2.0 | 0/1 | Not started | - |
 | 38. Session Persistence & Polish | v2.0 | 0/TBD | Not started | - |
