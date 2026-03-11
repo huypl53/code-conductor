@@ -15,15 +15,15 @@ Requirements for the Orchestrator Intelligence milestone. Each maps to roadmap p
 
 ### Execution Pipeline
 
-- [ ] **WAVE-01**: Orchestrator executes tasks in pre-computed waves — all tasks in a wave spawn concurrently, next wave starts when current completes
-- [ ] **ROUTE-01**: ACPClient accepts model selection parameter; orchestrator routes model per role using active ModelProfile
-- [ ] **LEAN-01**: Agent system prompts pass file paths only (not content), letting agents read their own context for fresh 200k windows
+- [x] **WAVE-01**: Orchestrator executes tasks in pre-computed waves — all tasks in a wave spawn concurrently, next wave starts when current completes
+- [x] **ROUTE-01**: ACPClient accepts model selection parameter; orchestrator routes model per role using active ModelProfile
+- [x] **LEAN-01**: Agent system prompts pass file paths only (not content), letting agents read their own context for fresh 200k windows
 
 ### Agent Communication
 
-- [ ] **STAT-01**: Agents report structured `AgentReport` with status enum (DONE, DONE_WITH_CONCERNS, BLOCKED, NEEDS_CONTEXT), files_changed list, and concerns
-- [ ] **STAT-02**: Orchestrator routes based on agent status — DONE proceeds to review, BLOCKED retries with more context or escalates, NEEDS_CONTEXT provides additional info
-- [ ] **DEVN-01**: Agent system prompts include deviation classification rules (auto-fix bugs/missing-critical, escalate architectural changes)
+- [x] **STAT-01**: Agents report structured `AgentReport` with status enum (DONE, DONE_WITH_CONCERNS, BLOCKED, NEEDS_CONTEXT), files_changed list, and concerns
+- [x] **STAT-02**: Orchestrator routes based on agent status — DONE proceeds to review, BLOCKED retries with more context or escalates, NEEDS_CONTEXT provides additional info
+- [x] **DEVN-01**: Agent system prompts include deviation classification rules (auto-fix bugs/missing-critical, escalate architectural changes)
 
 ### Verification Pipeline
 
@@ -70,12 +70,12 @@ All 19 requirements delivered. See `.planning/milestones/v1.1-REQUIREMENTS.md`.
 | INFRA-01 | Phase 26 | Complete |
 | INFRA-02 | Phase 26 | Complete |
 | MODEL-01 | Phase 26 | Complete |
-| WAVE-01 | Phase 27 | Pending |
-| ROUTE-01 | Phase 27 | Pending |
-| LEAN-01 | Phase 27 | Pending |
-| STAT-01 | Phase 28 | Pending |
-| STAT-02 | Phase 28 | Pending |
-| DEVN-01 | Phase 28 | Pending |
+| WAVE-01 | Phase 27 | Complete |
+| ROUTE-01 | Phase 27 | Complete |
+| LEAN-01 | Phase 27 | Complete |
+| STAT-01 | Phase 28 | Complete |
+| STAT-02 | Phase 28 | Complete |
+| DEVN-01 | Phase 28 | Complete |
 | VERI-01 | Phase 29 | Pending |
 | VERI-02 | Phase 29 | Pending |
 | RVEW-01 | Phase 29 | Pending |

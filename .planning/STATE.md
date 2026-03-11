@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Task Verification & Build Safety
 status: planning
-stopped_at: Completed 27-01-PLAN.md
-last_updated: "2026-03-11T11:36:11.012Z"
+stopped_at: Completed 28-01-PLAN.md
+last_updated: "2026-03-11T11:47:47.309Z"
 last_activity: 2026-03-11 — Milestone v1.3 started
 progress:
   total_phases: 13
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 4
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 5
   percent: 0
 ---
 
@@ -47,6 +47,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 27]: ACPClient uses options_kwargs dict to conditionally include model only when not None for backward compat
 - [Phase 27]: run() uses compute_waves() for wave-based asyncio.gather execution; resume() left with FIRST_COMPLETED per constraints
 - [Phase 27]: build_system_prompt() emits file paths only (no task description); task description sent as first user message
+- [Phase 28]: parse_agent_report uses best-effort regex extraction — returns None on any failure (no crash)
+- [Phase 28]: STATUS_BLOCK_INSTRUCTIONS and DEVIATION_RULES are prompt-only constants — no code enforcement
+- [Phase 28]: BLOCKED routing uses continue inside the revision loop so it counts as a revision iteration
 
 ### Pending Todos
 
@@ -64,6 +67,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T11:36:11.009Z
-Stopped at: Completed 27-01-PLAN.md
+Last session: 2026-03-11T11:47:43.503Z
+Stopped at: Completed 28-01-PLAN.md
 Resume file: None
