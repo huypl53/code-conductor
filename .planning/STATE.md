@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Task Verification & Build Safety
 status: planning
-stopped_at: Completed 26-01-PLAN.md
-last_updated: "2026-03-11T11:25:22.047Z"
+stopped_at: Completed 27-01-PLAN.md
+last_updated: "2026-03-11T11:36:11.012Z"
 last_activity: 2026-03-11 — Milestone v1.3 started
 progress:
   total_phases: 13
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 3
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 4
   percent: 0
 ---
 
@@ -44,6 +44,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 26]: compute_waves() uses a scratch TopologicalSorter from self._graph to avoid consuming the active sorter
 - [Phase 26]: Explicit max_revisions/max_agents params override OrchestratorConfig when non-default — backward compat preserved
 - [Phase 26]: AgentRole uses StrEnum so values are plain strings and JSON-serializable
+- [Phase 27]: ACPClient uses options_kwargs dict to conditionally include model only when not None for backward compat
+- [Phase 27]: run() uses compute_waves() for wave-based asyncio.gather execution; resume() left with FIRST_COMPLETED per constraints
+- [Phase 27]: build_system_prompt() emits file paths only (no task description); task description sent as first user message
 
 ### Pending Todos
 
@@ -61,6 +64,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T11:25:15.595Z
-Stopped at: Completed 26-01-PLAN.md
+Last session: 2026-03-11T11:36:11.009Z
+Stopped at: Completed 27-01-PLAN.md
 Resume file: None
