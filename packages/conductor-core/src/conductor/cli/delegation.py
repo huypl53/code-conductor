@@ -160,11 +160,12 @@ class DelegationManager:
         )
         self._active_run = run
 
-        # Phase 22: Start background escalation task
-        # (status display moved to Textual StateWatchWorker in Phase 35)
-        self._escalation_task = asyncio.create_task(
-            self._escalation_listener()
-        )
+        # Phase 22: Start background escalation task only for non-TUI paths
+        # (TUI path uses ConductorApp._watch_escalations worker instead)
+        if self._input_fn is not None:
+            self._escalation_task = asyncio.create_task(
+                self._escalation_listener()
+            )
 
         try:
             await orchestrator.run(task)
@@ -369,6 +370,16 @@ class DelegationManager:
         self._console.print(table)
 
     # -- properties ---------------------------------------------------------
+
+    @property
+    def human_out_queue(self) -> asyncio.Queue | None:
+        """The queue where HumanQuery objects are placed for the TUI to display."""
+        return self._human_out
+
+    @property
+    def human_in_queue(self) -> asyncio.Queue | None:
+        """The queue where the TUI puts user replies for the escalation router."""
+        return self._human_in
 
     @property
     def is_delegating(self) -> bool:

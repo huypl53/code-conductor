@@ -56,6 +56,9 @@ class ConductorApp(App):
         # Active streaming cell reference
         self._active_cell: Any | None = None  # AssistantCell | None
 
+        # DelegationManager reference (set in _ensure_sdk_connected)
+        self._delegation_manager: Any | None = None
+
     def compose(self) -> ComposeResult:
         """Phase 32: two-column layout -- TranscriptPane + AgentMonitorPane + CommandInput + StatusFooter."""
         from textual.containers import Horizontal
@@ -147,9 +150,14 @@ class ConductorApp(App):
             allowed_tools=["conductor_delegate"],
         )
 
+        self._delegation_manager = delegation_manager
+
         self._sdk_client = ClaudeSDKClient(options=options)
         await self._sdk_client.connect()
         self._sdk_connected = True
+
+        # Start the escalation queue watcher for TUI modal flow
+        self._start_escalation_watcher()
 
     async def _disconnect_sdk(self) -> None:
         """Disconnect the SDK client if connected."""
@@ -159,6 +167,48 @@ class ConductorApp(App):
             except Exception:  # noqa: BLE001
                 pass
             self._sdk_connected = False
+
+    # -- Escalation queue watcher ----------------------------------------------
+
+    def _start_escalation_watcher(self) -> None:
+        """Start the escalation queue watcher if delegation has queues."""
+        if self._delegation_manager is None:
+            return
+        human_out = self._delegation_manager.human_out_queue
+        human_in = self._delegation_manager.human_in_queue
+        if human_out is not None and human_in is not None:
+            self._watch_escalations(human_out, human_in)
+
+    @work(exclusive=False, exit_on_error=False)
+    async def _watch_escalations(
+        self,
+        human_out: asyncio.Queue,
+        human_in: asyncio.Queue,
+    ) -> None:
+        """Watch for escalation questions and show approval modals."""
+        from conductor.tui.widgets.modals import EscalationModal
+        from textual.widgets import Input
+
+        try:
+            while True:
+                human_query = await human_out.get()
+                agent_id = human_query.context.get("agent_id", "") if human_query.context else ""
+                reply = await self.push_screen_wait(
+                    EscalationModal(
+                        question=human_query.question,
+                        agent_id=agent_id,
+                    )
+                )
+                await human_in.put(reply)
+                # Restore focus to CommandInput after modal dismissal (Pitfall 6)
+                try:
+                    from conductor.tui.widgets.command_input import CommandInput
+                    cmd = self.query_one(CommandInput)
+                    cmd.query_one(Input).focus()
+                except Exception:
+                    pass
+        except asyncio.CancelledError:
+            pass
 
     # -- SDK streaming worker --------------------------------------------------
 
